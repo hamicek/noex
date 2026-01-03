@@ -38,3 +38,6 @@ export {
   AlreadyRegisteredError,
   DEFAULTS,
 } from './core/types.js';
+
+// GenServer
+export { GenServer } from './core/gen-server.js';

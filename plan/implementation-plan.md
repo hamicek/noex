@@ -47,13 +47,15 @@ noex/
 - [x] `DEFAULTS` - výchozí hodnoty pro timeouty a limity
 - [x] Comprehensive tests
 
-### Krok 3: GenServer implementace (`src/core/gen-server.ts`)
-- `GenServer.start()` - spustí server, zavolá `init()`
-- `GenServer.call()` - synchronní request/response
-- `GenServer.cast()` - asynchronní fire-and-forget
-- `GenServer.stop()` - graceful shutdown
-- Interní message queue pro serializaci zpráv
-- Try/catch kolem handlerů s možností recovery
+### Krok 3: GenServer implementace (`src/core/gen-server.ts`) [DONE]
+- [x] `GenServer.start()` - spustí server, zavolá `init()`
+- [x] `GenServer.call()` - synchronní request/response
+- [x] `GenServer.cast()` - asynchronní fire-and-forget
+- [x] `GenServer.stop()` - graceful shutdown
+- [x] Interní message queue pro serializaci zpráv
+- [x] Try/catch kolem handlerů s možností recovery
+- [x] Lifecycle events (started, terminated)
+- [x] Comprehensive tests (32 test cases)
 
 ### Krok 4: Supervisor implementace (`src/core/supervisor.ts`)
 - `Supervisor.start()` - spustí supervisor se spec children
