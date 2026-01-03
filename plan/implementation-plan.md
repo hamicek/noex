@@ -33,25 +33,19 @@ noex/
 - [x] Přidat dev dependencies: `typescript`, `vitest`, `@types/node`
 - [x] Vytvořit základní adresářovou strukturu
 
-### Krok 2: Core typy (`src/core/types.ts`)
-```typescript
-interface GenServerBehavior<State, CallMsg, CastMsg, CallReply> {
-  init(): Promise<State>
-  handleCall(msg: CallMsg, state: State): Promise<[CallReply, State]>
-  handleCast(msg: CastMsg, state: State): Promise<State>
-  terminate?(reason: TerminateReason, state: State): Promise<void>
-}
-
-type TerminateReason = 'normal' | 'shutdown' | { error: Error }
-
-interface SupervisorSpec {
-  id: string
-  start: () => Promise<GenServerRef>
-  restart: 'permanent' | 'transient' | 'temporary'
-}
-
-type RestartStrategy = 'one_for_one' | 'one_for_all' | 'rest_for_one'
-```
+### Krok 2: Core typy (`src/core/types.ts`) [DONE]
+- [x] `GenServerRef` - branded type pro reference na GenServer
+- [x] `GenServerBehavior` - interface pro implementaci serveru (init, handleCall, handleCast, terminate)
+- [x] `TerminateReason` - důvod ukončení ('normal' | 'shutdown' | { error: Error })
+- [x] `ChildSpec` - specifikace child procesu pro Supervisor
+- [x] `SupervisorStrategy` - strategie restartu ('one_for_one' | 'one_for_all' | 'rest_for_one')
+- [x] `ChildRestartStrategy` - restart strategie pro child ('permanent' | 'transient' | 'temporary')
+- [x] `RestartIntensity` - konfigurace limitu restartů
+- [x] `SupervisorOptions`, `SupervisorRef` - typy pro Supervisor
+- [x] `LifecycleEvent`, `LifecycleHandler` - eventy pro observability
+- [x] Error classes - `CallTimeoutError`, `ServerNotRunningError`, `InitializationError`, `MaxRestartsExceededError`, `DuplicateChildError`, `ChildNotFoundError`, `NotRegisteredError`, `AlreadyRegisteredError`
+- [x] `DEFAULTS` - výchozí hodnoty pro timeouty a limity
+- [x] Comprehensive tests
 
 ### Krok 3: GenServer implementace (`src/core/gen-server.ts`)
 - `GenServer.start()` - spustí server, zavolá `init()`
