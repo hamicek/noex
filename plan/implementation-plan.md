@@ -73,12 +73,17 @@ noex/
 - [x] Lifecycle events
 - [x] Comprehensive tests (38 test cases)
 
-### Krok 5: Registry (`src/core/registry.ts`)
-- Pojmenované reference na GenServery
-- `Registry.register(name, ref)`
-- `Registry.lookup(name)`
-- `Registry.unregister(name)`
-- Automatické odregistrování při terminaci
+### Krok 5: Registry (`src/core/registry.ts`) [DONE]
+- [x] Pojmenované reference na GenServery
+- [x] `Registry.register(name, ref)` - registrace s AlreadyRegisteredError
+- [x] `Registry.lookup(name)` - vyhledání s NotRegisteredError
+- [x] `Registry.whereis(name)` - non-throwing varianta lookup
+- [x] `Registry.unregister(name)` - idempotentní odregistrování
+- [x] `Registry.isRegistered(name)` - kontrola existence
+- [x] `Registry.getNames()` - seznam všech registrovaných jmen
+- [x] `Registry.count()` - počet registrací
+- [x] Automatické odregistrování při terminaci pomocí lifecycle events
+- [x] Comprehensive tests (31 test cases)
 
 ### Krok 6: EventBus služba (`src/services/event-bus.ts`)
 - Implementovaný jako GenServer
