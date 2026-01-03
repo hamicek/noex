@@ -50,3 +50,18 @@ export { Registry } from './core/registry.js';
 
 // Services
 export { EventBus, type EventBusRef, type EventBusOptions } from './services/event-bus.js';
+export {
+  Cache,
+  _resetAccessCounter,
+  type CacheRef,
+  type CacheOptions,
+  type CacheSetOptions,
+  type CacheStats,
+} from './services/cache.js';
+export {
+  RateLimiter,
+  RateLimitExceededError,
+  type RateLimiterRef,
+  type RateLimiterOptions,
+  type RateLimitResult,
+} from './services/rate-limiter.js';

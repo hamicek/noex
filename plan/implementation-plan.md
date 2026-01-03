@@ -94,9 +94,9 @@ noex/
 - [x] `getSubscriptionCount()` a `getTopics()` pro introspekci
 - [x] Comprehensive tests (35 test cases)
 
-### Krok 7: Ukázkové služby
-- **Cache** - TTL, max size, LRU eviction
-- **RateLimiter** - sliding window, per-key limits
+### Krok 7: Ukázkové služby [DONE]
+- [x] **Cache** - TTL, max size, LRU eviction
+- [x] **RateLimiter** - sliding window, per-key limits
 
 ### Krok 8: Testy a dokumentace
 - Unit testy pro každou komponentu
