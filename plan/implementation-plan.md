@@ -98,10 +98,10 @@ noex/
 - [x] **Cache** - TTL, max size, LRU eviction
 - [x] **RateLimiter** - sliding window, per-key limits
 
-### Krok 8: Testy a dokumentace
-- Unit testy pro každou komponentu
-- Integration testy pro supervisor tree
-- README s příklady použití
+### Krok 8: Testy a dokumentace [DONE]
+- [x] Unit testy pro každou komponentu (259 testů celkem)
+- [x] Integration testy pro supervisor tree (16 testů)
+- [x] README s příklady použití
 
 ## API ukázka (cílový stav)
 
