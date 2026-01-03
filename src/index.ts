@@ -41,3 +41,6 @@ export {
 
 // GenServer
 export { GenServer } from './core/gen-server.js';
+
+// Supervisor
+export { Supervisor } from './core/supervisor.js';

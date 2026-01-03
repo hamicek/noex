@@ -57,15 +57,21 @@ noex/
 - [x] Lifecycle events (started, terminated)
 - [x] Comprehensive tests (32 test cases)
 
-### Krok 4: Supervisor implementace (`src/core/supervisor.ts`)
-- `Supervisor.start()` - spustí supervisor se spec children
-- `Supervisor.startChild()` - dynamicky přidá child
-- `Supervisor.terminateChild()` - zastaví child
-- Restart strategie:
-  - `one_for_one` - restartuj jen padlý proces
-  - `one_for_all` - restartuj všechny při pádu jednoho
-  - `rest_for_one` - restartuj padlý a všechny po něm
-- Max restart intensity (např. max 3 restarty za 5 sekund)
+### Krok 4: Supervisor implementace (`src/core/supervisor.ts`) [DONE]
+- [x] `Supervisor.start()` - spustí supervisor se spec children
+- [x] `Supervisor.startChild()` - dynamicky přidá child
+- [x] `Supervisor.terminateChild()` - zastaví child
+- [x] `Supervisor.restartChild()` - manuální restart child
+- [x] `Supervisor.getChildren()` / `Supervisor.getChild()` - introspekce
+- [x] Restart strategie:
+  - [x] `one_for_one` - restartuj jen padlý proces
+  - [x] `one_for_all` - restartuj všechny při pádu jednoho
+  - [x] `rest_for_one` - restartuj padlý a všechny po něm
+- [x] Child restart strategie (permanent, transient, temporary)
+- [x] Max restart intensity (např. max 3 restarty za 5 sekund)
+- [x] Graceful shutdown s ordered termination
+- [x] Lifecycle events
+- [x] Comprehensive tests (38 test cases)
 
 ### Krok 5: Registry (`src/core/registry.ts`)
 - Pojmenované reference na GenServery
