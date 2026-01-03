@@ -85,11 +85,14 @@ noex/
 - [x] Automatické odregistrování při terminaci pomocí lifecycle events
 - [x] Comprehensive tests (31 test cases)
 
-### Krok 6: EventBus služba (`src/services/event-bus.ts`)
-- Implementovaný jako GenServer
-- `subscribe(topic, handler)`
-- `publish(topic, message)`
-- Wildcard topics (např. `user.*`)
+### Krok 6: EventBus služba (`src/services/event-bus.ts`) [DONE]
+- [x] Implementovaný jako GenServer
+- [x] `subscribe(topic, handler)` - vrací unsubscribe funkci
+- [x] `publish(topic, message)` - fire-and-forget
+- [x] `publishSync(topic, message)` - synchronní varianta pro testování
+- [x] Wildcard topics (`*` - globální, `user.*` - single-level, `*.*.event` - multi-level)
+- [x] `getSubscriptionCount()` a `getTopics()` pro introspekci
+- [x] Comprehensive tests (35 test cases)
 
 ### Krok 7: Ukázkové služby
 - **Cache** - TTL, max size, LRU eviction

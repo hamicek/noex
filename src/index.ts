@@ -47,3 +47,6 @@ export { Supervisor } from './core/supervisor.js';
 
 // Registry
 export { Registry } from './core/registry.js';
+
+// Services
+export { EventBus, type EventBusRef, type EventBusOptions } from './services/event-bus.js';
