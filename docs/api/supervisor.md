@@ -28,17 +28,28 @@ Options for `Supervisor.start()`.
 interface SupervisorOptions {
   readonly strategy?: SupervisorStrategy;
   readonly children?: readonly ChildSpec[];
+  readonly childTemplate?: ChildTemplate;
   readonly restartIntensity?: RestartIntensity;
   readonly name?: string;
+  readonly autoShutdown?: AutoShutdown;
 }
 ```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `strategy` | `SupervisorStrategy` | `'one_for_one'` | Restart strategy |
+| `children` | `readonly ChildSpec[]` | `[]` | Initial children (not for `simple_one_for_one`) |
+| `childTemplate` | `ChildTemplate` | - | Template for dynamic children (required for `simple_one_for_one`) |
+| `restartIntensity` | `RestartIntensity` | `{maxRestarts: 3, withinMs: 5000}` | Restart limiting |
+| `name` | `string` | - | Registry name |
+| `autoShutdown` | `AutoShutdown` | `'never'` | Auto-shutdown behavior |
 
 ### SupervisorStrategy
 
 Strategy for handling child failures.
 
 ```typescript
-type SupervisorStrategy = 'one_for_one' | 'one_for_all' | 'rest_for_one';
+type SupervisorStrategy = 'one_for_one' | 'one_for_all' | 'rest_for_one' | 'simple_one_for_one';
 ```
 
 | Strategy | Behavior |
@@ -46,6 +57,9 @@ type SupervisorStrategy = 'one_for_one' | 'one_for_all' | 'rest_for_one';
 | `'one_for_one'` | Only restart the failed child (default) |
 | `'one_for_all'` | Restart all children when one fails |
 | `'rest_for_one'` | Restart failed child and all children started after it |
+| `'simple_one_for_one'` | Simplified variant for dynamically spawned homogeneous children |
+
+**Note:** `simple_one_for_one` requires `childTemplate` instead of `children`. All children are created dynamically using `Supervisor.startChild()` with arguments passed to the template's start function.
 
 ### ChildSpec
 
@@ -57,8 +71,17 @@ interface ChildSpec<State = unknown, CallMsg = unknown, CastMsg = unknown, CallR
   readonly start: () => Promise<GenServerRef<State, CallMsg, CastMsg, CallReply>>;
   readonly restart?: ChildRestartStrategy;
   readonly shutdownTimeout?: number;
+  readonly significant?: boolean;
 }
 ```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `string` | required | Unique identifier for this child |
+| `start` | `() => Promise<GenServerRef>` | required | Factory function to create the child |
+| `restart` | `ChildRestartStrategy` | `'permanent'` | When to restart this child |
+| `shutdownTimeout` | `number` | `5000` | Milliseconds to wait for graceful shutdown |
+| `significant` | `boolean` | `false` | Marks child as significant for `autoShutdown` behavior |
 
 ### ChildRestartStrategy
 
@@ -73,6 +96,42 @@ type ChildRestartStrategy = 'permanent' | 'transient' | 'temporary';
 | `'permanent'` | Always restart (default) |
 | `'transient'` | Restart only on abnormal exit |
 | `'temporary'` | Never restart |
+
+### ChildTemplate
+
+Template for creating children dynamically in `simple_one_for_one` supervisors.
+
+```typescript
+interface ChildTemplate<Args extends unknown[] = unknown[]> {
+  readonly start: (...args: Args) => Promise<GenServerRef>;
+  readonly restart?: ChildRestartStrategy;
+  readonly shutdownTimeout?: number;
+  readonly significant?: boolean;
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `start` | `(...args) => Promise<GenServerRef>` | required | Factory function called with arguments from `startChild()` |
+| `restart` | `ChildRestartStrategy` | `'permanent'` | Restart strategy for all children |
+| `shutdownTimeout` | `number` | `5000` | Milliseconds to wait for graceful shutdown |
+| `significant` | `boolean` | `false` | Marks children as significant for `autoShutdown` |
+
+### AutoShutdown
+
+Auto-shutdown behavior when children terminate.
+
+```typescript
+type AutoShutdown = 'never' | 'any_significant' | 'all_significant';
+```
+
+| Value | Behavior |
+|-------|----------|
+| `'never'` | Supervisor continues running even after all children terminate (default) |
+| `'any_significant'` | Supervisor shuts down when any significant child terminates |
+| `'all_significant'` | Supervisor shuts down when all significant children have terminated |
+
+**Note:** Only children with `significant: true` are considered for auto-shutdown decisions.
 
 ### RestartIntensity
 
@@ -167,6 +226,8 @@ Children are stopped in reverse order (last started = first stopped).
 
 Dynamically starts a new child under the supervisor.
 
+**For standard strategies (`one_for_one`, `one_for_all`, `rest_for_one`):**
+
 ```typescript
 async startChild(ref: SupervisorRef, spec: ChildSpec): Promise<GenServerRef>
 ```
@@ -187,6 +248,36 @@ const workerRef = await Supervisor.startChild(supervisor, {
   start: () => GenServer.start(workerBehavior),
   restart: 'permanent',
 });
+```
+
+**For `simple_one_for_one` strategy:**
+
+```typescript
+async startChild(ref: SupervisorRef, args: unknown[]): Promise<GenServerRef>
+```
+
+**Parameters:**
+- `ref` - Reference to the supervisor
+- `args` - Arguments passed to the template's `start` function
+
+**Returns:** Promise resolving to the child's GenServerRef (child ID is auto-generated)
+
+**Example:**
+```typescript
+// Create supervisor with template
+const supervisor = await Supervisor.start({
+  strategy: 'simple_one_for_one',
+  childTemplate: {
+    start: async (workerId: string, config: WorkerConfig) => {
+      return GenServer.start(createWorkerBehavior(workerId, config));
+    },
+    restart: 'transient',
+  },
+});
+
+// Start children dynamically with arguments
+const worker1 = await Supervisor.startChild(supervisor, ['worker-1', { priority: 'high' }]);
+const worker2 = await Supervisor.startChild(supervisor, ['worker-2', { priority: 'low' }]);
 ```
 
 ---
@@ -397,6 +488,29 @@ class ChildNotFoundError extends Error {
 }
 ```
 
+### MissingChildTemplateError
+
+Thrown when `simple_one_for_one` supervisor is started without `childTemplate`.
+
+```typescript
+class MissingChildTemplateError extends Error {
+  readonly name = 'MissingChildTemplateError';
+  readonly supervisorId: string;
+}
+```
+
+### InvalidSimpleOneForOneConfigError
+
+Thrown when `simple_one_for_one` supervisor has invalid configuration.
+
+```typescript
+class InvalidSimpleOneForOneConfigError extends Error {
+  readonly name = 'InvalidSimpleOneForOneConfigError';
+  readonly supervisorId: string;
+  readonly reason: string;
+}
+```
+
 ---
 
 ## Complete Example
@@ -463,6 +577,91 @@ async function main() {
 
   // Shutdown
   await Supervisor.stop(pool);
+}
+```
+
+---
+
+## simple_one_for_one Example
+
+Use `simple_one_for_one` when you need to dynamically spawn many identical children:
+
+```typescript
+import { Supervisor, GenServer, type GenServerBehavior } from 'noex';
+
+// Worker behavior factory
+function createWorkerBehavior(workerId: string): GenServerBehavior<{ id: string; count: number }, 'status', 'work', string> {
+  return {
+    init: () => ({ id: workerId, count: 0 }),
+    handleCall: (msg, state) => [`Worker ${state.id}: processed ${state.count} tasks`, state],
+    handleCast: (msg, state) => ({ ...state, count: state.count + 1 }),
+  };
+}
+
+async function main() {
+  // Create supervisor with template
+  const supervisor = await Supervisor.start({
+    strategy: 'simple_one_for_one',
+    childTemplate: {
+      start: async (workerId: string) => GenServer.start(createWorkerBehavior(workerId)),
+      restart: 'transient',
+    },
+  });
+
+  // Dynamically spawn workers
+  const workers = await Promise.all([
+    Supervisor.startChild(supervisor, ['worker-1']),
+    Supervisor.startChild(supervisor, ['worker-2']),
+    Supervisor.startChild(supervisor, ['worker-3']),
+  ]);
+
+  // All workers are now running
+  console.log(`Started ${Supervisor.countChildren(supervisor)} workers`);
+
+  await Supervisor.stop(supervisor);
+}
+```
+
+---
+
+## auto_shutdown Example
+
+Use `autoShutdown` to automatically terminate supervisors when significant children exit:
+
+```typescript
+import { Supervisor, GenServer, type GenServerBehavior } from 'noex';
+
+const primaryBehavior: GenServerBehavior<void, never, never, never> = {
+  init: () => undefined,
+  handleCall: () => [undefined as never, undefined],
+  handleCast: () => undefined,
+};
+
+const secondaryBehavior: GenServerBehavior<void, never, never, never> = {
+  init: () => undefined,
+  handleCall: () => [undefined as never, undefined],
+  handleCast: () => undefined,
+};
+
+async function main() {
+  const supervisor = await Supervisor.start({
+    strategy: 'one_for_one',
+    autoShutdown: 'any_significant',
+    children: [
+      {
+        id: 'primary-service',
+        start: () => GenServer.start(primaryBehavior),
+        significant: true,  // Supervisor shuts down when this terminates
+      },
+      {
+        id: 'secondary-service',
+        start: () => GenServer.start(secondaryBehavior),
+        significant: false, // This won't trigger shutdown
+      },
+    ],
+  });
+
+  // When primary-service terminates, supervisor automatically shuts down
 }
 ```
 
