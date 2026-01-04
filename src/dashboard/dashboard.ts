@@ -8,7 +8,7 @@
  * updates about GenServers and Supervisors.
  */
 
-import * as blessed from 'blessed';
+import blessed from 'blessed';
 import contrib from 'blessed-contrib';
 import { Observer } from '../observer/index.js';
 import type { ObserverSnapshot } from '../observer/types.js';

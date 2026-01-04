@@ -7,7 +7,7 @@
  * - Visual highlighting for processes with issues
  */
 
-import * as blessed from 'blessed';
+import blessed from 'blessed';
 import contrib from 'blessed-contrib';
 import type { GenServerStats } from '../../core/types.js';
 import { formatBytes } from '../../observer/memory-utils.js';

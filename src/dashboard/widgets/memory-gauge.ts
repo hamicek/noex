@@ -6,7 +6,7 @@
  * - Percentage and absolute values in label
  */
 
-import * as blessed from 'blessed';
+import blessed from 'blessed';
 import contrib from 'blessed-contrib';
 import type { MemoryStats } from '../../core/types.js';
 import { formatBytes } from '../../observer/memory-utils.js';

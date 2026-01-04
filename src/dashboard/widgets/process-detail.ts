@@ -6,7 +6,7 @@
  * restart history.
  */
 
-import * as blessed from 'blessed';
+import blessed from 'blessed';
 import type { GenServerStats, SupervisorStats, ProcessTreeNode } from '../../core/types.js';
 import { formatBytes } from '../../observer/memory-utils.js';
 import type { DashboardTheme } from '../types.js';

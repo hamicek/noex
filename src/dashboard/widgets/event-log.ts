@@ -7,7 +7,7 @@
  * - Automatic scrolling to newest entries
  */
 
-import * as blessed from 'blessed';
+import blessed from 'blessed';
 import contrib from 'blessed-contrib';
 import type { EventLogEntry, DashboardTheme } from '../types.js';
 import { BaseWidget, type GridPosition, type WidgetConfig } from './types.js';

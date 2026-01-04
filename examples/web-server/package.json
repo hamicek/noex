@@ -1,0 +1,21 @@
+{
+  "name": "noex-web-server-example",
+  "version": "1.0.0",
+  "description": "Example: noex + Fastify + WebSocket",
+  "type": "module",
+  "scripts": {
+    "start": "tsx server.ts",
+    "dev": "tsx watch server.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "@fastify/websocket": "^11.0.0",
+    "@fastify/static": "^8.0.0",
+    "noex": "file:../.."
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>noex Chat - WebSocket Demo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #16213e;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      color: #e94560;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #666;
+    }
+
+    .status-dot.connected {
+      background: #4ade80;
+    }
+
+    .status-dot.disconnected {
+      background: #ef4444;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1rem;
+      gap: 1rem;
+    }
+
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #16213e;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .messages {
+      flex: 1;
+      padding: 1rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .message {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      max-width: 80%;
+    }
+
+    .message.system {
+      background: #0f3460;
+      color: #94a3b8;
+      font-style: italic;
+      align-self: center;
+      font-size: 0.875rem;
+    }
+
+    .message.incoming {
+      background: #1e3a5f;
+      align-self: flex-start;
+    }
+
+    .message.outgoing {
+      background: #e94560;
+      align-self: flex-end;
+    }
+
+    .message .meta {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-bottom: 0.25rem;
+    }
+
+    .message.outgoing .meta {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .input-area {
+      padding: 1rem;
+      background: #0f3460;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    input, button {
+      padding: 0.75rem 1rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+
+    input {
+      flex: 1;
+      background: #1a1a2e;
+      color: #eee;
+    }
+
+    input:focus {
+      outline: 2px solid #e94560;
+    }
+
+    button {
+      background: #e94560;
+      color: white;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    button:hover {
+      background: #d63850;
+    }
+
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+
+    .sidebar {
+      width: 280px;
+      background: #16213e;
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .sidebar h2 {
+      font-size: 1rem;
+      color: #e94560;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #0f3460;
+    }
+
+    .stats {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.875rem;
+    }
+
+    .stat-item .label {
+      color: #94a3b8;
+    }
+
+    .stat-item .value {
+      color: #4ade80;
+      font-weight: 500;
+    }
+
+    .join-form {
+      margin-bottom: 1rem;
+    }
+
+    .join-form input {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+
+    .join-form button {
+      width: 100%;
+    }
+
+    @media (max-width: 768px) {
+      main {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>noex Chat</h1>
+    <div class="status">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Disconnected</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="chat-container">
+      <div class="messages" id="messages"></div>
+      <div class="input-area">
+        <input type="text" id="messageInput" placeholder="Type a message..." disabled>
+        <button id="sendBtn" disabled>Send</button>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="join-form" id="joinForm">
+        <h2>Join Chat</h2>
+        <input type="text" id="usernameInput" placeholder="Enter your username">
+        <button id="joinBtn">Join</button>
+      </div>
+
+      <div class="stats">
+        <h2>Server Stats</h2>
+        <div class="stat-item">
+          <span class="label">Active connections</span>
+          <span class="value" id="activeConnections">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">Total messages</span>
+          <span class="value" id="totalMessages">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">Server uptime</span>
+          <span class="value" id="uptime">-</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const messagesEl = document.getElementById('messages');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const usernameInput = document.getElementById('usernameInput');
+    const joinBtn = document.getElementById('joinBtn');
+    const joinForm = document.getElementById('joinForm');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+
+    let ws = null;
+    let username = null;
+    let connectionId = null;
+
+    function setStatus(connected) {
+      statusDot.className = 'status-dot ' + (connected ? 'connected' : 'disconnected');
+      statusText.textContent = connected ? 'Connected' : 'Disconnected';
+      messageInput.disabled = !connected || !username;
+      sendBtn.disabled = !connected || !username;
+    }
+
+    function addMessage(type, content, meta = null) {
+      const msg = document.createElement('div');
+      msg.className = 'message ' + type;
+
+      if (meta) {
+        const metaEl = document.createElement('div');
+        metaEl.className = 'meta';
+        metaEl.textContent = meta;
+        msg.appendChild(metaEl);
+      }
+
+      const text = document.createElement('div');
+      text.textContent = content;
+      msg.appendChild(text);
+
+      messagesEl.appendChild(msg);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function connect() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+      ws.onopen = () => {
+        setStatus(true);
+        addMessage('system', 'Connected to server');
+      };
+
+      ws.onclose = () => {
+        setStatus(false);
+        addMessage('system', 'Disconnected from server');
+        // Reconnect after 3 seconds
+        setTimeout(connect, 3000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'welcome') {
+          connectionId = data.connectionId;
+          addMessage('system', data.message);
+        } else if (data.topic === 'chat.message') {
+          const isOwn = data.from === username;
+          addMessage(
+            isOwn ? 'outgoing' : 'incoming',
+            data.message,
+            isOwn ? null : data.from
+          );
+        } else if (data.topic === 'chat.system') {
+          if (data.type === 'user_joined') {
+            addMessage('system', `${data.username} joined the chat`);
+          } else if (data.type === 'user_left') {
+            addMessage('system', `${data.username} left the chat`);
+          }
+        }
+      };
+    }
+
+    function join() {
+      username = usernameInput.value.trim();
+      if (!username) return;
+
+      ws.send(JSON.stringify({ type: 'join', username }));
+      joinForm.style.display = 'none';
+      messageInput.disabled = false;
+      sendBtn.disabled = false;
+      messageInput.focus();
+    }
+
+    function sendMessage() {
+      const text = messageInput.value.trim();
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+      ws.send(JSON.stringify({ type: 'message', text }));
+      messageInput.value = '';
+    }
+
+    // Event listeners
+    joinBtn.addEventListener('click', join);
+    usernameInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') join();
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    // Update stats periodically
+    async function updateStats() {
+      try {
+        const res = await fetch('/api/stats');
+        const stats = await res.json();
+
+        document.getElementById('activeConnections').textContent = stats.currentConnections;
+        document.getElementById('totalMessages').textContent = stats.totalMessages;
+
+        const uptimeMs = stats.uptimeMs;
+        const seconds = Math.floor(uptimeMs / 1000) % 60;
+        const minutes = Math.floor(uptimeMs / 60000) % 60;
+        const hours = Math.floor(uptimeMs / 3600000);
+        document.getElementById('uptime').textContent =
+          `${hours}h ${minutes}m ${seconds}s`;
+      } catch (e) {
+        // Ignore errors
+      }
+    }
+
+    // Start
+    connect();
+    updateStats();
+    setInterval(updateStats, 5000);
+  </script>
+</body>
+</html>

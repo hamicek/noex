@@ -5,7 +5,7 @@
  * enabling consistent lifecycle management and rendering.
  */
 
-import * as blessed from 'blessed';
+import blessed from 'blessed';
 import contrib from 'blessed-contrib';
 import type { DashboardTheme } from '../types.js';
 

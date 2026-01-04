@@ -7,7 +7,7 @@
  * - Navigation support via keyboard
  */
 
-import * as blessed from 'blessed';
+import blessed from 'blessed';
 import contrib from 'blessed-contrib';
 import type { ProcessTreeNode, GenServerStats, SupervisorStats } from '../../core/types.js';
 import { BaseWidget, type GridPosition, type WidgetConfig } from './types.js';
