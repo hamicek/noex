@@ -423,6 +423,55 @@
   </main>
 
   <script>
+    /**
+     * Circular buffer for storing time-series metrics data.
+     * Provides O(1) insertion and efficient ordered retrieval.
+     */
+    class MetricsHistory {
+      constructor(capacity = 900) {
+        this.capacity = capacity;
+        this.buffer = new Array(capacity);
+        this.head = 0;
+        this.size = 0;
+      }
+
+      push(timestamp, value) {
+        this.buffer[this.head] = { timestamp, value };
+        this.head = (this.head + 1) % this.capacity;
+        if (this.size < this.capacity) {
+          this.size++;
+        }
+      }
+
+      getAll() {
+        if (this.size === 0) return [];
+
+        const result = new Array(this.size);
+        const start = this.size < this.capacity ? 0 : this.head;
+
+        for (let i = 0; i < this.size; i++) {
+          result[i] = this.buffer[(start + i) % this.capacity];
+        }
+
+        return result;
+      }
+
+      clear() {
+        this.head = 0;
+        this.size = 0;
+      }
+
+      get length() {
+        return this.size;
+      }
+
+      getLast() {
+        if (this.size === 0) return null;
+        const index = (this.head - 1 + this.capacity) % this.capacity;
+        return this.buffer[index];
+      }
+    }
+
     let ws = null;
     let snapshot = null;
     let selectedId = null;
