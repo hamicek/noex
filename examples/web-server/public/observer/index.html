@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>noex Observer</title>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #eab308;
+      --error: #ef4444;
+      --border: #475569;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Fira Code', monospace;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--bg-secondary);
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    header h1::before {
+      content: '';
+      width: 24px;
+      height: 24px;
+      background: var(--accent);
+      border-radius: 4px;
+    }
+
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--error);
+    }
+
+    .status-indicator.connected {
+      background: var(--success);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem;
+      gap: 1.5rem;
+      max-width: 1600px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Summary Cards */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .summary-card {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 1.25rem;
+      border: 1px solid var(--border);
+    }
+
+    .summary-card .label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .summary-card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .summary-card .value.servers { color: var(--accent); }
+    .summary-card .value.supervisors { color: #a855f7; }
+    .summary-card .value.messages { color: var(--success); }
+    .summary-card .value.restarts { color: var(--warning); }
+
+    /* Main Content */
+    .content {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 1.5rem;
+      flex: 1;
+      min-height: 0;
+    }
+
+    @media (max-width: 1024px) {
+      .content {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Process Tree Panel */
+    .tree-panel {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      min-height: 400px;
+    }
+
+    .panel-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.875rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-header .badge {
+      background: var(--bg-tertiary);
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .tree-content {
+      flex: 1;
+      overflow: auto;
+      padding: 1rem;
+    }
+
+    /* Tree Nodes */
+    .tree-node {
+      margin-left: 1.5rem;
+      position: relative;
+    }
+
+    .tree-node::before {
+      content: '';
+      position: absolute;
+      left: -1rem;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--border);
+    }
+
+    .tree-node:last-child::before {
+      bottom: 50%;
+    }
+
+    .tree-node::after {
+      content: '';
+      position: absolute;
+      left: -1rem;
+      top: 50%;
+      width: 0.75rem;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .tree-root {
+      margin-left: 0;
+    }
+
+    .tree-root::before,
+    .tree-root::after {
+      display: none;
+    }
+
+    .node-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-bottom: 0.25rem;
+    }
+
+    .node-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .node-item.selected {
+      background: var(--accent);
+      color: white;
+    }
+
+    .node-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .node-icon.supervisor {
+      background: #a855f7;
+      color: white;
+    }
+
+    .node-icon.genserver {
+      background: var(--accent);
+      color: white;
+    }
+
+    .node-name {
+      font-size: 0.875rem;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .node-status {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      flex-shrink: 0;
+    }
+
+    .node-status.stopped {
+      background: var(--error);
+    }
+
+    .node-children {
+      display: block;
+    }
+
+    /* Detail Panel */
+    .detail-panel {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .detail-content {
+      flex: 1;
+      overflow: auto;
+      padding: 1.25rem;
+    }
+
+    .detail-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      text-align: center;
+      gap: 0.5rem;
+    }
+
+    .detail-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .detail-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .detail-section h3 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 0.75rem;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+
+    .detail-row .label {
+      color: var(--text-secondary);
+    }
+
+    .detail-row .value {
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .detail-row .value.running {
+      color: var(--success);
+    }
+
+    .detail-row .value.stopped {
+      color: var(--error);
+    }
+
+    .process-type-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.375rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+    }
+
+    .process-type-badge.supervisor {
+      background: rgba(168, 85, 247, 0.2);
+      color: #a855f7;
+    }
+
+    .process-type-badge.genserver {
+      background: rgba(59, 130, 246, 0.2);
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>noex Observer</h1>
+    <div class="connection-status">
+      <span class="status-indicator" id="wsStatus"></span>
+      <span id="wsStatusText">Connecting...</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="label">GenServers</div>
+        <div class="value servers" id="serverCount">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Supervisors</div>
+        <div class="value supervisors" id="supervisorCount">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Total Messages</div>
+        <div class="value messages" id="messageCount">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Total Restarts</div>
+        <div class="value restarts" id="restartCount">0</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="tree-panel">
+        <div class="panel-header">
+          <span>Process Tree</span>
+          <span class="badge" id="processCount">0 processes</span>
+        </div>
+        <div class="tree-content" id="treeContent">
+          <div class="detail-empty">Loading...</div>
+        </div>
+      </div>
+
+      <div class="detail-panel">
+        <div class="panel-header">Process Details</div>
+        <div class="detail-content" id="detailContent">
+          <div class="detail-empty">
+            <span>Select a process to view details</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let ws = null;
+    let snapshot = null;
+    let selectedId = null;
+
+    const wsStatus = document.getElementById('wsStatus');
+    const wsStatusText = document.getElementById('wsStatusText');
+    const serverCount = document.getElementById('serverCount');
+    const supervisorCount = document.getElementById('supervisorCount');
+    const messageCount = document.getElementById('messageCount');
+    const restartCount = document.getElementById('restartCount');
+    const processCount = document.getElementById('processCount');
+    const treeContent = document.getElementById('treeContent');
+    const detailContent = document.getElementById('detailContent');
+
+    function formatUptime(ms) {
+      const seconds = Math.floor(ms / 1000) % 60;
+      const minutes = Math.floor(ms / 60000) % 60;
+      const hours = Math.floor(ms / 3600000);
+      if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+      if (minutes > 0) return `${minutes}m ${seconds}s`;
+      return `${seconds}s`;
+    }
+
+    function formatNumber(n) {
+      return n.toLocaleString();
+    }
+
+    function updateSummary(data) {
+      serverCount.textContent = formatNumber(data.servers.length);
+      supervisorCount.textContent = formatNumber(data.supervisors.length);
+      messageCount.textContent = formatNumber(data.totalMessages);
+      restartCount.textContent = formatNumber(data.totalRestarts);
+      processCount.textContent = `${data.processCount} processes`;
+    }
+
+    function renderTreeNode(node, isRoot = false) {
+      const div = document.createElement('div');
+      div.className = 'tree-node' + (isRoot ? ' tree-root' : '');
+
+      const item = document.createElement('div');
+      item.className = 'node-item' + (selectedId === node.id ? ' selected' : '');
+      item.onclick = () => selectProcess(node);
+
+      const icon = document.createElement('div');
+      icon.className = `node-icon ${node.type}`;
+      icon.textContent = node.type === 'supervisor' ? 'S' : 'G';
+
+      const name = document.createElement('div');
+      name.className = 'node-name';
+      name.textContent = node.name || node.id;
+
+      const status = document.createElement('div');
+      status.className = 'node-status' + (node.stats.status !== 'running' ? ' stopped' : '');
+
+      item.appendChild(icon);
+      item.appendChild(name);
+      item.appendChild(status);
+      div.appendChild(item);
+
+      if (node.children && node.children.length > 0) {
+        const children = document.createElement('div');
+        children.className = 'node-children';
+        for (const child of node.children) {
+          children.appendChild(renderTreeNode(child));
+        }
+        div.appendChild(children);
+      }
+
+      return div;
+    }
+
+    function renderTree(tree) {
+      treeContent.innerHTML = '';
+      if (!tree || tree.length === 0) {
+        treeContent.innerHTML = '<div class="detail-empty">No processes running</div>';
+        return;
+      }
+      for (const node of tree) {
+        treeContent.appendChild(renderTreeNode(node, true));
+      }
+    }
+
+    function selectProcess(node) {
+      selectedId = node.id;
+      renderTree(snapshot?.tree || []);
+      renderDetail(node);
+    }
+
+    function renderDetail(node) {
+      const stats = node.stats;
+      const isSupervisor = node.type === 'supervisor';
+
+      let html = `
+        <div class="process-type-badge ${node.type}">
+          ${isSupervisor ? 'Supervisor' : 'GenServer'}
+        </div>
+        <div class="detail-section">
+          <h3>Identity</h3>
+          <div class="detail-row">
+            <span class="label">ID</span>
+            <span class="value">${node.id}</span>
+          </div>
+          ${node.name ? `
+          <div class="detail-row">
+            <span class="label">Name</span>
+            <span class="value">${node.name}</span>
+          </div>
+          ` : ''}
+          <div class="detail-row">
+            <span class="label">Status</span>
+            <span class="value ${stats.status}">${stats.status}</span>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h3>Metrics</h3>
+          <div class="detail-row">
+            <span class="label">Uptime</span>
+            <span class="value">${formatUptime(stats.uptimeMs)}</span>
+          </div>
+      `;
+
+      if (isSupervisor) {
+        html += `
+          <div class="detail-row">
+            <span class="label">Strategy</span>
+            <span class="value">${stats.strategy}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Children</span>
+            <span class="value">${stats.childCount}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Total Restarts</span>
+            <span class="value">${formatNumber(stats.totalRestarts)}</span>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="detail-row">
+            <span class="label">Queue Size</span>
+            <span class="value">${stats.queueSize}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Messages Processed</span>
+            <span class="value">${formatNumber(stats.messageCount)}</span>
+          </div>
+        `;
+      }
+
+      html += '</div>';
+      detailContent.innerHTML = html;
+    }
+
+    function findNodeById(nodes, id) {
+      for (const node of nodes) {
+        if (node.id === id) return node;
+        if (node.children) {
+          const found = findNodeById(node.children, id);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    function updateFromSnapshot(data) {
+      snapshot = data;
+      updateSummary(data);
+      renderTree(data.tree);
+
+      if (selectedId) {
+        const node = findNodeById(data.tree, selectedId);
+        if (node) {
+          renderDetail(node);
+        } else {
+          selectedId = null;
+          detailContent.innerHTML = '<div class="detail-empty">Process no longer exists</div>';
+        }
+      }
+    }
+
+    function handleStatsUpdate(event) {
+      if (!snapshot) return;
+
+      snapshot.servers = event.servers;
+      snapshot.supervisors = event.supervisors;
+      snapshot.totalMessages = event.servers.reduce((sum, s) => sum + s.messageCount, 0);
+      snapshot.totalRestarts = event.supervisors.reduce((sum, s) => sum + s.totalRestarts, 0);
+
+      updateSummary(snapshot);
+
+      if (selectedId) {
+        const node = findNodeById(snapshot.tree, selectedId);
+        if (node) {
+          const serverStats = event.servers.find(s => s.id === selectedId);
+          const supStats = event.supervisors.find(s => s.id === selectedId);
+          if (serverStats) node.stats = serverStats;
+          if (supStats) node.stats = supStats;
+          renderDetail(node);
+        }
+      }
+    }
+
+    function connect() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${location.host}/observer/ws`);
+
+      ws.onopen = () => {
+        wsStatus.classList.add('connected');
+        wsStatusText.textContent = 'Connected';
+      };
+
+      ws.onclose = () => {
+        wsStatus.classList.remove('connected');
+        wsStatusText.textContent = 'Disconnected';
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === 'snapshot') {
+          updateFromSnapshot(msg.data);
+        } else if (msg.type === 'event') {
+          const evt = msg.data;
+          if (evt.type === 'stats_update') {
+            handleStatsUpdate(evt);
+          } else if (evt.type === 'server_started' || evt.type === 'supervisor_started') {
+            // Request fresh snapshot on process start
+          } else if (evt.type === 'server_stopped' || evt.type === 'supervisor_stopped') {
+            // Process stopped - will be reflected in next stats update
+          }
+        }
+      };
+    }
+
+    connect();
+  </script>
+</body>
+</html>

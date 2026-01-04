@@ -141,7 +141,7 @@ export type { GenServerStats, SupervisorStats, ProcessTreeNode, ObserverEvent } 
 
 ---
 
-## Fáze 3: Web integrace
+## Fáze 3: Web integrace ✅
 
 ### 3.1 Nové routes v `examples/web-server/server.ts`
 
