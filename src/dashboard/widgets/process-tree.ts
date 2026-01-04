@@ -58,6 +58,7 @@ export class ProcessTreeWidget extends BaseWidget<ProcessTreeData> {
         style: {
           border: { fg: this.theme.primary },
           label: this.getLabelStyle(),
+          focus: { border: { fg: this.theme.warning } },
         },
         scrollable: true,
         scrollbar: {
@@ -67,6 +68,7 @@ export class ProcessTreeWidget extends BaseWidget<ProcessTreeData> {
         mouse: true,
         keys: true,
         vi: true,
+        focusable: true,
       },
     );
 

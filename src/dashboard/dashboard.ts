@@ -352,6 +352,12 @@ export class Dashboard {
 
     // Process Detail View (modal, not part of grid)
     this.processDetailView = new ProcessDetailView({ theme: this.theme });
+
+    // Set initial focus on stats table
+    const statsElement = this.statsTableWidget?.getElement();
+    if (statsElement) {
+      statsElement.focus();
+    }
   }
 
   /**

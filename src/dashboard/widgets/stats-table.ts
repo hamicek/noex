@@ -109,6 +109,10 @@ export class StatsTableWidget extends BaseWidget<StatsTableData> {
         border: this.getBorderStyle(),
         columnSpacing: 2,
         columnWidth: TABLE_COLUMNS.map((col) => col.width),
+        focusable: true,
+        style: {
+          focus: { border: { fg: this.theme.warning } },
+        },
       },
     );
 
