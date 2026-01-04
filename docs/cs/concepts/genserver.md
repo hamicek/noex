@@ -210,10 +210,23 @@ GenServer prochází těmito stavy:
 
 ```typescript
 const ref = await GenServer.start(behavior, {
-  name: 'my-server',      // Volitelné: registrace v Registry
+  name: 'my-server',      // Volitelné: automatická registrace v Registry
   initTimeout: 5000,      // Volitelné: max čas pro init() (výchozí: 5000ms)
 });
 ```
+
+Pokud je `name` zadáno, server je automaticky zaregistrován v Registry a lze ho vyhledat odkudkoliv v aplikaci:
+
+```typescript
+// Spuštění s registrací jména
+const counter = await GenServer.start(counterBehavior, { name: 'counter' });
+
+// Později, odkudkoliv v aplikaci:
+const ref = Registry.lookup('counter');
+await GenServer.call(ref, 'get');
+```
+
+Registrace je automaticky vyčištěna při zastavení serveru. Pokud je jméno již obsazeno, vyhodí se `AlreadyRegisteredError` a server nebude spuštěn.
 
 ### Kontrola stavu
 

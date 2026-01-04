@@ -210,10 +210,23 @@ A GenServer goes through these states:
 
 ```typescript
 const ref = await GenServer.start(behavior, {
-  name: 'my-server',      // Optional: register in Registry
+  name: 'my-server',      // Optional: automatically register in Registry
   initTimeout: 5000,      // Optional: max time for init() (default: 5000ms)
 });
 ```
+
+When `name` is provided, the server is automatically registered in the Registry and can be looked up from anywhere in your application:
+
+```typescript
+// Start with name registration
+const counter = await GenServer.start(counterBehavior, { name: 'counter' });
+
+// Later, from anywhere in the app:
+const ref = Registry.lookup('counter');
+await GenServer.call(ref, 'get');
+```
+
+The registration is automatically cleaned up when the server stops. If the name is already taken, `AlreadyRegisteredError` is thrown and the server is not started.
 
 ### Checking Status
 

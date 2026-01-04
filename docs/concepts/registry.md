@@ -24,26 +24,40 @@ const value = await GenServer.call(ref, 'get');
 
 ## Registering Processes
 
-### Basic Registration
+### Automatic Registration (Recommended)
+
+The simplest way to register a GenServer is using the `name` option at start time:
+
+```typescript
+// Server is automatically registered as 'my-service'
+const ref = await GenServer.start(behavior, { name: 'my-service' });
+
+// Look it up from anywhere
+const found = Registry.lookup('my-service');
+```
+
+This approach:
+- Registers atomically with server start
+- Automatically cleans up when server stops
+- Throws `AlreadyRegisteredError` if name is taken (server won't start)
+
+### Manual Registration
+
+For more control, register separately after starting:
 
 ```typescript
 const ref = await GenServer.start(behavior);
 Registry.register('my-service', ref);
 ```
 
-### Registration at Start Time
-
-A common pattern is to register immediately after starting:
+### Registration Pattern for Multiple Services
 
 ```typescript
-async function startNamedService(name: string) {
-  const ref = await GenServer.start(serviceBehavior);
-  Registry.register(name, ref);
-  return ref;
+async function startServices() {
+  // Using automatic registration
+  await GenServer.start(cacheBehavior, { name: 'user-cache' });
+  await GenServer.start(sessionBehavior, { name: 'session-store' });
 }
-
-await startNamedService('user-cache');
-await startNamedService('session-store');
 ```
 
 ### Unique Names
@@ -250,7 +264,7 @@ async function replaceService(name: string, newBehavior: GenServerBehavior) {
 
 ### Supervised Registration
 
-Combine with Supervisor for resilient named services:
+Combine with Supervisor for resilient named services. With automatic registration, restarts are handled seamlessly:
 
 ```typescript
 const supervisor = await Supervisor.start({
@@ -259,18 +273,15 @@ const supervisor = await Supervisor.start({
     {
       id: 'cache',
       start: async () => {
-        const ref = await GenServer.start(cacheBehavior);
-        // Re-register on each restart
-        if (Registry.isRegistered('cache')) {
-          Registry.unregister('cache');
-        }
-        Registry.register('cache', ref);
-        return ref;
+        // Automatic registration handles cleanup on restart
+        return await GenServer.start(cacheBehavior, { name: 'cache' });
       },
     },
   ],
 });
 ```
+
+Since the old registration is automatically cleaned up when the server terminates, the restarted server can reuse the same name.
 
 ## Best Practices
 

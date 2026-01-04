@@ -24,26 +24,40 @@ const value = await GenServer.call(ref, 'get');
 
 ## Registrace procesů
 
-### Základní registrace
+### Automatická registrace (doporučeno)
+
+Nejjednodušší způsob registrace GenServeru je použití `name` option při spuštění:
+
+```typescript
+// Server je automaticky registrován jako 'my-service'
+const ref = await GenServer.start(behavior, { name: 'my-service' });
+
+// Vyhledání odkudkoli
+const found = Registry.lookup('my-service');
+```
+
+Tento přístup:
+- Registruje atomicky se spuštěním serveru
+- Automaticky vyčistí registraci při zastavení serveru
+- Vyhodí `AlreadyRegisteredError` pokud je jméno obsazeno (server se nespustí)
+
+### Manuální registrace
+
+Pro větší kontrolu registrujte separátně po spuštění:
 
 ```typescript
 const ref = await GenServer.start(behavior);
 Registry.register('my-service', ref);
 ```
 
-### Registrace při spuštění
-
-Běžný vzor je registrovat ihned po spuštění:
+### Vzor pro více služeb
 
 ```typescript
-async function startNamedService(name: string) {
-  const ref = await GenServer.start(serviceBehavior);
-  Registry.register(name, ref);
-  return ref;
+async function startServices() {
+  // Použití automatické registrace
+  await GenServer.start(cacheBehavior, { name: 'user-cache' });
+  await GenServer.start(sessionBehavior, { name: 'session-store' });
 }
-
-await startNamedService('user-cache');
-await startNamedService('session-store');
 ```
 
 ### Unikátní jména
@@ -250,7 +264,7 @@ async function replaceService(name: string, newBehavior: GenServerBehavior) {
 
 ### Registrace pod supervizorem
 
-Kombinace se Supervisorem pro odolné pojmenované služby:
+Kombinace se Supervisorem pro odolné pojmenované služby. S automatickou registrací jsou restarty řešeny bezproblémově:
 
 ```typescript
 const supervisor = await Supervisor.start({
@@ -259,18 +273,15 @@ const supervisor = await Supervisor.start({
     {
       id: 'cache',
       start: async () => {
-        const ref = await GenServer.start(cacheBehavior);
-        // Přeregistrovat při každém restartu
-        if (Registry.isRegistered('cache')) {
-          Registry.unregister('cache');
-        }
-        Registry.register('cache', ref);
-        return ref;
+        // Automatická registrace řeší vyčištění při restartu
+        return await GenServer.start(cacheBehavior, { name: 'cache' });
       },
     },
   ],
 });
 ```
+
+Protože stará registrace je automaticky vyčištěna při ukončení serveru, restartovaný server může znovu použít stejné jméno.
 
 ## Osvědčené postupy
 

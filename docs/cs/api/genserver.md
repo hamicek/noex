@@ -93,13 +93,14 @@ async start<State, CallMsg, CastMsg, CallReply>(
 **Parametry:**
 - `behavior` - Objekt implementující callbacky GenServerBehavior
 - `options` - Volitelná konfigurace startu
-  - `name` - Zaregistrovat server pod tímto jménem v Registry
+  - `name` - Zaregistrovat server pod tímto jménem v Registry (automaticky odregistrován při ukončení)
   - `initTimeout` - Maximální čas pro dokončení `init()` (výchozí: 5000ms)
 
 **Vrací:** Promise resolvující na GenServerRef
 
 **Vyhazuje:**
 - `InitializationError` - Pokud `init()` selže nebo vyprší timeout
+- `AlreadyRegisteredError` - Pokud je `options.name` již zaregistrováno
 
 **Příklad:**
 ```typescript
@@ -111,7 +112,7 @@ const behavior: GenServerBehavior<number, 'get', 'inc', number> = {
 
 const ref = await GenServer.start(behavior);
 
-// S volbami
+// S registrací jména (lze vyhledat přes Registry.lookup('counter'))
 const ref = await GenServer.start(behavior, {
   name: 'counter',
   initTimeout: 10000,

@@ -93,13 +93,14 @@ async start<State, CallMsg, CastMsg, CallReply>(
 **Parameters:**
 - `behavior` - Object implementing GenServerBehavior callbacks
 - `options` - Optional start configuration
-  - `name` - Register the server under this name in Registry
+  - `name` - Register the server under this name in Registry (auto-cleanup on stop)
   - `initTimeout` - Maximum time for `init()` to complete (default: 5000ms)
 
 **Returns:** Promise resolving to a GenServerRef
 
 **Throws:**
 - `InitializationError` - If `init()` fails or times out
+- `AlreadyRegisteredError` - If `options.name` is already registered
 
 **Example:**
 ```typescript
@@ -111,7 +112,7 @@ const behavior: GenServerBehavior<number, 'get', 'inc', number> = {
 
 const ref = await GenServer.start(behavior);
 
-// With options
+// With name registration (can be looked up via Registry.lookup('counter'))
 const ref = await GenServer.start(behavior, {
   name: 'counter',
   initTimeout: 10000,

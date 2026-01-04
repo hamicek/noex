@@ -52,7 +52,19 @@ export type CallResult<Reply, State> = readonly [Reply, State];
 export interface StartOptions {
   /**
    * Optional name for registry registration.
-   * If provided, the server will be registered under this name.
+   * If provided, the server will be automatically registered in the Registry
+   * under this name, allowing lookup via Registry.lookup(name).
+   *
+   * The registration is automatically cleaned up when the server terminates.
+   *
+   * @throws {AlreadyRegisteredError} If the name is already in use
+   *
+   * @example
+   * ```typescript
+   * const ref = await GenServer.start(behavior, { name: 'my-service' });
+   * // Later, from anywhere:
+   * const found = Registry.lookup('my-service');
+   * ```
    */
   readonly name?: string;
 

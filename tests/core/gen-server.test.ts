@@ -5,12 +5,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   GenServer,
+  Registry,
   type GenServerBehavior,
   type GenServerRef,
   type LifecycleEvent,
   CallTimeoutError,
   ServerNotRunningError,
   InitializationError,
+  AlreadyRegisteredError,
 } from '../../src/index.js';
 
 // Helper to create a simple counter behavior
@@ -766,6 +768,118 @@ describe('GenServer', () => {
       await slowCall;
       await new Promise((r) => setTimeout(r, 250));
       await GenServer.stop(ref);
+    });
+  });
+
+  describe('automatic name registration', () => {
+    beforeEach(() => {
+      Registry._clearLifecycleHandler();
+      Registry._clear();
+    });
+
+    afterEach(() => {
+      Registry._clearLifecycleHandler();
+      Registry._clear();
+    });
+
+    it('registers server in Registry when name option is provided', async () => {
+      const ref = await GenServer.start(createCounterBehavior(), { name: 'my-counter' });
+
+      expect(Registry.isRegistered('my-counter')).toBe(true);
+      expect(Registry.lookup('my-counter').id).toBe(ref.id);
+
+      await GenServer.stop(ref);
+    });
+
+    it('does not register when name option is not provided', async () => {
+      const ref = await GenServer.start(createCounterBehavior());
+
+      expect(Registry.getNames()).toHaveLength(0);
+
+      await GenServer.stop(ref);
+    });
+
+    it('throws AlreadyRegisteredError when name is already taken', async () => {
+      const ref1 = await GenServer.start(createCounterBehavior(), { name: 'counter' });
+
+      await expect(
+        GenServer.start(createCounterBehavior(), { name: 'counter' })
+      ).rejects.toThrow(AlreadyRegisteredError);
+
+      await GenServer.stop(ref1);
+    });
+
+    it('cleans up server instance when registration fails (no zombie servers)', async () => {
+      const ref1 = await GenServer.start(createCounterBehavior(), { name: 'unique-name' });
+      const initialServerCount = GenServer._getAllServerIds().length;
+
+      // Attempt to start another server with the same name
+      await expect(
+        GenServer.start(createCounterBehavior(), { name: 'unique-name' })
+      ).rejects.toThrow(AlreadyRegisteredError);
+
+      // Verify no zombie server was left behind
+      const finalServerCount = GenServer._getAllServerIds().length;
+      expect(finalServerCount).toBe(initialServerCount);
+
+      await GenServer.stop(ref1);
+    });
+
+    it('automatically unregisters when server stops', async () => {
+      const ref = await GenServer.start(createCounterBehavior(), { name: 'temp-counter' });
+
+      expect(Registry.isRegistered('temp-counter')).toBe(true);
+
+      await GenServer.stop(ref);
+
+      expect(Registry.isRegistered('temp-counter')).toBe(false);
+    });
+
+    it('allows lookup by name after registration', async () => {
+      const ref = await GenServer.start(createCounterBehavior(), { name: 'lookup-test' });
+
+      const foundRef = Registry.lookup('lookup-test');
+      await GenServer.cast(foundRef, 'inc');
+      const value = await GenServer.call(foundRef, 'get');
+
+      expect(value).toBe(1);
+
+      await GenServer.stop(ref);
+    });
+
+    it('works with both name and initTimeout options', async () => {
+      const behavior: GenServerBehavior<string, 'get', never, string> = {
+        init: async () => {
+          await new Promise((r) => setTimeout(r, 10));
+          return 'initialized';
+        },
+        handleCall: (_, state) => [state, state],
+        handleCast: (_, state) => state,
+      };
+
+      const ref = await GenServer.start(behavior, {
+        name: 'async-server',
+        initTimeout: 1000,
+      });
+
+      expect(Registry.isRegistered('async-server')).toBe(true);
+      const result = await GenServer.call(ref, 'get');
+      expect(result).toBe('initialized');
+
+      await GenServer.stop(ref);
+    });
+
+    it('name can be reused after server stops', async () => {
+      const ref1 = await GenServer.start(createCounterBehavior(), { name: 'reusable' });
+      await GenServer.cast(ref1, 'inc');
+      await GenServer.stop(ref1);
+
+      // Same name should be available again
+      const ref2 = await GenServer.start(createCounterBehavior(), { name: 'reusable' });
+      const value = await GenServer.call(ref2, 'get');
+      expect(value).toBe(0); // Fresh server, fresh state
+
+      await GenServer.stop(ref2);
     });
   });
 });

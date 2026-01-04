@@ -25,6 +25,7 @@ import {
   DEFAULTS,
 } from './types.js';
 import { estimateObjectSize } from '../observer/memory-utils.js';
+import { Registry } from './registry.js';
 
 /**
  * Internal message type for the processing queue.
@@ -459,6 +460,7 @@ export const GenServer = {
    * @param options - Start options (name, initTimeout)
    * @returns A reference to the started server
    * @throws {InitializationError} If init() fails or times out
+   * @throws {AlreadyRegisteredError} If options.name is already registered
    */
   async start<State, CallMsg, CastMsg, CallReply>(
     behavior: GenServerBehavior<State, CallMsg, CastMsg, CallReply>,
@@ -497,6 +499,18 @@ export const GenServer = {
     instance.markRunning();
 
     const ref = createRef<State, CallMsg, CastMsg, CallReply>(id);
+
+    // Register in Registry if name is provided
+    if (options.name) {
+      try {
+        Registry.register(options.name, ref);
+      } catch (error) {
+        // Rollback: clean up the server instance on registration failure
+        serverRegistry.delete(id);
+        throw error;
+      }
+    }
+
     emitLifecycleEvent('started', ref as GenServerRef);
 
     return ref;
