@@ -70,7 +70,8 @@ describe('Supervisor', () => {
     GenServer._resetIdCounter();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await Supervisor._clearAll();
     Supervisor._clearLifecycleHandlers();
     GenServer._clearLifecycleHandlers();
   });
@@ -766,6 +767,165 @@ describe('Supervisor', () => {
 
       const children = Supervisor.getChildren(ref);
       expect(children.map((c) => c.id)).toEqual(['b', 'c', 'd']);
+
+      await Supervisor.stop(ref);
+    });
+  });
+
+  describe('introspection (Observer support)', () => {
+    it('_getStats() returns correct statistics', async () => {
+      const startTime = Date.now();
+      const ref = await Supervisor.start({
+        strategy: 'one_for_one',
+        children: [
+          createChildSpec('child1'),
+          createChildSpec('child2'),
+        ],
+      });
+
+      const stats = Supervisor._getStats(ref);
+
+      expect(stats).toBeDefined();
+      expect(stats!.id).toBe(ref.id);
+      expect(stats!.strategy).toBe('one_for_one');
+      expect(stats!.childCount).toBe(2);
+      expect(stats!.totalRestarts).toBe(0);
+      expect(stats!.startedAt).toBeGreaterThanOrEqual(startTime - 10);
+      expect(stats!.startedAt).toBeLessThanOrEqual(Date.now());
+      expect(stats!.uptimeMs).toBeGreaterThanOrEqual(0);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('_getStats() returns undefined for stopped supervisor', async () => {
+      const ref = await Supervisor.start();
+      await Supervisor.stop(ref);
+
+      const stats = Supervisor._getStats(ref);
+      expect(stats).toBeUndefined();
+    });
+
+    it('_getStats() tracks totalRestarts correctly', async () => {
+      const ref = await Supervisor.start({
+        restartIntensity: { maxRestarts: 10, withinMs: 5000 },
+        children: [createChildSpec('child')],
+      });
+
+      let stats = Supervisor._getStats(ref);
+      expect(stats!.totalRestarts).toBe(0);
+
+      // Crash child twice
+      for (let i = 0; i < 2; i++) {
+        const child = Supervisor.getChild(ref, 'child')!;
+        const childRefBefore = child.ref;
+        crashChild(child.ref);
+        await waitFor(() => {
+          const current = Supervisor.getChild(ref, 'child');
+          return current?.ref.id !== childRefBefore.id;
+        }, 2000);
+      }
+
+      stats = Supervisor._getStats(ref);
+      expect(stats!.totalRestarts).toBe(2);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('_getAllStats() returns statistics for all running supervisors', async () => {
+      const ref1 = await Supervisor.start({
+        strategy: 'one_for_one',
+        children: [createChildSpec('child')],
+      });
+      const ref2 = await Supervisor.start({
+        strategy: 'one_for_all',
+      });
+
+      const allStats = Supervisor._getAllStats();
+
+      expect(allStats.length).toBe(2);
+      expect(allStats.map((s) => s.id).sort()).toEqual(
+        [ref1.id, ref2.id].sort()
+      );
+
+      const stats1 = allStats.find((s) => s.id === ref1.id);
+      const stats2 = allStats.find((s) => s.id === ref2.id);
+
+      expect(stats1!.strategy).toBe('one_for_one');
+      expect(stats1!.childCount).toBe(1);
+      expect(stats2!.strategy).toBe('one_for_all');
+      expect(stats2!.childCount).toBe(0);
+
+      await Promise.all([Supervisor.stop(ref1), Supervisor.stop(ref2)]);
+    });
+
+    it('_getAllStats() returns empty array when no supervisors running', () => {
+      const allStats = Supervisor._getAllStats();
+      expect(allStats).toEqual([]);
+    });
+
+    it('_getAllSupervisorIds() returns all running supervisor IDs', async () => {
+      const ref1 = await Supervisor.start();
+      const ref2 = await Supervisor.start();
+
+      const ids = Supervisor._getAllSupervisorIds();
+
+      expect(ids.length).toBe(2);
+      expect(ids).toContain(ref1.id);
+      expect(ids).toContain(ref2.id);
+
+      await Supervisor.stop(ref1);
+
+      const idsAfterStop = Supervisor._getAllSupervisorIds();
+      expect(idsAfterStop.length).toBe(1);
+      expect(idsAfterStop).toContain(ref2.id);
+      expect(idsAfterStop).not.toContain(ref1.id);
+
+      await Supervisor.stop(ref2);
+    });
+
+    it('_getRefById() returns ref for valid ID', async () => {
+      const ref = await Supervisor.start();
+
+      const foundRef = Supervisor._getRefById(ref.id);
+
+      expect(foundRef).toBeDefined();
+      expect(foundRef!.id).toBe(ref.id);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('_getRefById() returns undefined for invalid ID', async () => {
+      const ref = Supervisor._getRefById('non_existent_id');
+      expect(ref).toBeUndefined();
+    });
+
+    it('_getRefById() returns undefined after supervisor is stopped', async () => {
+      const ref = await Supervisor.start();
+      const id = ref.id;
+      await Supervisor.stop(ref);
+
+      const foundRef = Supervisor._getRefById(id);
+      expect(foundRef).toBeUndefined();
+    });
+
+    it('childCount updates dynamically', async () => {
+      const ref = await Supervisor.start({
+        children: [createChildSpec('a')],
+      });
+
+      let stats = Supervisor._getStats(ref);
+      expect(stats!.childCount).toBe(1);
+
+      await Supervisor.startChild(ref, createChildSpec('b'));
+      await Supervisor.startChild(ref, createChildSpec('c'));
+
+      stats = Supervisor._getStats(ref);
+      expect(stats!.childCount).toBe(3);
+
+      await Supervisor.terminateChild(ref, 'b');
+
+      stats = Supervisor._getStats(ref);
+      expect(stats!.childCount).toBe(2);
 
       await Supervisor.stop(ref);
     });

@@ -386,3 +386,73 @@ export const DEFAULTS = {
   MAX_RESTARTS: 3,
   RESTART_WITHIN_MS: 5000,
 } as const;
+
+// =============================================================================
+// Observer Types
+// =============================================================================
+
+/**
+ * Runtime statistics for a GenServer instance.
+ * Provides introspection data for monitoring and debugging.
+ */
+export interface GenServerStats {
+  /** Unique identifier of the server */
+  readonly id: string;
+  /** Current operational status */
+  readonly status: ServerStatus;
+  /** Number of messages waiting in the queue */
+  readonly queueSize: number;
+  /** Total number of messages processed (calls + casts) */
+  readonly messageCount: number;
+  /** Unix timestamp when the server started */
+  readonly startedAt: number;
+  /** Time elapsed since start in milliseconds */
+  readonly uptimeMs: number;
+}
+
+/**
+ * Runtime statistics for a Supervisor instance.
+ * Provides introspection data for monitoring supervision trees.
+ */
+export interface SupervisorStats {
+  /** Unique identifier of the supervisor */
+  readonly id: string;
+  /** Restart strategy in use */
+  readonly strategy: SupervisorStrategy;
+  /** Number of children currently managed */
+  readonly childCount: number;
+  /** Total number of child restarts performed */
+  readonly totalRestarts: number;
+  /** Unix timestamp when the supervisor started */
+  readonly startedAt: number;
+  /** Time elapsed since start in milliseconds */
+  readonly uptimeMs: number;
+}
+
+/**
+ * A node in the process tree hierarchy.
+ * Used for visualizing the supervision structure.
+ */
+export interface ProcessTreeNode {
+  /** Type of process */
+  readonly type: 'genserver' | 'supervisor';
+  /** Unique identifier */
+  readonly id: string;
+  /** Optional registered name */
+  readonly name?: string;
+  /** Runtime statistics */
+  readonly stats: GenServerStats | SupervisorStats;
+  /** Child nodes (only for supervisors) */
+  readonly children?: readonly ProcessTreeNode[];
+}
+
+/**
+ * Events emitted by the Observer for real-time monitoring.
+ * Discriminated union for type-safe event handling.
+ */
+export type ObserverEvent =
+  | { readonly type: 'server_started'; readonly stats: GenServerStats }
+  | { readonly type: 'server_stopped'; readonly id: string; readonly reason: TerminateReason }
+  | { readonly type: 'supervisor_started'; readonly stats: SupervisorStats }
+  | { readonly type: 'supervisor_stopped'; readonly id: string }
+  | { readonly type: 'stats_update'; readonly servers: readonly GenServerStats[]; readonly supervisors: readonly SupervisorStats[] };

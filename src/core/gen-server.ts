@@ -18,6 +18,7 @@ import {
   type CallOptions,
   type ServerStatus,
   type LifecycleHandler,
+  type GenServerStats,
   CallTimeoutError,
   ServerNotRunningError,
   InitializationError,
@@ -55,6 +56,8 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
   private status: ServerStatus = 'initializing';
   private readonly queue: QueuedMessage<CallMsg, CastMsg, CallReply>[] = [];
   private processing = false;
+  private readonly startedAt: number = Date.now();
+  private messageCount = 0;
 
   constructor(
     readonly id: string,
@@ -76,6 +79,27 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
    */
   getStatus(): ServerStatus {
     return this.status;
+  }
+
+  /**
+   * Returns the current queue size.
+   */
+  getQueueSize(): number {
+    return this.queue.length;
+  }
+
+  /**
+   * Returns comprehensive statistics for this server instance.
+   */
+  getStats(): GenServerStats {
+    return {
+      id: this.id,
+      status: this.status,
+      queueSize: this.queue.length,
+      messageCount: this.messageCount,
+      startedAt: this.startedAt,
+      uptimeMs: Date.now() - this.startedAt,
+    };
   }
 
   /**
@@ -239,6 +263,7 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
       );
       const [reply, newState] = result;
       this.state = newState;
+      this.messageCount++;
       message.resolve(reply);
     } catch (error) {
       message.reject(error instanceof Error ? error : new Error(String(error)));
@@ -262,6 +287,7 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
         this.behavior.handleCast(message.msg, this.state),
       );
       this.state = newState;
+      this.messageCount++;
     } catch {
       // Cast errors are silently ignored as there's no caller to notify.
       // In production, errors should be captured via lifecycle events.
@@ -598,5 +624,45 @@ export const GenServer = {
    */
   _resetIdCounter(): void {
     serverIdCounter = 0;
+  },
+
+  /**
+   * Returns statistics for a specific server.
+   * Used by Observer for introspection.
+   *
+   * @internal
+   */
+  _getStats<State, CallMsg, CastMsg, CallReply>(
+    ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
+  ): GenServerStats | undefined {
+    const instance = serverRegistry.get(ref.id);
+    if (!instance) {
+      return undefined;
+    }
+    return (instance as ServerInstance<State, CallMsg, CastMsg, CallReply>).getStats();
+  },
+
+  /**
+   * Returns statistics for all running servers.
+   * Used by Observer for system-wide introspection.
+   *
+   * @internal
+   */
+  _getAllStats(): readonly GenServerStats[] {
+    const stats: GenServerStats[] = [];
+    for (const instance of serverRegistry.values()) {
+      stats.push(instance.getStats());
+    }
+    return stats;
+  },
+
+  /**
+   * Returns IDs of all running servers.
+   * Used by Observer for enumeration.
+   *
+   * @internal
+   */
+  _getAllServerIds(): readonly string[] {
+    return Array.from(serverRegistry.keys());
   },
 } as const;

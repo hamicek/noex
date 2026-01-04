@@ -618,4 +618,154 @@ describe('GenServer', () => {
       await GenServer.stop(ref);
     });
   });
+
+  describe('introspection (Observer support)', () => {
+    it('_getStats() returns correct statistics', async () => {
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior);
+      const startTime = Date.now();
+
+      // Process some messages
+      GenServer.cast(ref, 'inc');
+      GenServer.cast(ref, 'inc');
+      await new Promise((r) => setTimeout(r, 20));
+      await GenServer.call(ref, 'get');
+
+      const stats = GenServer._getStats(ref);
+
+      expect(stats).toBeDefined();
+      expect(stats!.id).toBe(ref.id);
+      expect(stats!.status).toBe('running');
+      expect(stats!.messageCount).toBe(3); // 2 casts + 1 call
+      expect(stats!.queueSize).toBe(0);
+      expect(stats!.startedAt).toBeGreaterThanOrEqual(startTime - 10);
+      expect(stats!.startedAt).toBeLessThanOrEqual(Date.now());
+      expect(stats!.uptimeMs).toBeGreaterThan(0);
+
+      await GenServer.stop(ref);
+    });
+
+    it('_getStats() returns undefined for stopped server', async () => {
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior);
+      await GenServer.stop(ref);
+
+      const stats = GenServer._getStats(ref);
+      expect(stats).toBeUndefined();
+    });
+
+    it('_getAllStats() returns statistics for all running servers', async () => {
+      const behavior = createCounterBehavior();
+      const ref1 = await GenServer.start(behavior);
+      const ref2 = await GenServer.start(behavior);
+      const ref3 = await GenServer.start(behavior);
+
+      GenServer.cast(ref1, 'inc');
+      await new Promise((r) => setTimeout(r, 20));
+
+      const allStats = GenServer._getAllStats();
+
+      expect(allStats.length).toBe(3);
+      expect(allStats.map((s) => s.id).sort()).toEqual(
+        [ref1.id, ref2.id, ref3.id].sort()
+      );
+
+      const stats1 = allStats.find((s) => s.id === ref1.id);
+      expect(stats1!.messageCount).toBe(1);
+
+      await Promise.all([
+        GenServer.stop(ref1),
+        GenServer.stop(ref2),
+        GenServer.stop(ref3),
+      ]);
+    });
+
+    it('_getAllStats() returns empty array when no servers running', () => {
+      const allStats = GenServer._getAllStats();
+      expect(allStats).toEqual([]);
+    });
+
+    it('_getAllServerIds() returns all running server IDs', async () => {
+      const behavior = createCounterBehavior();
+      const ref1 = await GenServer.start(behavior);
+      const ref2 = await GenServer.start(behavior);
+
+      const ids = GenServer._getAllServerIds();
+
+      expect(ids.length).toBe(2);
+      expect(ids).toContain(ref1.id);
+      expect(ids).toContain(ref2.id);
+
+      await GenServer.stop(ref1);
+
+      const idsAfterStop = GenServer._getAllServerIds();
+      expect(idsAfterStop.length).toBe(1);
+      expect(idsAfterStop).toContain(ref2.id);
+      expect(idsAfterStop).not.toContain(ref1.id);
+
+      await GenServer.stop(ref2);
+    });
+
+    it('messageCount correctly tracks both calls and casts', async () => {
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior);
+
+      // Initial state
+      let stats = GenServer._getStats(ref);
+      expect(stats!.messageCount).toBe(0);
+
+      // After casts
+      GenServer.cast(ref, 'inc');
+      GenServer.cast(ref, 'inc');
+      GenServer.cast(ref, 'inc');
+      await new Promise((r) => setTimeout(r, 50));
+
+      stats = GenServer._getStats(ref);
+      expect(stats!.messageCount).toBe(3);
+
+      // After calls
+      await GenServer.call(ref, 'get');
+      await GenServer.call(ref, { type: 'add', value: 5 });
+
+      stats = GenServer._getStats(ref);
+      expect(stats!.messageCount).toBe(5);
+
+      await GenServer.stop(ref);
+    });
+
+    it('queueSize reflects pending messages', async () => {
+      const behavior: GenServerBehavior<null, 'slow', 'slow', null> = {
+        init: () => null,
+        handleCall: async (_, state) => {
+          await new Promise((r) => setTimeout(r, 100));
+          return [null, state];
+        },
+        handleCast: async (_, state) => {
+          await new Promise((r) => setTimeout(r, 100));
+          return state;
+        },
+      };
+
+      const ref = await GenServer.start(behavior);
+
+      // Start a slow call
+      const slowCall = GenServer.call(ref, 'slow', { timeout: 5000 });
+
+      // Queue more messages
+      GenServer.cast(ref, 'slow');
+      GenServer.cast(ref, 'slow');
+
+      // Wait a bit for the first call to start processing
+      await new Promise((r) => setTimeout(r, 10));
+
+      const stats = GenServer._getStats(ref);
+      // Queue should have the 2 casts (first call is being processed)
+      expect(stats!.queueSize).toBe(2);
+
+      // Clean up
+      await slowCall;
+      await new Promise((r) => setTimeout(r, 250));
+      await GenServer.stop(ref);
+    });
+  });
 });

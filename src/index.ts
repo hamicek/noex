@@ -24,6 +24,11 @@ export type {
   LifecycleHandler,
   ServerStatus,
   ChildInfo,
+  // Observer types
+  GenServerStats,
+  SupervisorStats,
+  ProcessTreeNode,
+  ObserverEvent,
 } from './core/types.js';
 
 // Error classes

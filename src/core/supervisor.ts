@@ -20,6 +20,7 @@ import {
   type TerminateReason,
   type LifecycleHandler,
   type LifecycleEvent,
+  type SupervisorStats,
   MaxRestartsExceededError,
   DuplicateChildError,
   ChildNotFoundError,
@@ -47,6 +48,8 @@ class SupervisorInstance {
   private running = true;
   private shuttingDown = false;
   private readonly restartTimestamps: number[] = [];
+  private readonly startedAt: number = Date.now();
+  private totalRestarts = 0;
 
   constructor(
     readonly id: string,
@@ -62,6 +65,20 @@ class SupervisorInstance {
     return {
       strategy: this.strategy,
       childCount: this.children.size,
+    };
+  }
+
+  /**
+   * Returns comprehensive statistics for this supervisor instance.
+   */
+  getStats(): SupervisorStats {
+    return {
+      id: this.id,
+      strategy: this.strategy,
+      childCount: this.children.size,
+      totalRestarts: this.totalRestarts,
+      startedAt: this.startedAt,
+      uptimeMs: Date.now() - this.startedAt,
     };
   }
 
@@ -288,6 +305,7 @@ class SupervisorInstance {
   private recordRestart(): void {
     const now = Date.now();
     this.restartTimestamps.push(now);
+    this.totalRestarts++;
 
     // Cleanup old timestamps
     const windowStart = now - this.restartWithinMs;
@@ -717,5 +735,64 @@ export const Supervisor = {
    */
   _resetIdCounter(): void {
     supervisorIdCounter = 0;
+  },
+
+  /**
+   * Returns statistics for a specific supervisor.
+   * Used by Observer for introspection.
+   *
+   * @internal
+   */
+  _getStats(ref: SupervisorRef): SupervisorStats | undefined {
+    const instance = supervisorRegistry.get(ref.id);
+    if (!instance) {
+      return undefined;
+    }
+    return instance.getStats();
+  },
+
+  /**
+   * Returns statistics for all running supervisors.
+   * Used by Observer for system-wide introspection.
+   *
+   * @internal
+   */
+  _getAllStats(): readonly SupervisorStats[] {
+    const stats: SupervisorStats[] = [];
+    for (const instance of supervisorRegistry.values()) {
+      stats.push(instance.getStats());
+    }
+    return stats;
+  },
+
+  /**
+   * Returns IDs of all running supervisors.
+   * Used by Observer for enumeration.
+   *
+   * @internal
+   */
+  _getAllSupervisorIds(): readonly string[] {
+    return Array.from(supervisorRegistry.keys());
+  },
+
+  /**
+   * Returns a SupervisorRef by its ID.
+   * Used by Observer for lookups.
+   *
+   * @internal
+   */
+  _getRefById(id: string): SupervisorRef | undefined {
+    return supervisorRefs.get(id);
+  },
+
+  /**
+   * Clears all supervisors from the registry.
+   * Useful for testing to ensure clean state between tests.
+   *
+   * @internal
+   */
+  async _clearAll(): Promise<void> {
+    const refs = Array.from(supervisorRefs.values());
+    await Promise.all(refs.map((ref) => this.stop(ref)));
   },
 } as const;
