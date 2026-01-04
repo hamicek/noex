@@ -15,6 +15,7 @@ export type {
   CallOptions,
   GenServerBehavior,
   ChildRestartStrategy,
+  AutoShutdown,
   ChildSpec,
   SupervisorStrategy,
   RestartIntensity,

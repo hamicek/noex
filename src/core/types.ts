@@ -141,6 +141,15 @@ export interface GenServerBehavior<
 export type ChildRestartStrategy = 'permanent' | 'transient' | 'temporary';
 
 /**
+ * Auto-shutdown behavior for supervisors.
+ *
+ * - 'never': Supervisor continues running even after all children terminate (default)
+ * - 'any_significant': Supervisor shuts down when any significant child terminates
+ * - 'all_significant': Supervisor shuts down when all significant children have terminated
+ */
+export type AutoShutdown = 'never' | 'any_significant' | 'all_significant';
+
+/**
  * Specification for a child process managed by a Supervisor.
  */
 export interface ChildSpec<
@@ -172,6 +181,14 @@ export interface ChildSpec<
    * @default 5000
    */
   readonly shutdownTimeout?: number;
+
+  /**
+   * Marks this child as significant for auto_shutdown behavior.
+   * When true, this child's termination may trigger supervisor shutdown
+   * depending on the autoShutdown setting.
+   * @default false
+   */
+  readonly significant?: boolean;
 }
 
 /**
@@ -228,6 +245,12 @@ export interface SupervisorOptions {
    * Optional name for registry registration.
    */
   readonly name?: string;
+
+  /**
+   * Auto-shutdown behavior when children terminate.
+   * @default 'never'
+   */
+  readonly autoShutdown?: AutoShutdown;
 }
 
 /**

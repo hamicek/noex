@@ -21,6 +21,7 @@ import {
   type LifecycleHandler,
   type LifecycleEvent,
   type SupervisorStats,
+  type AutoShutdown,
   MaxRestartsExceededError,
   DuplicateChildError,
   ChildNotFoundError,
@@ -60,6 +61,7 @@ class SupervisorInstance {
     private readonly strategy: SupervisorStrategy,
     private readonly maxRestarts: number,
     private readonly restartWithinMs: number,
+    private readonly autoShutdown: AutoShutdown,
   ) {}
 
   /**
@@ -163,8 +165,15 @@ class SupervisorInstance {
       throw new ChildNotFoundError(this.id, childId);
     }
 
+    const spec = child.spec;
     await this.stopChild(child, 'shutdown');
     this.removeChild(childId);
+
+    // Check auto_shutdown after child removal
+    if (this.checkAutoShutdown(spec)) {
+      const ref = supervisorRefs.get(this.id)!;
+      void Supervisor.stop(ref, 'shutdown');
+    }
   }
 
   /**
@@ -266,8 +275,15 @@ class SupervisorInstance {
 
     // Check if we should restart based on child restart strategy and exit reason
     if (!this.shouldRestartChild(restartStrategy, crashedChild.lastExitReason)) {
+      const spec = crashedChild.spec;
       this.removeChild(crashedChild.id);
       emitSupervisorEvent('child_terminated', supervisorRefs.get(this.id)!, crashedChild.ref);
+
+      // Check auto_shutdown after child removal
+      if (this.checkAutoShutdown(spec)) {
+        const ref = supervisorRefs.get(this.id)!;
+        void Supervisor.stop(ref, 'shutdown');
+      }
       return;
     }
 
@@ -465,6 +481,37 @@ class SupervisorInstance {
       this.childOrder.splice(index, 1);
     }
   }
+
+  /**
+   * Checks if supervisor should auto-shutdown based on child termination.
+   * Returns true if supervisor should shut down.
+   */
+  checkAutoShutdown(terminatedChildSpec: ChildSpec): boolean {
+    if (this.autoShutdown === 'never') {
+      return false;
+    }
+
+    const wasSignificant = terminatedChildSpec.significant === true;
+
+    if (this.autoShutdown === 'any_significant') {
+      return wasSignificant;
+    }
+
+    if (this.autoShutdown === 'all_significant') {
+      if (!wasSignificant) {
+        return false;
+      }
+      // Check if any significant children remain
+      for (const child of this.children.values()) {
+        if (child.spec.significant === true) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    return false;
+  }
 }
 
 /**
@@ -604,8 +651,9 @@ export const Supervisor = {
     const strategy = options.strategy ?? 'one_for_one';
     const maxRestarts = options.restartIntensity?.maxRestarts ?? DEFAULTS.MAX_RESTARTS;
     const restartWithinMs = options.restartIntensity?.withinMs ?? DEFAULTS.RESTART_WITHIN_MS;
+    const autoShutdown = options.autoShutdown ?? 'never';
 
-    const instance = new SupervisorInstance(id, strategy, maxRestarts, restartWithinMs);
+    const instance = new SupervisorInstance(id, strategy, maxRestarts, restartWithinMs, autoShutdown);
     supervisorRegistry.set(id, instance);
 
     const ref = createSupervisorRef(id);

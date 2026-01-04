@@ -984,4 +984,254 @@ describe('Supervisor', () => {
       await Supervisor.stop(ref);
     });
   });
+
+  describe('auto_shutdown', () => {
+    it('never: supervisor continues after all children terminate', async () => {
+      const ref = await Supervisor.start({
+        autoShutdown: 'never',
+        children: [
+          {
+            id: 'sig1',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: true,
+          },
+          {
+            id: 'sig2',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: true,
+          },
+        ],
+      });
+
+      expect(Supervisor.isRunning(ref)).toBe(true);
+      expect(Supervisor.countChildren(ref)).toBe(2);
+
+      // Terminate all children
+      const child1 = Supervisor.getChild(ref, 'sig1')!;
+      const child2 = Supervisor.getChild(ref, 'sig2')!;
+      crashChild(child1.ref);
+      crashChild(child2.ref);
+
+      // Wait for children to be removed
+      await waitFor(() => Supervisor.countChildren(ref) === 0, 2000);
+
+      // Supervisor should still be running
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('any_significant: shuts down when any significant child terminates', async () => {
+      const ref = await Supervisor.start({
+        autoShutdown: 'any_significant',
+        children: [
+          {
+            id: 'significant',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: true,
+          },
+          {
+            id: 'regular',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: false,
+          },
+        ],
+      });
+
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      // Crash the significant child
+      const sigChild = Supervisor.getChild(ref, 'significant')!;
+      crashChild(sigChild.ref);
+
+      // Wait for supervisor to shut down
+      await waitFor(() => !Supervisor.isRunning(ref), 2000);
+
+      expect(Supervisor.isRunning(ref)).toBe(false);
+    });
+
+    it('any_significant: ignores non-significant children', async () => {
+      const ref = await Supervisor.start({
+        autoShutdown: 'any_significant',
+        children: [
+          {
+            id: 'significant',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: true,
+          },
+          {
+            id: 'regular',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: false,
+          },
+        ],
+      });
+
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      // Crash the non-significant child
+      const regularChild = Supervisor.getChild(ref, 'regular')!;
+      crashChild(regularChild.ref);
+
+      // Wait for child to be removed
+      await waitFor(
+        () => Supervisor.getChild(ref, 'regular') === undefined,
+        2000,
+      );
+
+      // Supervisor should still be running
+      expect(Supervisor.isRunning(ref)).toBe(true);
+      expect(Supervisor.countChildren(ref)).toBe(1);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('all_significant: shuts down when ALL significant children terminate', async () => {
+      const ref = await Supervisor.start({
+        autoShutdown: 'all_significant',
+        children: [
+          {
+            id: 'sig1',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: true,
+          },
+          {
+            id: 'sig2',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: true,
+          },
+          {
+            id: 'regular',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: false,
+          },
+        ],
+      });
+
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      // Crash first significant child
+      const sig1 = Supervisor.getChild(ref, 'sig1')!;
+      crashChild(sig1.ref);
+
+      await waitFor(
+        () => Supervisor.getChild(ref, 'sig1') === undefined,
+        2000,
+      );
+
+      // Supervisor should still be running (sig2 is still alive)
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      // Crash second significant child
+      const sig2 = Supervisor.getChild(ref, 'sig2')!;
+      crashChild(sig2.ref);
+
+      // Wait for supervisor to shut down
+      await waitFor(() => !Supervisor.isRunning(ref), 2000);
+
+      expect(Supervisor.isRunning(ref)).toBe(false);
+    });
+
+    it('all_significant: ignores non-significant children for shutdown decision', async () => {
+      const ref = await Supervisor.start({
+        autoShutdown: 'all_significant',
+        children: [
+          {
+            id: 'significant',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: true,
+          },
+          {
+            id: 'regular',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: false,
+          },
+        ],
+      });
+
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      // Crash the non-significant child first
+      const regularChild = Supervisor.getChild(ref, 'regular')!;
+      crashChild(regularChild.ref);
+
+      await waitFor(
+        () => Supervisor.getChild(ref, 'regular') === undefined,
+        2000,
+      );
+
+      // Supervisor should still be running
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      // Now crash the significant child - should trigger shutdown
+      const sigChild = Supervisor.getChild(ref, 'significant')!;
+      crashChild(sigChild.ref);
+
+      await waitFor(() => !Supervisor.isRunning(ref), 2000);
+
+      expect(Supervisor.isRunning(ref)).toBe(false);
+    });
+
+    it('auto_shutdown works with terminateChild()', async () => {
+      const ref = await Supervisor.start({
+        autoShutdown: 'any_significant',
+        children: [
+          {
+            id: 'significant',
+            start: () => GenServer.start(createCounterBehavior()),
+            significant: true,
+          },
+        ],
+      });
+
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      // Manually terminate the significant child
+      await Supervisor.terminateChild(ref, 'significant');
+
+      // Wait for supervisor to shut down
+      await waitFor(() => !Supervisor.isRunning(ref), 2000);
+
+      expect(Supervisor.isRunning(ref)).toBe(false);
+    });
+
+    it('defaults to never when autoShutdown is not specified', async () => {
+      const ref = await Supervisor.start({
+        children: [
+          {
+            id: 'significant',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'temporary',
+            significant: true,
+          },
+        ],
+      });
+
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      const child = Supervisor.getChild(ref, 'significant')!;
+      crashChild(child.ref);
+
+      await waitFor(
+        () => Supervisor.getChild(ref, 'significant') === undefined,
+        2000,
+      );
+
+      // Supervisor should still be running (default is 'never')
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      await Supervisor.stop(ref);
+    });
+  });
 });
