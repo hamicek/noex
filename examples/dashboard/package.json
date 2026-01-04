@@ -1,0 +1,11 @@
+{
+  "name": "noex-dashboard-example",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.ts"
+  },
+  "dependencies": {
+    "noex": "file:../.."
+  }
+}

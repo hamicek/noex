@@ -9,8 +9,10 @@ Elixir-style GenServer and Supervisor patterns for TypeScript.
 - **GenServer**: Stateful services with serialized message processing
 - **Supervisor**: Automatic restart strategies for fault tolerance
 - **Registry**: Named process lookup for loose coupling
+- **Observer**: Real-time introspection into process state
+- **Dashboard**: TUI-based monitoring interface
 - **Type-safe**: Full TypeScript support with strict typing
-- **Zero dependencies**: Lightweight and focused
+- **Zero dependencies**: Core library is lightweight and focused
 
 ## Installation
 
@@ -266,6 +268,94 @@ try {
 
 await RateLimiter.stop(limiter);
 ```
+
+## Observer
+
+The Observer module provides real-time introspection into your supervision tree:
+
+```typescript
+import { Observer } from 'noex';
+
+// Get a snapshot of all processes
+const snapshot = Observer.getSnapshot();
+console.log(`Total processes: ${snapshot.processCount}`);
+console.log(`Total messages processed: ${snapshot.totalMessages}`);
+
+// Iterate GenServer statistics
+for (const server of snapshot.servers) {
+  console.log(`${server.id}: ${server.messageCount} messages, queue: ${server.queueSize}`);
+}
+
+// Get hierarchical process tree
+const tree = Observer.getProcessTree();
+// Returns nested structure of supervisors and their children
+
+// Subscribe to real-time events
+const unsubscribe = Observer.subscribe((event) => {
+  console.log(`Event: ${event.type}`, event);
+});
+
+// Start polling for periodic updates
+const stopPolling = Observer.startPolling(1000, (event) => {
+  if (event.type === 'stats_update') {
+    console.log('Stats updated');
+  }
+});
+```
+
+## Dashboard (TUI)
+
+noex includes an optional TUI dashboard for real-time monitoring. It requires `blessed-contrib`:
+
+```bash
+npm install blessed-contrib
+```
+
+```typescript
+import { Dashboard } from 'noex/dashboard';
+
+const dashboard = new Dashboard({
+  refreshInterval: 500,  // Update every 500ms
+  theme: 'dark',         // 'dark' or 'light'
+  layout: 'full',        // 'full', 'compact', or 'minimal'
+});
+
+dashboard.start();
+
+// The dashboard displays:
+// - Process tree with status indicators
+// - GenServer statistics table
+// - Memory usage gauge
+// - Real-time event log
+
+// Keyboard controls:
+// q, Escape  - Quit
+// r          - Refresh
+// 1/2/3      - Switch layouts
+// Tab        - Navigate widgets
+// Enter      - Process details
+// ?          - Help
+```
+
+### Dashboard Layouts
+
+| Layout | Widgets |
+|--------|---------|
+| `full` | Process tree, stats table, memory gauge, event log |
+| `compact` | Process tree, stats table |
+| `minimal` | Stats table only |
+
+### Dashboard API
+
+| Method | Description |
+|--------|-------------|
+| `start()` | Start the dashboard |
+| `stop()` | Stop and cleanup |
+| `refresh()` | Force immediate refresh |
+| `switchLayout(layout)` | Change layout at runtime |
+| `selectProcess(id)` | Show process details |
+| `isRunning()` | Check if dashboard is active |
+| `getLayout()` | Get current layout |
 
 ## Lifecycle Events
 
