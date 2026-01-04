@@ -255,6 +255,25 @@ export class Dashboard {
    * Initializes the blessed screen with proper configuration.
    */
   private initializeScreen(): void {
+    // Suppress blessed terminfo warnings (xterm-256color.Setulc parsing errors)
+    const originalStderr = process.stderr.write.bind(process.stderr);
+    const suppressedWrite = function (
+      this: NodeJS.WriteStream,
+      chunk: string | Uint8Array,
+      encodingOrCb?: BufferEncoding | ((err?: Error | null) => void),
+      cb?: (err?: Error | null) => void
+    ): boolean {
+      const str = typeof chunk === 'string' ? chunk : chunk.toString();
+      if (str.includes('Setulc') || str.includes('stack.push')) {
+        return true;
+      }
+      if (typeof encodingOrCb === 'function') {
+        return originalStderr(chunk, encodingOrCb);
+      }
+      return originalStderr(chunk, encodingOrCb, cb);
+    };
+    process.stderr.write = suppressedWrite as typeof process.stderr.write;
+
     this.screen = blessed.screen({
       smartCSR: true,
       title: 'noex Dashboard',
@@ -262,6 +281,9 @@ export class Dashboard {
       autoPadding: true,
       warnings: false,
     });
+
+    // Restore stderr after screen initialization
+    process.stderr.write = originalStderr;
   }
 
   /**
