@@ -3,8 +3,8 @@
  *
  * Displays a hierarchical tree of supervisors and GenServers with:
  * - Color-coded status indicators
- * - Collapsible nodes (future enhancement)
- * - Navigation support via keyboard
+ * - Interactive selection with keyboard navigation
+ * - Enter key support to show process details
  */
 
 import blessed from 'blessed';
@@ -21,21 +21,31 @@ export interface ProcessTreeData {
 }
 
 /**
+ * Entry in the line-to-node mapping.
+ */
+interface TreeLineEntry {
+  readonly node: ProcessTreeNode;
+  readonly displayLine: string;
+}
+
+/**
  * Widget that visualizes the supervision tree hierarchy.
  *
  * Renders a tree structure showing supervisors and their children,
  * with visual indicators for process status and type.
+ * Supports keyboard navigation and selection.
  *
  * @example
  * ```
- * \u25BC supervisor:main
- *   \u251C\u2500 \u25CF counter (running)
- *   \u251C\u2500 \u25CF cache (running)
- *   \u2514\u2500 \u25CB worker (stopped)
+ * ▼ supervisor:main
+ *   ├─ ● counter (running)
+ *   ├─ ● cache (running)
+ *   └─ ○ worker (stopped)
  * ```
  */
 export class ProcessTreeWidget extends BaseWidget<ProcessTreeData> {
-  private boxElement: blessed.Widgets.BoxElement | null = null;
+  private listElement: blessed.Widgets.ListElement | null = null;
+  private lineMapping: TreeLineEntry[] = [];
 
   constructor(config: WidgetConfig) {
     super(config);
@@ -45,12 +55,12 @@ export class ProcessTreeWidget extends BaseWidget<ProcessTreeData> {
     grid: InstanceType<typeof contrib.grid>,
     position: GridPosition,
   ): blessed.Widgets.BlessedElement {
-    this.boxElement = grid.set(
+    this.listElement = grid.set(
       position.row,
       position.col,
       position.rowSpan,
       position.colSpan,
-      blessed.box,
+      blessed.list,
       {
         label: ' Process Tree ',
         tags: true,
@@ -59,6 +69,13 @@ export class ProcessTreeWidget extends BaseWidget<ProcessTreeData> {
           border: { fg: this.theme.primary },
           label: this.getLabelStyle(),
           focus: { border: { fg: this.theme.warning } },
+          selected: {
+            bg: this.theme.primary,
+            fg: this.theme.background,
+          },
+          item: {
+            fg: this.theme.text,
+          },
         },
         scrollable: true,
         scrollbar: {
@@ -69,30 +86,63 @@ export class ProcessTreeWidget extends BaseWidget<ProcessTreeData> {
         keys: true,
         vi: true,
         focusable: true,
+        interactive: true,
       },
     );
 
-    this.element = this.boxElement as blessed.Widgets.BlessedElement;
-    return this.boxElement as blessed.Widgets.BlessedElement;
+    this.element = this.listElement as blessed.Widgets.BlessedElement;
+    return this.listElement as blessed.Widgets.BlessedElement;
   }
 
   update(data: ProcessTreeData): void {
-    if (!this.boxElement) return;
+    if (!this.listElement) return;
 
     const { tree } = data;
+    this.lineMapping = [];
     const lines = this.renderTree(tree);
-    const content = lines.length > 0
-      ? lines.join('\n')
-      : `{${this.theme.textMuted}-fg}No processes running{/${this.theme.textMuted}-fg}`;
 
-    this.boxElement.setContent(content);
+    if (lines.length === 0) {
+      this.listElement.setItems([`{${this.theme.textMuted}-fg}No processes running{/${this.theme.textMuted}-fg}`]);
+      this.lineMapping = [];
+    } else {
+      this.listElement.setItems(lines);
+    }
+  }
+
+  /**
+   * Gets the currently selected process ID, if any.
+   */
+  getSelectedId(): string | null {
+    if (!this.listElement || this.lineMapping.length === 0) return null;
+
+    const selectedIndex = (this.listElement as unknown as { selected?: number }).selected;
+    if (selectedIndex === undefined || selectedIndex < 0) return null;
+    if (selectedIndex >= this.lineMapping.length) return null;
+
+    const entry = this.lineMapping[selectedIndex];
+    return entry ? entry.node.id : null;
+  }
+
+  /**
+   * Gets the currently selected process node, if any.
+   */
+  getSelectedNode(): ProcessTreeNode | null {
+    if (!this.listElement || this.lineMapping.length === 0) return null;
+
+    const selectedIndex = (this.listElement as unknown as { selected?: number }).selected;
+    if (selectedIndex === undefined || selectedIndex < 0) return null;
+    if (selectedIndex >= this.lineMapping.length) return null;
+
+    const entry = this.lineMapping[selectedIndex];
+    return entry ? entry.node : null;
   }
 
   /**
    * Renders the entire tree to formatted lines.
    */
   private renderTree(nodes: readonly ProcessTreeNode[]): string[] {
-    return this.renderNodes(nodes, '', true);
+    const entries = this.renderNodes(nodes, '', true);
+    return entries.map(e => e.displayLine);
   }
 
   /**
@@ -102,8 +152,8 @@ export class ProcessTreeWidget extends BaseWidget<ProcessTreeData> {
     nodes: readonly ProcessTreeNode[],
     prefix: string,
     isRoot: boolean,
-  ): string[] {
-    const lines: string[] = [];
+  ): TreeLineEntry[] {
+    const entries: TreeLineEntry[] = [];
     const nodeCount = nodes.length;
 
     for (let i = 0; i < nodeCount; i++) {
@@ -111,16 +161,18 @@ export class ProcessTreeWidget extends BaseWidget<ProcessTreeData> {
       const isLast = i === nodeCount - 1;
 
       const line = this.renderNode(node, prefix, isRoot, isLast);
-      lines.push(line);
+      const entry: TreeLineEntry = { node, displayLine: line };
+      entries.push(entry);
+      this.lineMapping.push(entry);
 
       if (node.children && node.children.length > 0) {
         const childPrefix = this.getChildPrefix(prefix, isRoot, isLast);
-        const childLines = this.renderNodes(node.children, childPrefix, false);
-        lines.push(...childLines);
+        const childEntries = this.renderNodes(node.children, childPrefix, false);
+        entries.push(...childEntries);
       }
     }
 
-    return lines;
+    return entries;
   }
 
   /**

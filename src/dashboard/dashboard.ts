@@ -645,8 +645,9 @@ export class Dashboard {
   /**
    * Shows the detail view for the currently selected process.
    *
-   * Attempts to get the selected process ID from the stats table
-   * and displays a modal with detailed information.
+   * Attempts to get the selected process from the focused widget
+   * (either Process Tree or Stats Table) and displays a modal
+   * with detailed information.
    */
   private showSelectedProcessDetail(): void {
     if (!this.screen || !this.processDetailView || !this.currentSnapshot) return;
@@ -654,31 +655,39 @@ export class Dashboard {
     // Prevent showing detail if another dialog is open
     if (this.processDetailView.isVisible()) return;
 
-    // Get selected ID from stats table
-    const selectedId = this.statsTableWidget?.getSelectedId();
-    if (!selectedId) {
-      this.logEvent('warning', 'No process selected');
-      return;
+    // Try to get selected node from Process Tree first (if focused)
+    let node: ProcessTreeNode | null = null;
+
+    // Check if Process Tree is focused and has selection
+    const treeNode = this.processTreeWidget?.getSelectedNode?.();
+    if (treeNode) {
+      node = treeNode;
     }
 
-    // Find the process node in tree or create from servers
-    let node = this.findProcessNode(selectedId, this.currentSnapshot.tree);
-
-    // If not found in tree, check servers directly
+    // If no tree selection, try Stats Table
     if (!node) {
-      const server = this.currentSnapshot.servers.find(s => s.id === selectedId);
-      if (server) {
-        node = {
-          id: server.id,
-          type: 'genserver',
-          name: server.id,
-          stats: server,
-        };
+      const selectedId = this.statsTableWidget?.getSelectedId();
+      if (selectedId) {
+        // Find in tree first
+        node = this.findProcessNode(selectedId, this.currentSnapshot.tree);
+
+        // If not found in tree, create from servers
+        if (!node) {
+          const server = this.currentSnapshot.servers.find(s => s.id === selectedId);
+          if (server) {
+            node = {
+              id: server.id,
+              type: 'genserver',
+              name: server.id,
+              stats: server,
+            };
+          }
+        }
       }
     }
 
     if (!node) {
-      this.logEvent('warning', `Process not found: ${selectedId}`);
+      this.logEvent('warning', 'No process selected');
       return;
     }
 
