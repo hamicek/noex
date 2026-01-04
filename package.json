@@ -34,7 +34,10 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@types/blessed": "^0.1.27",
     "@types/node": "^22.0.0",
+    "blessed": "^0.1.81",
+    "blessed-contrib": "^4.11.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   },
