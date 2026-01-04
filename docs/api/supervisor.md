@@ -85,7 +85,7 @@ interface ChildSpec<State = unknown, CallMsg = unknown, CastMsg = unknown, CallR
 
 ### ChildRestartStrategy
 
-When to restart a child.
+When to restart a child process after termination.
 
 ```typescript
 type ChildRestartStrategy = 'permanent' | 'transient' | 'temporary';
@@ -93,9 +93,22 @@ type ChildRestartStrategy = 'permanent' | 'transient' | 'temporary';
 
 | Strategy | Behavior |
 |----------|----------|
-| `'permanent'` | Always restart (default) |
-| `'transient'` | Restart only on abnormal exit |
-| `'temporary'` | Never restart |
+| `'permanent'` | Always restart regardless of exit reason (default) |
+| `'transient'` | Restart only on abnormal exit (crashes with errors) |
+| `'temporary'` | Never restart under any circumstances |
+
+#### Restart Behavior by Exit Reason
+
+| Exit Reason | `permanent` | `transient` | `temporary` |
+|-------------|:-----------:|:-----------:|:-----------:|
+| Normal (`'normal'`) | ✅ Restart | ❌ No restart | ❌ No restart |
+| Shutdown (`'shutdown'`) | ✅ Restart | ❌ No restart | ❌ No restart |
+| Error (`{ error: Error }`) | ✅ Restart | ✅ Restart | ❌ No restart |
+
+**Exit reasons explained:**
+- **Normal** - Process completed its work and terminated gracefully via `GenServer.stop(ref, 'normal')`
+- **Shutdown** - Process was terminated by supervisor or explicit shutdown via `GenServer.stop(ref, 'shutdown')`
+- **Error** - Process crashed due to unhandled exception or was force-terminated with error
 
 ### ChildTemplate
 
@@ -582,6 +595,95 @@ async function main() {
 
 ---
 
+## Child Restart Strategies Examples
+
+### permanent - Always Restart
+
+Use `permanent` for critical services that must always be running:
+
+```typescript
+const supervisor = await Supervisor.start({
+  children: [
+    {
+      id: 'database-connection',
+      start: () => GenServer.start(dbConnectionBehavior),
+      restart: 'permanent',  // Always restart, even on normal exit
+    },
+  ],
+});
+```
+
+### transient - Restart Only on Crashes
+
+Use `transient` for workers that should be restarted on failures but not when they complete normally:
+
+```typescript
+import { Supervisor, GenServer, type GenServerBehavior } from 'noex';
+
+// Task processor that completes and exits normally
+const taskProcessorBehavior: GenServerBehavior<
+  { taskId: string; completed: boolean },
+  'status',
+  { type: 'process'; data: unknown },
+  string
+> = {
+  init: () => ({ taskId: '', completed: false }),
+
+  handleCall: (msg, state) => {
+    return [`Task ${state.taskId}: ${state.completed ? 'done' : 'processing'}`, state];
+  },
+
+  handleCast: async (msg, state) => {
+    if (msg.type === 'process') {
+      // Process the task...
+      console.log(`Processing task with data: ${JSON.stringify(msg.data)}`);
+
+      // When done, stop normally - will NOT be restarted due to 'transient'
+      // In real code, you'd call GenServer.stop() from within
+      return { ...state, completed: true };
+    }
+    return state;
+  },
+};
+
+async function main() {
+  const supervisor = await Supervisor.start({
+    children: [
+      {
+        id: 'task-processor',
+        start: () => GenServer.start(taskProcessorBehavior),
+        restart: 'transient',  // Restart on crash, not on normal completion
+      },
+    ],
+  });
+
+  const processor = Supervisor.getChild(supervisor, 'task-processor');
+  if (processor) {
+    // If this crashes (throws error) → child will be restarted
+    // If this completes normally → child will NOT be restarted
+    GenServer.cast(processor.ref, { type: 'process', data: { id: 1 } });
+  }
+}
+```
+
+### temporary - Never Restart
+
+Use `temporary` for one-shot tasks or children managed externally:
+
+```typescript
+const supervisor = await Supervisor.start({
+  children: [
+    {
+      id: 'one-time-migration',
+      start: () => GenServer.start(migrationBehavior),
+      restart: 'temporary',  // Run once, never restart
+    },
+  ],
+});
+```
+
+---
+
 ## simple_one_for_one Example
 
 Use `simple_one_for_one` when you need to dynamically spawn many identical children:
@@ -664,6 +766,40 @@ async function main() {
   // When primary-service terminates, supervisor automatically shuts down
 }
 ```
+
+---
+
+## Best Practices
+
+### Choosing the Right Restart Strategy
+
+| Use Case | Strategy | Reason |
+|----------|----------|--------|
+| Database connections | `permanent` | Must always be available |
+| HTTP servers | `permanent` | Should recover from any failure |
+| Background job workers | `transient` | Restart on crash, not on job completion |
+| One-time initialization | `temporary` | Run once, don't restart |
+| Event handlers | `transient` | Recover from errors, allow clean exit |
+| Connection pools | `permanent` | Maintain pool size |
+
+### Choosing the Right Supervisor Strategy
+
+| Use Case | Strategy | Reason |
+|----------|----------|--------|
+| Independent services | `one_for_one` | Failures are isolated |
+| Tightly coupled services | `one_for_all` | All must restart together |
+| Pipeline/chain processing | `rest_for_one` | Downstream depends on upstream |
+| Worker pools | `simple_one_for_one` | Homogeneous, dynamic children |
+
+### Auto-Shutdown Patterns
+
+| Use Case | `autoShutdown` | Example |
+|----------|----------------|---------|
+| Long-running services | `'never'` | Web servers, daemons |
+| Batch processing | `'all_significant'` | All workers must complete |
+| Critical dependency | `'any_significant'` | Shutdown if primary fails |
+
+---
 
 ## Related
 
