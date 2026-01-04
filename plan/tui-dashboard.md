@@ -112,11 +112,11 @@ dashboard.stop();
 3. ✅ Implementovat základní layout s grid systémem
 4. ✅ Napojení na Observer pro data
 
-### Fáze 2: Core widgety
-5. Implementovat Process Tree widget
-6. Implementovat Stats Table widget
-7. Implementovat Memory Gauge widget
-8. Implementovat Event Log widget
+### Fáze 2: Core widgety ✅
+5. ✅ Implementovat Process Tree widget
+6. ✅ Implementovat Stats Table widget
+7. ✅ Implementovat Memory Gauge widget
+8. ✅ Implementovat Event Log widget
 
 ### Fáze 3: Interaktivita
 9. Implementovat keyboard handling
