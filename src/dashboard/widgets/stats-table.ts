@@ -84,6 +84,7 @@ const TABLE_COLUMNS: readonly TableColumn[] = [
  */
 export class StatsTableWidget extends BaseWidget<StatsTableData> {
   private tableElement: ReturnType<typeof contrib.table> | null = null;
+  private currentServers: readonly GenServerStats[] = [];
 
   constructor(config: WidgetConfig) {
     super(config);
@@ -124,6 +125,7 @@ export class StatsTableWidget extends BaseWidget<StatsTableData> {
     if (!this.tableElement) return;
 
     const { servers } = data;
+    this.currentServers = servers;
     const headers = TABLE_COLUMNS.map((col) => col.header);
     const rows = this.buildRows(servers);
 
@@ -160,28 +162,33 @@ export class StatsTableWidget extends BaseWidget<StatsTableData> {
 
   /**
    * Gets the currently selected server ID, if any.
-   * Note: This uses internal blessed-contrib APIs that may change.
    */
   getSelectedId(): string | null {
-    if (!this.tableElement) return null;
+    if (!this.tableElement || this.currentServers.length === 0) return null;
 
-    // blessed-contrib table stores rows in a nested structure
+    // blessed-contrib table stores selected index in rows.selected
     const tableAny = this.tableElement as unknown as {
-      rows?: {
-        selected?: number;
-        items?: string[][];
-      };
+      rows?: { selected?: number };
     };
 
-    const rows = tableAny.rows;
-    if (!rows || rows.selected === undefined || rows.selected < 0) return null;
-    if (!rows.items) return null;
+    const selectedIndex = tableAny.rows?.selected;
+    if (selectedIndex === undefined || selectedIndex < 0) return null;
+    if (selectedIndex >= this.currentServers.length) return null;
 
-    const selectedRow = rows.items[rows.selected];
-    if (!selectedRow) return null;
+    const server = this.currentServers[selectedIndex];
+    return server ? server.id : null;
+  }
 
-    const firstCell = selectedRow[0];
-    if (firstCell === undefined || firstCell === 'No processes') return null;
-    return firstCell;
+  /**
+   * Gets the index of the currently selected row.
+   */
+  getSelectedIndex(): number {
+    if (!this.tableElement) return -1;
+
+    const tableAny = this.tableElement as unknown as {
+      rows?: { selected?: number };
+    };
+
+    return tableAny.rows?.selected ?? -1;
   }
 }

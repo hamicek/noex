@@ -656,11 +656,31 @@ export class Dashboard {
 
     // Get selected ID from stats table
     const selectedId = this.statsTableWidget?.getSelectedId();
-    if (!selectedId) return;
+    if (!selectedId) {
+      this.logEvent('warning', 'No process selected');
+      return;
+    }
 
-    // Find the process node
-    const node = this.findProcessNode(selectedId, this.currentSnapshot.tree);
-    if (!node) return;
+    // Find the process node in tree or create from servers
+    let node = this.findProcessNode(selectedId, this.currentSnapshot.tree);
+
+    // If not found in tree, check servers directly
+    if (!node) {
+      const server = this.currentSnapshot.servers.find(s => s.id === selectedId);
+      if (server) {
+        node = {
+          id: server.id,
+          type: 'genserver',
+          name: server.id,
+          stats: server,
+        };
+      }
+    }
+
+    if (!node) {
+      this.logEvent('warning', `Process not found: ${selectedId}`);
+      return;
+    }
 
     // Show detail view
     this.processDetailView.show(this.screen, { node }, () => {
