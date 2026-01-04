@@ -58,7 +58,7 @@ class MetricsHistory {
 }
 ```
 
-### Krok 2: MetricsStore objekt
+### Krok 2: MetricsStore objekt ✅ DONE
 Globální správce všech metrik.
 
 ```javascript

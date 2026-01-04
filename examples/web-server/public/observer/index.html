@@ -472,6 +472,120 @@
       }
     }
 
+    /**
+     * Centralized store for all metrics data.
+     * Manages system-wide and per-process time-series metrics with automatic
+     * delta calculations for rate-based metrics.
+     */
+    const metricsStore = {
+      // System-wide metrics (15 min history at 1s intervals)
+      throughput: new MetricsHistory(900),
+      processCount: new MetricsHistory(900),
+      restartRate: new MetricsHistory(900),
+
+      // Per-process metrics keyed by process ID
+      processMetrics: new Map(),
+
+      // Previous values for delta calculations
+      _lastTotalMessages: 0,
+      _lastTotalRestarts: 0,
+      _lastTimestamp: 0,
+
+      /**
+       * Records system-wide metrics from a stats update event.
+       * Calculates per-second rates for throughput and restart metrics.
+       */
+      recordSystemMetrics(event) {
+        const now = Date.now();
+        const totalMessages = event.servers.reduce((sum, s) => sum + s.messageCount, 0);
+        const totalRestarts = event.supervisors.reduce((sum, s) => sum + s.totalRestarts, 0);
+        const processTotal = event.servers.length + event.supervisors.length;
+
+        // Calculate per-second rates (skip first call to establish baseline)
+        if (this._lastTimestamp > 0) {
+          const elapsedSec = (now - this._lastTimestamp) / 1000;
+          if (elapsedSec > 0) {
+            const msgDelta = totalMessages - this._lastTotalMessages;
+            const restartDelta = totalRestarts - this._lastTotalRestarts;
+
+            // Clamp to zero to handle counter resets gracefully
+            this.throughput.push(now, Math.max(0, msgDelta / elapsedSec));
+            this.restartRate.push(now, Math.max(0, restartDelta / elapsedSec));
+          }
+        } else {
+          // First data point - record zero rates
+          this.throughput.push(now, 0);
+          this.restartRate.push(now, 0);
+        }
+
+        this.processCount.push(now, processTotal);
+
+        this._lastTotalMessages = totalMessages;
+        this._lastTotalRestarts = totalRestarts;
+        this._lastTimestamp = now;
+      },
+
+      /**
+       * Records metrics for a specific process.
+       * Creates new history buffers if this is a new process.
+       */
+      recordProcessMetrics(id, type, stats) {
+        const now = Date.now();
+
+        if (!this.processMetrics.has(id)) {
+          this.processMetrics.set(id, {
+            type,
+            queueSize: new MetricsHistory(900),
+            messageCount: new MetricsHistory(900),
+            restartCount: new MetricsHistory(900),
+          });
+        }
+
+        const history = this.processMetrics.get(id);
+
+        if (type === 'genserver') {
+          history.queueSize.push(now, stats.queueSize);
+          history.messageCount.push(now, stats.messageCount);
+        } else if (type === 'supervisor') {
+          history.restartCount.push(now, stats.totalRestarts);
+        }
+      },
+
+      /**
+       * Retrieves history for a specific process.
+       * @returns {Object|null} History object or null if not found
+       */
+      getProcessHistory(id) {
+        return this.processMetrics.get(id) || null;
+      },
+
+      /**
+       * Removes history for processes that no longer exist.
+       * Prevents memory leaks from terminated processes.
+       */
+      pruneInactiveProcesses(activeIds) {
+        for (const id of this.processMetrics.keys()) {
+          if (!activeIds.has(id)) {
+            this.processMetrics.delete(id);
+          }
+        }
+      },
+
+      /**
+       * Clears all stored metrics data.
+       * Should be called on WebSocket reconnect to avoid stale data.
+       */
+      clear() {
+        this.throughput.clear();
+        this.processCount.clear();
+        this.restartRate.clear();
+        this.processMetrics.clear();
+        this._lastTotalMessages = 0;
+        this._lastTotalRestarts = 0;
+        this._lastTimestamp = 0;
+      }
+    };
+
     let ws = null;
     let snapshot = null;
     let selectedId = null;
@@ -662,6 +776,23 @@
 
       updateSummary(snapshot);
 
+      // Record metrics for historical tracking
+      metricsStore.recordSystemMetrics(event);
+
+      // Record per-process metrics
+      const activeIds = new Set();
+      for (const server of event.servers) {
+        activeIds.add(server.id);
+        metricsStore.recordProcessMetrics(server.id, 'genserver', server);
+      }
+      for (const supervisor of event.supervisors) {
+        activeIds.add(supervisor.id);
+        metricsStore.recordProcessMetrics(supervisor.id, 'supervisor', supervisor);
+      }
+
+      // Clean up metrics for terminated processes
+      metricsStore.pruneInactiveProcesses(activeIds);
+
       if (selectedId) {
         const node = findNodeById(snapshot.tree, selectedId);
         if (node) {
@@ -681,6 +812,8 @@
       ws.onopen = () => {
         wsStatus.classList.add('connected');
         wsStatusText.textContent = 'Connected';
+        // Clear stale metrics data on reconnect
+        metricsStore.clear();
       };
 
       ws.onclose = () => {
