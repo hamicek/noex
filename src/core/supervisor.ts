@@ -37,6 +37,10 @@ interface RunningChild {
   ref: GenServerRef;
   restartCount: number;
   readonly restartTimestamps: number[];
+  /** Exit reason from the last termination (used for transient restart strategy). */
+  lastExitReason?: TerminateReason;
+  /** Unsubscribe function for lifecycle event listener. */
+  lifecycleUnsubscribe?: () => void;
 }
 
 /**
@@ -202,6 +206,11 @@ class SupervisorInstance {
       }
     }
 
+    // Clean up all lifecycle listeners
+    for (const child of this.children.values()) {
+      child.lifecycleUnsubscribe?.();
+    }
+
     this.children.clear();
     this.childOrder.length = 0;
   }
@@ -217,16 +226,29 @@ class SupervisorInstance {
    * Watches a child for crashes and handles restart.
    */
   private watchChild(child: RunningChild): void {
+    // Unsubscribe previous listener if exists (e.g., after restart)
+    child.lifecycleUnsubscribe?.();
+    delete child.lastExitReason;
+
+    // Register lifecycle listener to capture exit reason
+    const unsubscribe = GenServer.onLifecycleEvent((event) => {
+      if (event.type === 'terminated' && event.ref.id === child.ref.id) {
+        child.lastExitReason = event.reason;
+      }
+    });
+    child.lifecycleUnsubscribe = unsubscribe;
+
     // Poll-based monitoring since we don't have direct crash notifications
-    // In a real implementation, this would be event-driven
     const checkInterval = setInterval(() => {
       if (!this.running || this.shuttingDown) {
         clearInterval(checkInterval);
+        unsubscribe();
         return;
       }
 
       if (!GenServer.isRunning(child.ref)) {
         clearInterval(checkInterval);
+        unsubscribe();
 
         // Child has died - handle based on restart strategy
         void this.handleChildCrash(child);
@@ -242,8 +264,8 @@ class SupervisorInstance {
 
     const restartStrategy = crashedChild.spec.restart ?? 'permanent';
 
-    // Check if we should restart based on child restart strategy
-    if (!this.shouldRestartChild(restartStrategy)) {
+    // Check if we should restart based on child restart strategy and exit reason
+    if (!this.shouldRestartChild(restartStrategy, crashedChild.lastExitReason)) {
       this.removeChild(crashedChild.id);
       emitSupervisorEvent('child_terminated', supervisorRefs.get(this.id)!, crashedChild.ref);
       return;
@@ -270,18 +292,21 @@ class SupervisorInstance {
   }
 
   /**
-   * Determines if a child should be restarted based on its restart strategy.
+   * Determines if a child should be restarted based on its restart strategy and exit reason.
    */
-  private shouldRestartChild(strategy: ChildRestartStrategy): boolean {
+  private shouldRestartChild(
+    strategy: ChildRestartStrategy,
+    exitReason?: TerminateReason,
+  ): boolean {
     switch (strategy) {
       case 'permanent':
-        // Always restart
         return true;
       case 'transient':
-        // Only restart on abnormal exit (for now, any uncontrolled exit is abnormal)
-        return true;
+        // Restart only on abnormal exit (errors)
+        if (!exitReason) return true; // Unknown reason - restart to be safe
+        if (exitReason === 'normal' || exitReason === 'shutdown') return false;
+        return true; // { error: Error } - restart
       case 'temporary':
-        // Never restart
         return false;
     }
   }
@@ -432,6 +457,8 @@ class SupervisorInstance {
    * Removes a child from tracking.
    */
   private removeChild(childId: string): void {
+    const child = this.children.get(childId);
+    child?.lifecycleUnsubscribe?.();
     this.children.delete(childId);
     const index = this.childOrder.indexOf(childId);
     if (index !== -1) {

@@ -593,6 +593,60 @@ describe('Supervisor', () => {
 
       await Supervisor.stop(ref);
     });
+
+    it('transient: does NOT restart on normal exit', async () => {
+      const ref = await Supervisor.start({
+        children: [
+          {
+            id: 'transient',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'transient',
+          },
+        ],
+      });
+
+      const childBefore = Supervisor.getChild(ref, 'transient')!;
+
+      // Normal exit - should NOT restart
+      await GenServer.stop(childBefore.ref, 'normal');
+
+      await waitFor(
+        () => Supervisor.getChild(ref, 'transient') === undefined,
+        2000,
+      );
+
+      expect(Supervisor.getChild(ref, 'transient')).toBeUndefined();
+      expect(Supervisor.countChildren(ref)).toBe(0);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('transient: does NOT restart on shutdown exit', async () => {
+      const ref = await Supervisor.start({
+        children: [
+          {
+            id: 'transient',
+            start: () => GenServer.start(createCounterBehavior()),
+            restart: 'transient',
+          },
+        ],
+      });
+
+      const childBefore = Supervisor.getChild(ref, 'transient')!;
+
+      // Shutdown exit - should NOT restart
+      await GenServer.stop(childBefore.ref, 'shutdown');
+
+      await waitFor(
+        () => Supervisor.getChild(ref, 'transient') === undefined,
+        2000,
+      );
+
+      expect(Supervisor.getChild(ref, 'transient')).toBeUndefined();
+      expect(Supervisor.countChildren(ref)).toBe(0);
+
+      await Supervisor.stop(ref);
+    });
   });
 
   describe('restart intensity', () => {
