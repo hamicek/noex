@@ -105,6 +105,50 @@ describe('Dashboard', () => {
       expect(DEFAULT_CONFIG.layout).toBe('full');
     });
   });
+
+  describe('getLayout()', () => {
+    it('returns default layout when not specified', () => {
+      const dashboard = new Dashboard();
+      expect(dashboard.getLayout()).toBe('full');
+    });
+
+    it('returns configured layout', () => {
+      const compactDashboard = new Dashboard({ layout: 'compact' });
+      expect(compactDashboard.getLayout()).toBe('compact');
+
+      const minimalDashboard = new Dashboard({ layout: 'minimal' });
+      expect(minimalDashboard.getLayout()).toBe('minimal');
+    });
+  });
+
+  describe('switchLayout()', () => {
+    it('does nothing when dashboard is not running', () => {
+      const dashboard = new Dashboard();
+      expect(dashboard.getLayout()).toBe('full');
+
+      // Should not throw and should not change layout (not running)
+      expect(() => dashboard.switchLayout('compact')).not.toThrow();
+      expect(dashboard.getLayout()).toBe('full');
+    });
+
+    it('does nothing when switching to same layout', () => {
+      const dashboard = new Dashboard({ layout: 'compact' });
+      expect(dashboard.getLayout()).toBe('compact');
+
+      // Should not throw
+      expect(() => dashboard.switchLayout('compact')).not.toThrow();
+      expect(dashboard.getLayout()).toBe('compact');
+    });
+  });
+
+  describe('selectProcess()', () => {
+    it('does nothing when dashboard is not running', () => {
+      const dashboard = new Dashboard();
+
+      // Should not throw
+      expect(() => dashboard.selectProcess('some-id')).not.toThrow();
+    });
+  });
 });
 
 describe('Dashboard integration (without terminal)', () => {

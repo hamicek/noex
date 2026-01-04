@@ -124,9 +124,9 @@ dashboard.stop();
 11. ✅ Implementovat detail view pro proces
 
 ### Fáze 4: Polish
-12. Přidat barevné schéma a theming
-13. Implementovat různé layouty (full/compact/minimal)
-14. Přidat help screen
+12. ✅ Přidat barevné schéma a theming
+13. ✅ Implementovat různé layouty (full/compact/minimal)
+14. ✅ Přidat help screen
 15. Napsat dokumentaci a příklady
 
 ## Integrace s Observer

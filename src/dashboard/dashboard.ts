@@ -37,15 +37,30 @@ import { formatReason } from './utils/formatters.js';
 type DashboardState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped';
 
 /**
- * Widget grid positions for the full layout.
+ * Layout configurations for different display modes.
+ *
+ * - full: All widgets visible (process tree, stats, memory gauge, event log)
+ * - compact: Essential widgets only (process tree + stats table)
+ * - minimal: Stats table only, maximized for small terminals
  */
-const LAYOUT = {
-  processTree: { row: 0, col: 0, rowSpan: 6, colSpan: 4 },
-  statsTable: { row: 0, col: 4, rowSpan: 6, colSpan: 8 },
-  memoryGauge: { row: 6, col: 0, rowSpan: 2, colSpan: 4 },
-  eventLog: { row: 6, col: 4, rowSpan: 5, colSpan: 8 },
-  statusBar: { row: 11, col: 0, rowSpan: 1, colSpan: 12 },
-} as const satisfies Record<string, GridPosition>;
+const LAYOUTS = {
+  full: {
+    processTree: { row: 0, col: 0, rowSpan: 6, colSpan: 4 },
+    statsTable: { row: 0, col: 4, rowSpan: 6, colSpan: 8 },
+    memoryGauge: { row: 6, col: 0, rowSpan: 2, colSpan: 4 },
+    eventLog: { row: 6, col: 4, rowSpan: 5, colSpan: 8 },
+    statusBar: { row: 11, col: 0, rowSpan: 1, colSpan: 12 },
+  },
+  compact: {
+    processTree: { row: 0, col: 0, rowSpan: 10, colSpan: 4 },
+    statsTable: { row: 0, col: 4, rowSpan: 10, colSpan: 8 },
+    statusBar: { row: 10, col: 0, rowSpan: 1, colSpan: 12 },
+  },
+  minimal: {
+    statsTable: { row: 0, col: 0, rowSpan: 11, colSpan: 12 },
+    statusBar: { row: 11, col: 0, rowSpan: 1, colSpan: 12 },
+  },
+} as const satisfies Record<string, Record<string, GridPosition>>;
 
 /**
  * Interactive TUI dashboard for monitoring noex processes.
@@ -68,6 +83,7 @@ export class Dashboard {
   private readonly theme: DashboardTheme;
 
   private state: DashboardState = 'idle';
+  private currentLayout: DashboardConfig['layout'];
   private screen: blessed.Widgets.Screen | null = null;
   private grid: InstanceType<typeof contrib.grid> | null = null;
 
@@ -99,6 +115,7 @@ export class Dashboard {
   constructor(options: DashboardOptions = {}) {
     this.config = { ...DEFAULT_CONFIG, ...options };
     this.theme = getTheme(this.config.theme);
+    this.currentLayout = this.config.layout;
   }
 
   /**
@@ -185,6 +202,56 @@ export class Dashboard {
   }
 
   /**
+   * Switches to a different layout mode.
+   *
+   * Destroys the current widget grid and recreates it with the new layout.
+   * This allows runtime switching between full, compact, and minimal views.
+   *
+   * @param layout - The layout mode to switch to
+   */
+  switchLayout(layout: DashboardConfig['layout']): void {
+    if (this.state !== 'running' || !this.screen) return;
+    if (layout === this.currentLayout) return;
+
+    // Store current snapshot for restoration
+    const snapshot = this.currentSnapshot;
+
+    // Destroy current widgets
+    this.destroyWidgets();
+
+    // Destroy current grid
+    if (this.grid) {
+      // Remove all children from screen (grid elements)
+      const children = [...this.screen.children];
+      for (const child of children) {
+        child.destroy();
+      }
+      this.grid = null;
+    }
+
+    // Update layout
+    this.currentLayout = layout;
+
+    // Recreate layout with new configuration
+    this.createLayout();
+
+    // Restore data if available
+    if (snapshot) {
+      this.updateWidgets(snapshot);
+    }
+
+    this.logEvent('info', `Switched to ${layout} layout`);
+    this.render();
+  }
+
+  /**
+   * Returns the current layout mode.
+   */
+  getLayout(): DashboardConfig['layout'] {
+    return this.currentLayout;
+  }
+
+  /**
    * Initializes the blessed screen with proper configuration.
    */
   private initializeScreen(): void {
@@ -214,33 +281,45 @@ export class Dashboard {
   }
 
   /**
-   * Creates all dashboard widgets.
+   * Creates dashboard widgets based on the current layout mode.
+   *
+   * Different layouts show different widget combinations:
+   * - full: All widgets (process tree, stats, memory gauge, event log)
+   * - compact: Process tree + stats table only
+   * - minimal: Stats table only
    */
   private createWidgets(): void {
     if (!this.grid) return;
 
+    const layout = LAYOUTS[this.currentLayout];
     const widgetConfig = { theme: this.theme };
 
-    // Process Tree
-    this.processTreeWidget = new ProcessTreeWidget(widgetConfig);
-    this.processTreeWidget.create(this.grid, LAYOUT.processTree);
+    // Process Tree (full + compact layouts)
+    if ('processTree' in layout) {
+      this.processTreeWidget = new ProcessTreeWidget(widgetConfig);
+      this.processTreeWidget.create(this.grid, layout.processTree);
+    }
 
-    // Stats Table
+    // Stats Table (all layouts)
     this.statsTableWidget = new StatsTableWidget(widgetConfig);
-    this.statsTableWidget.create(this.grid, LAYOUT.statsTable);
+    this.statsTableWidget.create(this.grid, layout.statsTable);
 
-    // Memory Gauge
-    this.memoryGaugeWidget = new MemoryGaugeWidget(widgetConfig);
-    this.memoryGaugeWidget.create(this.grid, LAYOUT.memoryGauge);
+    // Memory Gauge (full layout only)
+    if ('memoryGauge' in layout) {
+      this.memoryGaugeWidget = new MemoryGaugeWidget(widgetConfig);
+      this.memoryGaugeWidget.create(this.grid, layout.memoryGauge);
+    }
 
-    // Event Log
-    this.eventLogWidget = new EventLogWidget({
-      theme: this.theme,
-      maxEntries: this.config.maxEventLogSize,
-    });
-    this.eventLogWidget.create(this.grid, LAYOUT.eventLog);
+    // Event Log (full layout only)
+    if ('eventLog' in layout) {
+      this.eventLogWidget = new EventLogWidget({
+        theme: this.theme,
+        maxEntries: this.config.maxEventLogSize,
+      });
+      this.eventLogWidget.create(this.grid, layout.eventLog);
+    }
 
-    // Status Bar
+    // Status Bar (all layouts)
     this.createStatusBar();
 
     // Process Detail View (modal, not part of grid)
@@ -253,7 +332,8 @@ export class Dashboard {
   private createStatusBar(): void {
     if (!this.grid) return;
 
-    const pos = LAYOUT.statusBar;
+    const layout = LAYOUTS[this.currentLayout];
+    const pos = layout.statusBar;
     this.statusBar = this.grid.set(pos.row, pos.col, pos.rowSpan, pos.colSpan, blessed.box, {
       tags: true,
       style: {
@@ -331,6 +411,19 @@ export class Dashboard {
     this.screen.key(['enter'], () => {
       this.showSelectedProcessDetail();
     });
+
+    // Layout switching with number keys
+    this.screen.key(['1'], () => {
+      this.switchLayout('full');
+    });
+
+    this.screen.key(['2'], () => {
+      this.switchLayout('compact');
+    });
+
+    this.screen.key(['3'], () => {
+      this.switchLayout('minimal');
+    });
   }
 
   /**
@@ -404,15 +497,31 @@ export class Dashboard {
     const { processCount } = snapshot;
     const serverCount = snapshot.servers.length;
     const supervisorCount = snapshot.supervisors.length;
+    const layoutIndicator = this.getLayoutIndicator();
 
     const content =
-      `  {${this.theme.textMuted}-fg}[q]uit  [r]efresh  [Enter]detail  [?]help{/${this.theme.textMuted}-fg}` +
+      `  {${this.theme.textMuted}-fg}[q]uit [r]efresh [?]help [1-3]layout{/${this.theme.textMuted}-fg}` +
       `{|}` +
-      `{${this.theme.textMuted}-fg}Processes: {/${this.theme.textMuted}-fg}${processCount} ` +
-      `{${this.theme.textMuted}-fg}({/${this.theme.textMuted}-fg}${serverCount} servers, ${supervisorCount} supervisors{${this.theme.textMuted}-fg}){/${this.theme.textMuted}-fg}  ` +
-      `{${this.theme.textMuted}-fg}Uptime:{/${this.theme.textMuted}-fg} ${uptime}  `;
+      `{${this.theme.secondary}-fg}${layoutIndicator}{/${this.theme.secondary}-fg}  ` +
+      `{${this.theme.textMuted}-fg}Processes:{/${this.theme.textMuted}-fg} ${processCount} ` +
+      `{${this.theme.textMuted}-fg}({/${this.theme.textMuted}-fg}${serverCount}s, ${supervisorCount}sup{${this.theme.textMuted}-fg}){/${this.theme.textMuted}-fg}  ` +
+      `{${this.theme.textMuted}-fg}Up:{/${this.theme.textMuted}-fg} ${uptime}  `;
 
     this.statusBar.setContent(content);
+  }
+
+  /**
+   * Returns a visual indicator for the current layout mode.
+   */
+  private getLayoutIndicator(): string {
+    switch (this.currentLayout) {
+      case 'full':
+        return '[1:Full]';
+      case 'compact':
+        return '[2:Compact]';
+      case 'minimal':
+        return '[3:Minimal]';
+    }
   }
 
   /**
@@ -433,7 +542,7 @@ export class Dashboard {
       top: 'center',
       left: 'center',
       width: 50,
-      height: 15,
+      height: 19,
       label: ' Keyboard Shortcuts ',
       tags: true,
       border: { type: 'line' },
@@ -449,6 +558,11 @@ export class Dashboard {
   {${this.theme.primary}-fg}Shift+Tab{/${this.theme.primary}-fg}          Previous widget
   {${this.theme.primary}-fg}Enter{/${this.theme.primary}-fg}              Show process detail
   {${this.theme.primary}-fg}Arrow keys{/${this.theme.primary}-fg}         Navigate within widget
+
+  {${this.theme.secondary}-fg}Layouts:{/${this.theme.secondary}-fg}
+  {${this.theme.primary}-fg}1{/${this.theme.primary}-fg}                  Full layout (all widgets)
+  {${this.theme.primary}-fg}2{/${this.theme.primary}-fg}                  Compact layout (tree + stats)
+  {${this.theme.primary}-fg}3{/${this.theme.primary}-fg}                  Minimal layout (stats only)
 
   {${this.theme.textMuted}-fg}Press any key to close{/${this.theme.textMuted}-fg}
 `,
