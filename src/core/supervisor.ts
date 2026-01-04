@@ -22,9 +22,12 @@ import {
   type LifecycleEvent,
   type SupervisorStats,
   type AutoShutdown,
+  type ChildTemplate,
   MaxRestartsExceededError,
   DuplicateChildError,
   ChildNotFoundError,
+  MissingChildTemplateError,
+  InvalidSimpleOneForOneConfigError,
   DEFAULTS,
 } from './types.js';
 import { GenServer } from './gen-server.js';
@@ -55,6 +58,7 @@ class SupervisorInstance {
   private readonly restartTimestamps: number[] = [];
   private readonly startedAt: number = Date.now();
   private totalRestarts = 0;
+  private childIdCounter = 0;
 
   constructor(
     readonly id: string,
@@ -62,6 +66,7 @@ class SupervisorInstance {
     private readonly maxRestarts: number,
     private readonly restartWithinMs: number,
     private readonly autoShutdown: AutoShutdown,
+    private readonly childTemplate?: ChildTemplate,
   ) {}
 
   /**
@@ -153,6 +158,50 @@ class SupervisorInstance {
     this.watchChild(child);
 
     return ref;
+  }
+
+  /**
+   * Starts a child from the template with given arguments.
+   * Only valid for simple_one_for_one supervisors.
+   */
+  async startChildFromTemplate(args: unknown[]): Promise<GenServerRef> {
+    if (!this.childTemplate) {
+      throw new MissingChildTemplateError(this.id);
+    }
+
+    const childId = `child_${++this.childIdCounter}`;
+    const ref = await this.childTemplate.start(...args);
+
+    // Build spec with only defined properties to satisfy exactOptionalPropertyTypes
+    const spec: ChildSpec = {
+      id: childId,
+      start: async () => this.childTemplate!.start(...args),
+      ...(this.childTemplate.restart !== undefined && { restart: this.childTemplate.restart }),
+      ...(this.childTemplate.shutdownTimeout !== undefined && { shutdownTimeout: this.childTemplate.shutdownTimeout }),
+      ...(this.childTemplate.significant !== undefined && { significant: this.childTemplate.significant }),
+    };
+
+    const child: RunningChild = {
+      id: childId,
+      spec,
+      ref,
+      restartCount: 0,
+      restartTimestamps: [],
+    };
+
+    this.children.set(childId, child);
+    this.childOrder.push(childId);
+
+    this.watchChild(child);
+
+    return ref;
+  }
+
+  /**
+   * Returns true if this is a simple_one_for_one supervisor.
+   */
+  isSimpleOneForOne(): boolean {
+    return this.strategy === 'simple_one_for_one';
   }
 
   /**
@@ -361,6 +410,7 @@ class SupervisorInstance {
   private async executeRestartStrategy(crashedChild: RunningChild): Promise<void> {
     switch (this.strategy) {
       case 'one_for_one':
+      case 'simple_one_for_one':
         await this.restartOneForOne(crashedChild);
         break;
       case 'one_for_all':
@@ -645,6 +695,8 @@ export const Supervisor = {
    *
    * @param options - Supervisor configuration
    * @returns A reference to the started supervisor
+   * @throws {MissingChildTemplateError} if simple_one_for_one without childTemplate
+   * @throws {InvalidSimpleOneForOneConfigError} if simple_one_for_one with static children
    */
   async start(options: SupervisorOptions = {}): Promise<SupervisorRef> {
     const id = generateSupervisorId();
@@ -653,13 +705,33 @@ export const Supervisor = {
     const restartWithinMs = options.restartIntensity?.withinMs ?? DEFAULTS.RESTART_WITHIN_MS;
     const autoShutdown = options.autoShutdown ?? 'never';
 
-    const instance = new SupervisorInstance(id, strategy, maxRestarts, restartWithinMs, autoShutdown);
+    // Validate simple_one_for_one configuration
+    if (strategy === 'simple_one_for_one') {
+      if (!options.childTemplate) {
+        throw new MissingChildTemplateError(id);
+      }
+      if (options.children && options.children.length > 0) {
+        throw new InvalidSimpleOneForOneConfigError(
+          id,
+          'static children are not allowed',
+        );
+      }
+    }
+
+    const instance = new SupervisorInstance(
+      id,
+      strategy,
+      maxRestarts,
+      restartWithinMs,
+      autoShutdown,
+      options.childTemplate,
+    );
     supervisorRegistry.set(id, instance);
 
     const ref = createSupervisorRef(id);
     supervisorRefs.set(id, ref);
 
-    // Start initial children
+    // Start initial children (not allowed for simple_one_for_one, validated above)
     if (options.children && options.children.length > 0) {
       try {
         await instance.startChildren(options.children);
@@ -699,14 +771,40 @@ export const Supervisor = {
   /**
    * Dynamically starts a new child under the supervisor.
    *
+   * For regular supervisors, provide a ChildSpec.
+   * For simple_one_for_one supervisors, provide an array of arguments
+   * that will be passed to the childTemplate.start function.
+   *
    * @param ref - Reference to the supervisor
-   * @param spec - Child specification
+   * @param specOrArgs - Child specification or arguments array for simple_one_for_one
    * @returns Reference to the started child
-   * @throws {DuplicateChildError} if child with same ID exists
+   * @throws {DuplicateChildError} if child with same ID exists (regular supervisors)
+   * @throws {MissingChildTemplateError} if simple_one_for_one without template
+   * @throws {InvalidSimpleOneForOneConfigError} if wrong argument type for supervisor strategy
    */
-  async startChild(ref: SupervisorRef, spec: ChildSpec): Promise<GenServerRef> {
+  async startChild(
+    ref: SupervisorRef,
+    specOrArgs: ChildSpec | unknown[],
+  ): Promise<GenServerRef> {
     const instance = getSupervisorInstance(ref);
-    return instance.startChild(spec);
+
+    if (instance.isSimpleOneForOne()) {
+      if (!Array.isArray(specOrArgs)) {
+        throw new InvalidSimpleOneForOneConfigError(
+          ref.id,
+          'startChild requires an arguments array for simple_one_for_one',
+        );
+      }
+      return instance.startChildFromTemplate(specOrArgs);
+    }
+
+    if (Array.isArray(specOrArgs)) {
+      throw new InvalidSimpleOneForOneConfigError(
+        ref.id,
+        'startChild requires a ChildSpec for non-simple_one_for_one supervisors',
+      );
+    }
+    return instance.startChild(specOrArgs);
   },
 
   /**

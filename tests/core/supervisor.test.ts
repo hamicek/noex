@@ -9,9 +9,12 @@ import {
   type GenServerBehavior,
   type GenServerRef,
   type ChildSpec,
+  type ChildTemplate,
   type LifecycleEvent,
   DuplicateChildError,
   ChildNotFoundError,
+  MissingChildTemplateError,
+  InvalidSimpleOneForOneConfigError,
 } from '../../src/index.js';
 
 /**
@@ -1230,6 +1233,270 @@ describe('Supervisor', () => {
 
       // Supervisor should still be running (default is 'never')
       expect(Supervisor.isRunning(ref)).toBe(true);
+
+      await Supervisor.stop(ref);
+    });
+  });
+
+  describe('simple_one_for_one strategy', () => {
+    /**
+     * Creates a behavior that stores an initial value passed via arguments.
+     */
+    function createParameterizedBehavior(
+      initialValue: number,
+    ): GenServerBehavior<number, 'get', 'inc', number> {
+      return {
+        init: () => initialValue,
+        handleCall: (_, state) => [state, state],
+        handleCast: (_, state) => state + 1,
+      };
+    }
+
+    /**
+     * Creates a child template for testing.
+     */
+    function createChildTemplate(): ChildTemplate<[number]> {
+      return {
+        start: async (initialValue: number) =>
+          GenServer.start(createParameterizedBehavior(initialValue)),
+        restart: 'permanent',
+      };
+    }
+
+    it('requires childTemplate', async () => {
+      await expect(
+        Supervisor.start({
+          strategy: 'simple_one_for_one',
+        }),
+      ).rejects.toThrow(MissingChildTemplateError);
+    });
+
+    it('rejects static children', async () => {
+      await expect(
+        Supervisor.start({
+          strategy: 'simple_one_for_one',
+          childTemplate: createChildTemplate(),
+          children: [createChildSpec('static')],
+        }),
+      ).rejects.toThrow(InvalidSimpleOneForOneConfigError);
+    });
+
+    it('starts children dynamically with arguments', async () => {
+      const ref = await Supervisor.start({
+        strategy: 'simple_one_for_one',
+        childTemplate: createChildTemplate(),
+      });
+
+      expect(Supervisor.countChildren(ref)).toBe(0);
+
+      // Start children with different initial values
+      const child1Ref = await Supervisor.startChild(ref, [100]);
+      const child2Ref = await Supervisor.startChild(ref, [200]);
+      const child3Ref = await Supervisor.startChild(ref, [300]);
+
+      expect(Supervisor.countChildren(ref)).toBe(3);
+
+      // Verify each child has the correct initial value
+      const value1 = await GenServer.call(child1Ref, 'get');
+      const value2 = await GenServer.call(child2Ref, 'get');
+      const value3 = await GenServer.call(child3Ref, 'get');
+
+      expect(value1).toBe(100);
+      expect(value2).toBe(200);
+      expect(value3).toBe(300);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('generates unique child IDs', async () => {
+      const ref = await Supervisor.start({
+        strategy: 'simple_one_for_one',
+        childTemplate: createChildTemplate(),
+      });
+
+      await Supervisor.startChild(ref, [1]);
+      await Supervisor.startChild(ref, [2]);
+      await Supervisor.startChild(ref, [3]);
+
+      const children = Supervisor.getChildren(ref);
+      const ids = children.map((c) => c.id);
+
+      // All IDs should be unique
+      expect(new Set(ids).size).toBe(3);
+
+      // IDs should follow the pattern
+      expect(ids[0]).toMatch(/^child_\d+$/);
+      expect(ids[1]).toMatch(/^child_\d+$/);
+      expect(ids[2]).toMatch(/^child_\d+$/);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('restarts only the crashed child', async () => {
+      const ref = await Supervisor.start({
+        strategy: 'simple_one_for_one',
+        childTemplate: createChildTemplate(),
+      });
+
+      const child1Ref = await Supervisor.startChild(ref, [100]);
+      const child2Ref = await Supervisor.startChild(ref, [200]);
+
+      const children = Supervisor.getChildren(ref);
+      const child1Id = children[0]!.id;
+      const child2Id = children[1]!.id;
+
+      // Crash child1
+      crashChild(child1Ref);
+
+      // Wait for restart
+      await waitFor(() => {
+        const child1 = Supervisor.getChild(ref, child1Id);
+        return child1?.ref.id !== child1Ref.id;
+      }, 2000);
+
+      const child1After = Supervisor.getChild(ref, child1Id);
+      const child2After = Supervisor.getChild(ref, child2Id);
+
+      // child1 should be restarted (different ref, incremented restart count)
+      expect(child1After?.ref.id).not.toBe(child1Ref.id);
+      expect(child1After?.restartCount).toBe(1);
+
+      // child2 should be unchanged
+      expect(child2After?.ref.id).toBe(child2Ref.id);
+      expect(child2After?.restartCount).toBe(0);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('preserves arguments on restart', async () => {
+      const ref = await Supervisor.start({
+        strategy: 'simple_one_for_one',
+        childTemplate: createChildTemplate(),
+      });
+
+      const childRef = await Supervisor.startChild(ref, [42]);
+      const children = Supervisor.getChildren(ref);
+      const childId = children[0]!.id;
+
+      // Verify initial value
+      let value = await GenServer.call(childRef, 'get');
+      expect(value).toBe(42);
+
+      // Crash the child
+      crashChild(childRef);
+
+      // Wait for restart
+      await waitFor(() => {
+        const child = Supervisor.getChild(ref, childId);
+        return child?.ref.id !== childRef.id;
+      }, 2000);
+
+      // Verify the restarted child has the same initial value
+      const childAfter = Supervisor.getChild(ref, childId);
+      value = await GenServer.call(childAfter!.ref, 'get');
+      expect(value).toBe(42);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('rejects ChildSpec when using startChild', async () => {
+      const ref = await Supervisor.start({
+        strategy: 'simple_one_for_one',
+        childTemplate: createChildTemplate(),
+      });
+
+      await expect(
+        Supervisor.startChild(ref, createChildSpec('spec')),
+      ).rejects.toThrow(InvalidSimpleOneForOneConfigError);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('rejects array args for non-simple_one_for_one supervisors', async () => {
+      const ref = await Supervisor.start({
+        strategy: 'one_for_one',
+      });
+
+      await expect(
+        Supervisor.startChild(ref, [100, 200]),
+      ).rejects.toThrow(InvalidSimpleOneForOneConfigError);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('respects child template restart strategy', async () => {
+      const ref = await Supervisor.start({
+        strategy: 'simple_one_for_one',
+        childTemplate: {
+          start: async (val: number) =>
+            GenServer.start(createParameterizedBehavior(val)),
+          restart: 'temporary',
+        },
+      });
+
+      const childRef = await Supervisor.startChild(ref, [100]);
+      const children = Supervisor.getChildren(ref);
+      const childId = children[0]!.id;
+
+      expect(Supervisor.countChildren(ref)).toBe(1);
+
+      // Crash the child
+      crashChild(childRef);
+
+      // Wait for child to be removed (not restarted due to 'temporary')
+      await waitFor(
+        () => Supervisor.getChild(ref, childId) === undefined,
+        2000,
+      );
+
+      expect(Supervisor.countChildren(ref)).toBe(0);
+
+      await Supervisor.stop(ref);
+    });
+
+    it('works with auto_shutdown', async () => {
+      const ref = await Supervisor.start({
+        strategy: 'simple_one_for_one',
+        autoShutdown: 'any_significant',
+        childTemplate: {
+          start: async (val: number) =>
+            GenServer.start(createParameterizedBehavior(val)),
+          restart: 'temporary',
+          significant: true,
+        },
+      });
+
+      const childRef = await Supervisor.startChild(ref, [100]);
+
+      expect(Supervisor.isRunning(ref)).toBe(true);
+
+      // Crash the significant child
+      crashChild(childRef);
+
+      // Wait for supervisor to shut down
+      await waitFor(() => !Supervisor.isRunning(ref), 2000);
+
+      expect(Supervisor.isRunning(ref)).toBe(false);
+    });
+
+    it('terminates children correctly', async () => {
+      const ref = await Supervisor.start({
+        strategy: 'simple_one_for_one',
+        childTemplate: createChildTemplate(),
+      });
+
+      await Supervisor.startChild(ref, [100]);
+      await Supervisor.startChild(ref, [200]);
+
+      const children = Supervisor.getChildren(ref);
+      const child1Id = children[0]!.id;
+
+      expect(Supervisor.countChildren(ref)).toBe(2);
+
+      await Supervisor.terminateChild(ref, child1Id);
+
+      expect(Supervisor.countChildren(ref)).toBe(1);
+      expect(Supervisor.getChild(ref, child1Id)).toBeUndefined();
 
       await Supervisor.stop(ref);
     });

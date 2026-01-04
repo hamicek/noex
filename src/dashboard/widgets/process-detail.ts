@@ -251,6 +251,7 @@ export class ProcessDetailView {
       one_for_one: 'One for One',
       one_for_all: 'One for All',
       rest_for_one: 'Rest for One',
+      simple_one_for_one: 'Simple One for One',
     };
     return strategyNames[strategy];
   }

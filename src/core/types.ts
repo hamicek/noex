@@ -197,8 +197,40 @@ export interface ChildSpec<
  * - 'one_for_one': Only restart the failed child
  * - 'one_for_all': Restart all children when one fails
  * - 'rest_for_one': Restart the failed child and all children started after it
+ * - 'simple_one_for_one': Simplified one_for_one for dynamically spawned homogeneous children
  */
-export type SupervisorStrategy = 'one_for_one' | 'one_for_all' | 'rest_for_one';
+export type SupervisorStrategy = 'one_for_one' | 'one_for_all' | 'rest_for_one' | 'simple_one_for_one';
+
+/**
+ * Template for creating children dynamically in simple_one_for_one supervisors.
+ *
+ * @typeParam Args - Tuple type of arguments passed to start function
+ */
+export interface ChildTemplate<Args extends unknown[] = unknown[]> {
+  /**
+   * Factory function to start a child process.
+   * Called with arguments provided to Supervisor.startChild().
+   */
+  readonly start: (...args: Args) => Promise<GenServerRef>;
+
+  /**
+   * Restart strategy for children created from this template.
+   * @default 'permanent'
+   */
+  readonly restart?: ChildRestartStrategy;
+
+  /**
+   * Time in milliseconds to wait for children to shut down gracefully.
+   * @default 5000
+   */
+  readonly shutdownTimeout?: number;
+
+  /**
+   * Marks children created from this template as significant for auto_shutdown.
+   * @default false
+   */
+  readonly significant?: boolean;
+}
 
 /**
  * Configuration for supervisor restart intensity limiting.
@@ -232,8 +264,15 @@ export interface SupervisorOptions {
   /**
    * Initial child specifications.
    * Children are started in order and stopped in reverse order.
+   * Not allowed when strategy is 'simple_one_for_one'.
    */
   readonly children?: readonly ChildSpec[];
+
+  /**
+   * Template for dynamically spawning children.
+   * Required when strategy is 'simple_one_for_one'.
+   */
+  readonly childTemplate?: ChildTemplate;
 
   /**
    * Restart intensity configuration.
@@ -380,6 +419,33 @@ export class AlreadyRegisteredError extends Error {
 
   constructor(readonly registeredName: string) {
     super(`Name '${registeredName}' is already registered`);
+  }
+}
+
+/**
+ * Error thrown when simple_one_for_one supervisor is started without childTemplate.
+ */
+export class MissingChildTemplateError extends Error {
+  override readonly name = 'MissingChildTemplateError' as const;
+
+  constructor(readonly supervisorId: string) {
+    super(
+      `Supervisor '${supervisorId}': simple_one_for_one strategy requires childTemplate`,
+    );
+  }
+}
+
+/**
+ * Error thrown when simple_one_for_one supervisor is configured with static children.
+ */
+export class InvalidSimpleOneForOneConfigError extends Error {
+  override readonly name = 'InvalidSimpleOneForOneConfigError' as const;
+
+  constructor(
+    readonly supervisorId: string,
+    readonly reason: string,
+  ) {
+    super(`Supervisor '${supervisorId}': invalid simple_one_for_one config - ${reason}`);
   }
 }
 

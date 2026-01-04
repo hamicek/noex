@@ -17,6 +17,7 @@ export type {
   ChildRestartStrategy,
   AutoShutdown,
   ChildSpec,
+  ChildTemplate,
   SupervisorStrategy,
   RestartIntensity,
   SupervisorOptions,
@@ -42,6 +43,8 @@ export {
   ChildNotFoundError,
   NotRegisteredError,
   AlreadyRegisteredError,
+  MissingChildTemplateError,
+  InvalidSimpleOneForOneConfigError,
   DEFAULTS,
 } from './core/types.js';
 
