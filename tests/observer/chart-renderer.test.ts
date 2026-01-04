@@ -48,6 +48,22 @@ describe('ChartRenderer', () => {
     };
     const mockToastContainer = { appendChild: vi.fn() };
 
+    // Mock elements for alert banner
+    const mockAlertBanner = {
+      classList: { add: vi.fn(), remove: vi.fn() },
+    };
+    const mockAlertBannerText = { textContent: '' };
+    const mockAlertBannerCount = { textContent: '' };
+    const mockAlertBannerDismiss = { addEventListener: vi.fn() };
+
+    // Mock elements for alert history panel
+    const mockAlertHistoryPanel = {
+      classList: { add: vi.fn(), toggle: vi.fn() },
+    };
+    const mockAlertHistoryHeader = { addEventListener: vi.fn() };
+    const mockAlertHistoryContent = { innerHTML: '' };
+    const mockAlertActiveCount = { textContent: '', style: { display: 'none' } };
+
     // Create a sandbox to execute the script and extract ChartRenderer
     const sandbox = {
       window: { devicePixelRatio: 2 },
@@ -62,6 +78,16 @@ describe('ChartRenderer', () => {
           if (id === 'stopModalCancel') return mockStopModalCancel;
           if (id === 'stopModalConfirm') return mockStopModalConfirm;
           if (id === 'toastContainer') return mockToastContainer;
+          // Alert banner elements
+          if (id === 'alertBanner') return mockAlertBanner;
+          if (id === 'alertBannerText') return mockAlertBannerText;
+          if (id === 'alertBannerCount') return mockAlertBannerCount;
+          if (id === 'alertBannerDismiss') return mockAlertBannerDismiss;
+          // Alert history panel elements
+          if (id === 'alertHistoryPanel') return mockAlertHistoryPanel;
+          if (id === 'alertHistoryHeader') return mockAlertHistoryHeader;
+          if (id === 'alertHistoryContent') return mockAlertHistoryContent;
+          if (id === 'alertActiveCount') return mockAlertActiveCount;
           return null;
         }),
         addEventListener: vi.fn(),
@@ -104,6 +130,7 @@ describe('ChartRenderer', () => {
       expect(ChartRenderer.colors.processCount).toBe('#3b82f6');
       expect(ChartRenderer.colors.restarts).toBe('#eab308');
       expect(ChartRenderer.colors.queueSize).toBe('#a855f7');
+      expect(ChartRenderer.colors.memory).toBe('#06b6d4');
     });
   });
 
@@ -322,6 +349,7 @@ declare global {
       processCount: string;
       restarts: string;
       queueSize: string;
+      memory: string;
     };
     config: {
       gridColor: string;

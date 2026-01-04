@@ -248,7 +248,7 @@ export const Observer = {
 
 ---
 
-## Fáze 5: UI Integration - Alert zobrazení
+## Fáze 5: UI Integration - Alert zobrazení ✅ DOKONČENO
 
 ### 5.1 Alert UI komponenty (`examples/web-server/public/observer/index.html`)
 
@@ -261,6 +261,10 @@ export const Observer = {
 
 - Přidat Memory chart do System Metrics sekce
 - Zobrazit stateMemoryBytes v detail panelu GenServeru
+
+### Soubory k úpravě:
+- `examples/web-server/public/observer/index.html`
+- `tests/observer/chart-renderer.test.ts`
 
 ---
 

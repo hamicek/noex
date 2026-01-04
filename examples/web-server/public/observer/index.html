@@ -805,6 +805,242 @@
         transform: translateY(0);
       }
     }
+
+    /* Alert Banner */
+    .alert-banner {
+      background: rgba(239, 68, 68, 0.1);
+      border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease, padding 0.3s ease;
+    }
+
+    .alert-banner.has-alerts {
+      padding: 0.75rem 2rem;
+      max-height: 200px;
+    }
+
+    .alert-banner-content {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .alert-banner-icon {
+      width: 20px;
+      height: 20px;
+      color: var(--error);
+      flex-shrink: 0;
+      animation: alert-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes alert-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .alert-banner-text {
+      flex: 1;
+      font-size: 0.8125rem;
+      color: var(--error);
+      font-weight: 500;
+    }
+
+    .alert-banner-count {
+      background: var(--error);
+      color: white;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .alert-banner-dismiss {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .alert-banner-dismiss:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--error);
+    }
+
+    .alert-banner-dismiss svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Alert Badge on Tree Nodes */
+    .node-alert-badge {
+      width: 8px;
+      height: 8px;
+      background: var(--error);
+      border-radius: 50%;
+      flex-shrink: 0;
+      animation: alert-pulse 2s ease-in-out infinite;
+      box-shadow: 0 0 6px var(--error);
+    }
+
+    /* Alert History Panel */
+    .alert-history-panel {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-top: 1.5rem;
+      overflow: hidden;
+    }
+
+    .alert-history-header {
+      padding: 0.875rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .alert-history-header:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .alert-history-header h3 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .alert-history-header .alert-count-badge {
+      background: var(--error);
+      color: white;
+      padding: 0.125rem 0.375rem;
+      border-radius: 4px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+    }
+
+    .alert-history-header .alert-count-badge.resolved {
+      background: var(--success);
+    }
+
+    .alert-history-toggle {
+      color: var(--text-secondary);
+      transition: transform 0.2s;
+    }
+
+    .alert-history-toggle svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .alert-history-panel.collapsed .alert-history-toggle {
+      transform: rotate(-90deg);
+    }
+
+    .alert-history-content {
+      max-height: 300px;
+      overflow-y: auto;
+      transition: max-height 0.3s ease;
+    }
+
+    .alert-history-panel.collapsed .alert-history-content {
+      max-height: 0;
+    }
+
+    .alert-history-empty {
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+    }
+
+    .alert-history-item {
+      padding: 0.875rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+
+    .alert-history-item:last-child {
+      border-bottom: none;
+    }
+
+    .alert-history-item.active {
+      background: rgba(239, 68, 68, 0.05);
+    }
+
+    .alert-history-item.resolved {
+      opacity: 0.6;
+    }
+
+    .alert-history-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .alert-history-icon.active {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--error);
+    }
+
+    .alert-history-icon.resolved {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--success);
+    }
+
+    .alert-history-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .alert-history-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .alert-history-message {
+      font-size: 0.8125rem;
+      color: var(--text-primary);
+      margin-bottom: 0.25rem;
+      word-break: break-word;
+    }
+
+    .alert-history-meta {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    /* Memory Stats Card in Summary */
+    .summary-card .value.memory {
+      color: #06b6d4;
+    }
+
+    /* Memory Chart Color */
+    .chart-header .chart-value.memory {
+      color: #06b6d4;
+    }
   </style>
 </head>
 <body>
@@ -893,6 +1129,22 @@
     </div>
   </header>
 
+  <!-- Alert Banner -->
+  <div class="alert-banner" id="alertBanner">
+    <div class="alert-banner-content">
+      <svg class="alert-banner-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+      </svg>
+      <span class="alert-banner-text" id="alertBannerText">Active alerts detected</span>
+      <span class="alert-banner-count" id="alertBannerCount">0</span>
+      <button class="alert-banner-dismiss" id="alertBannerDismiss" title="Dismiss">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
   <main>
     <div class="summary-grid">
       <div class="summary-card">
@@ -910,6 +1162,10 @@
       <div class="summary-card">
         <div class="label">Total Restarts</div>
         <div class="value restarts" id="restartCount">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Heap Memory</div>
+        <div class="value memory" id="memoryValue">0 MB</div>
       </div>
     </div>
 
@@ -940,6 +1196,13 @@
           </div>
           <canvas id="restartRateChart" class="chart-canvas"></canvas>
         </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span>Heap Memory</span>
+            <span class="chart-value memory" id="memoryChartValue">0 MB</span>
+          </div>
+          <canvas id="memoryChart" class="chart-canvas"></canvas>
+        </div>
       </div>
     </section>
 
@@ -961,6 +1224,24 @@
             <span>Select a process to view details</span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Alert History Panel -->
+    <div class="alert-history-panel" id="alertHistoryPanel">
+      <div class="alert-history-header" id="alertHistoryHeader">
+        <h3>
+          Alert History
+          <span class="alert-count-badge" id="alertActiveCount" style="display: none;">0</span>
+        </h3>
+        <span class="alert-history-toggle">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+        </span>
+      </div>
+      <div class="alert-history-content" id="alertHistoryContent">
+        <div class="alert-history-empty">No alerts recorded yet</div>
       </div>
     </div>
   </main>
@@ -1025,6 +1306,7 @@
       throughput: new MetricsHistory(900),
       processCount: new MetricsHistory(900),
       restartRate: new MetricsHistory(900),
+      memory: new MetricsHistory(900),
 
       // Per-process metrics keyed by process ID
       processMetrics: new Map(),
@@ -1095,6 +1377,15 @@
       },
 
       /**
+       * Records memory statistics from snapshot.
+       */
+      recordMemoryStats(memoryStats) {
+        if (memoryStats && typeof memoryStats.heapUsed === 'number') {
+          this.memory.push(memoryStats.timestamp || Date.now(), memoryStats.heapUsed);
+        }
+      },
+
+      /**
        * Retrieves history for a specific process.
        * @returns {Object|null} History object or null if not found
        */
@@ -1122,6 +1413,7 @@
         this.throughput.clear();
         this.processCount.clear();
         this.restartRate.clear();
+        this.memory.clear();
         this.processMetrics.clear();
         this._lastTotalMessages = 0;
         this._lastTotalRestarts = 0;
@@ -1140,6 +1432,7 @@
         processCount: '#3b82f6',
         restarts: '#eab308',
         queueSize: '#a855f7',
+        memory: '#06b6d4',
       },
 
       /** Visual configuration constants */
@@ -1357,6 +1650,236 @@
     let snapshot = null;
     let selectedId = null;
 
+    // ============================================================
+    // Alert Management Store
+    // ============================================================
+
+    /**
+     * Centralized store for alert state and history.
+     * Tracks active alerts and maintains history for the UI.
+     */
+    const alertStore = {
+      /** Currently active alerts keyed by process ID */
+      activeAlerts: new Map(),
+
+      /** Alert history (both triggered and resolved) */
+      history: [],
+
+      /** Maximum history entries to keep */
+      maxHistory: 100,
+
+      /** Whether the banner has been dismissed by user */
+      bannerDismissed: false,
+
+      /**
+       * Handles an alert triggered event.
+       */
+      handleAlertTriggered(alert) {
+        this.activeAlerts.set(alert.processId, alert);
+        this.history.unshift({
+          type: 'triggered',
+          alert,
+          timestamp: alert.timestamp,
+        });
+        this.trimHistory();
+        this.bannerDismissed = false;
+        this.updateUI();
+        this.playAlertSound();
+      },
+
+      /**
+       * Handles an alert resolved event.
+       */
+      handleAlertResolved(alertId, processId) {
+        const alert = this.activeAlerts.get(processId);
+        this.activeAlerts.delete(processId);
+        this.history.unshift({
+          type: 'resolved',
+          alertId,
+          processId,
+          alert,
+          timestamp: Date.now(),
+        });
+        this.trimHistory();
+        this.updateUI();
+      },
+
+      /**
+       * Loads initial alerts from snapshot.
+       */
+      loadInitialAlerts(alerts) {
+        this.activeAlerts.clear();
+        for (const alert of alerts || []) {
+          this.activeAlerts.set(alert.processId, alert);
+        }
+        this.updateUI();
+      },
+
+      /**
+       * Checks if a process has an active alert.
+       */
+      hasAlert(processId) {
+        return this.activeAlerts.has(processId);
+      },
+
+      /**
+       * Gets all active alerts as an array.
+       */
+      getActiveAlerts() {
+        return Array.from(this.activeAlerts.values());
+      },
+
+      /**
+       * Trims history to max size.
+       */
+      trimHistory() {
+        if (this.history.length > this.maxHistory) {
+          this.history.length = this.maxHistory;
+        }
+      },
+
+      /**
+       * Plays alert notification sound (optional).
+       */
+      playAlertSound() {
+        // Create a subtle beep sound using Web Audio API
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const oscillator = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+
+          oscillator.frequency.value = 440;
+          oscillator.type = 'sine';
+          gainNode.gain.value = 0.1;
+
+          oscillator.start();
+          gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+          oscillator.stop(audioCtx.currentTime + 0.3);
+        } catch {
+          // Audio not supported or blocked - fail silently
+        }
+      },
+
+      /**
+       * Updates all alert-related UI components.
+       */
+      updateUI() {
+        this.updateBanner();
+        this.updateHistoryPanel();
+        // Re-render tree to show/hide alert badges
+        if (snapshot) {
+          renderTree(snapshot.tree);
+        }
+      },
+
+      /**
+       * Updates the alert banner.
+       */
+      updateBanner() {
+        const banner = document.getElementById('alertBanner');
+        const bannerText = document.getElementById('alertBannerText');
+        const bannerCount = document.getElementById('alertBannerCount');
+
+        const count = this.activeAlerts.size;
+
+        if (count > 0 && !this.bannerDismissed) {
+          banner.classList.add('has-alerts');
+          bannerCount.textContent = count.toString();
+          const alerts = this.getActiveAlerts();
+          if (count === 1) {
+            bannerText.textContent = alerts[0].message;
+          } else {
+            bannerText.textContent = `${count} active alerts detected`;
+          }
+        } else {
+          banner.classList.remove('has-alerts');
+        }
+      },
+
+      /**
+       * Updates the alert history panel.
+       */
+      updateHistoryPanel() {
+        const content = document.getElementById('alertHistoryContent');
+        const activeCountBadge = document.getElementById('alertActiveCount');
+
+        const activeCount = this.activeAlerts.size;
+        if (activeCount > 0) {
+          activeCountBadge.textContent = activeCount.toString();
+          activeCountBadge.style.display = 'inline';
+        } else {
+          activeCountBadge.style.display = 'none';
+        }
+
+        if (this.history.length === 0) {
+          content.innerHTML = '<div class="alert-history-empty">No alerts recorded yet</div>';
+          return;
+        }
+
+        let html = '';
+        for (const entry of this.history) {
+          const isActive = entry.type === 'triggered';
+          const alert = entry.alert;
+          const time = new Date(entry.timestamp).toLocaleTimeString();
+
+          html += `
+            <div class="alert-history-item ${isActive ? 'active' : 'resolved'}">
+              <div class="alert-history-icon ${isActive ? 'active' : 'resolved'}">
+                ${isActive
+                  ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>'
+                  : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>'
+                }
+              </div>
+              <div class="alert-history-details">
+                <div class="alert-history-message">
+                  ${isActive ? alert.message : `Alert resolved: ${alert?.processName || entry.processId}`}
+                </div>
+                <div class="alert-history-meta">
+                  <span>${time}</span>
+                  ${alert ? `<span>Threshold: ${alert.threshold.toFixed(1)}</span>` : ''}
+                  ${isActive && alert ? `<span>Value: ${alert.currentValue}</span>` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        content.innerHTML = html;
+      },
+
+      /**
+       * Clears all alert state.
+       */
+      clear() {
+        this.activeAlerts.clear();
+        this.history = [];
+        this.bannerDismissed = false;
+        this.updateUI();
+      },
+
+      /**
+       * Dismisses the alert banner temporarily.
+       */
+      dismissBanner() {
+        this.bannerDismissed = true;
+        this.updateBanner();
+      }
+    };
+
+    /**
+     * Formats bytes to human-readable string.
+     */
+    function formatBytes(bytes) {
+      if (bytes === 0 || bytes == null) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+    }
+
     const wsStatus = document.getElementById('wsStatus');
     const wsStatusText = document.getElementById('wsStatusText');
     const serverCount = document.getElementById('serverCount');
@@ -1386,6 +1909,15 @@
       messageCount.textContent = formatNumber(data.totalMessages);
       restartCount.textContent = formatNumber(data.totalRestarts);
       processCount.textContent = `${data.processCount} processes`;
+
+      // Update memory display
+      if (data.memoryStats) {
+        const memoryEl = document.getElementById('memoryValue');
+        if (memoryEl) {
+          memoryEl.textContent = formatBytes(data.memoryStats.heapUsed);
+        }
+        metricsStore.recordMemoryStats(data.memoryStats);
+      }
     }
 
     function renderTreeNode(node, isRoot = false) {
@@ -1403,6 +1935,15 @@
       const name = document.createElement('div');
       name.className = 'node-name';
       name.textContent = node.name || node.id;
+
+      // Add alert badge if process has an active alert
+      const hasAlert = alertStore.hasAlert(node.id);
+      if (hasAlert) {
+        const alertBadge = document.createElement('div');
+        alertBadge.className = 'node-alert-badge';
+        alertBadge.title = 'Active alert';
+        item.appendChild(alertBadge);
+      }
 
       const status = document.createElement('div');
       status.className = 'node-status' + (node.stats.status !== 'running' ? ' stopped' : '');
@@ -1500,6 +2041,15 @@
             <span class="value">${formatNumber(stats.messageCount)}</span>
           </div>
         `;
+        // Show state memory if available
+        if (stats.stateMemoryBytes != null) {
+          html += `
+            <div class="detail-row">
+              <span class="label">State Memory</span>
+              <span class="value">${formatBytes(stats.stateMemoryBytes)}</span>
+            </div>
+          `;
+        }
       }
 
       html += '</div>';
@@ -1623,15 +2173,18 @@
       const throughputCanvas = document.getElementById('throughputChart');
       const processCountCanvas = document.getElementById('processCountChart');
       const restartRateCanvas = document.getElementById('restartRateChart');
+      const memoryCanvas = document.getElementById('memoryChart');
 
       const throughputData = metricsStore.throughput.getAll();
       const processCountData = metricsStore.processCount.getAll();
       const restartRateData = metricsStore.restartRate.getAll();
+      const memoryData = metricsStore.memory.getAll();
 
       // Update current value displays
       const throughputValue = document.getElementById('throughputValue');
       const processCountValue = document.getElementById('processCountValue');
       const restartRateValue = document.getElementById('restartRateValue');
+      const memoryChartValue = document.getElementById('memoryChartValue');
 
       if (throughputData.length > 0) {
         const lastThroughput = throughputData[throughputData.length - 1].value;
@@ -1646,6 +2199,11 @@
       if (restartRateData.length > 0) {
         const lastRestartRate = restartRateData[restartRateData.length - 1].value;
         restartRateValue.textContent = `${lastRestartRate.toFixed(1)} /s`;
+      }
+
+      if (memoryData.length > 0) {
+        const lastMemory = memoryData[memoryData.length - 1].value;
+        memoryChartValue.textContent = formatBytes(lastMemory);
       }
 
       // Render charts
@@ -1666,6 +2224,13 @@
       if (restartRateCanvas) {
         ChartRenderer.renderLineChart(restartRateCanvas, restartRateData, {
           color: ChartRenderer.colors.restarts,
+          minY: 0,
+        });
+      }
+
+      if (memoryCanvas) {
+        ChartRenderer.renderLineChart(memoryCanvas, memoryData, {
+          color: ChartRenderer.colors.memory,
           minY: 0,
         });
       }
@@ -1740,6 +2305,10 @@
 
         if (msg.type === 'snapshot') {
           updateFromSnapshot(msg.data);
+          // Load initial alerts from snapshot
+          if (msg.data.activeAlerts) {
+            alertStore.loadInitialAlerts(msg.data.activeAlerts);
+          }
         } else if (msg.type === 'event') {
           const evt = msg.data;
           if (evt.type === 'stats_update') {
@@ -1748,6 +2317,14 @@
             // Request fresh snapshot on process start
           } else if (evt.type === 'server_stopped' || evt.type === 'supervisor_stopped') {
             // Process stopped - will be reflected in next stats update
+          }
+        } else if (msg.type === 'alert') {
+          // Handle alert events from AlertManager
+          const alertEvt = msg.data;
+          if (alertEvt.type === 'alert_triggered') {
+            alertStore.handleAlertTriggered(alertEvt.alert);
+          } else if (alertEvt.type === 'alert_resolved') {
+            alertStore.handleAlertResolved(alertEvt.alertId, alertEvt.processId);
           }
         }
       };
@@ -1919,6 +2496,29 @@
         executeStopProcess();
       }
     });
+
+    // ============================================================
+    // Alert Banner Event Listeners
+    // ============================================================
+
+    const alertBannerDismiss = document.getElementById('alertBannerDismiss');
+    alertBannerDismiss.addEventListener('click', () => {
+      alertStore.dismissBanner();
+    });
+
+    // ============================================================
+    // Alert History Panel Toggle
+    // ============================================================
+
+    const alertHistoryPanel = document.getElementById('alertHistoryPanel');
+    const alertHistoryHeader = document.getElementById('alertHistoryHeader');
+
+    alertHistoryHeader.addEventListener('click', () => {
+      alertHistoryPanel.classList.toggle('collapsed');
+    });
+
+    // Start collapsed by default
+    alertHistoryPanel.classList.add('collapsed');
   </script>
 </body>
 </html>
