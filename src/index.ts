@@ -97,3 +97,10 @@ export type {
   ProcessMetricsHistory,
   CsvExportResult,
 } from './observer/index.js';
+
+// Dashboard Server (for remote dashboard connections)
+export { DashboardServer } from './dashboard/server/dashboard-server.js';
+export type {
+  DashboardServerConfig,
+  DashboardServerRef,
+} from './dashboard/server/dashboard-server.js';
