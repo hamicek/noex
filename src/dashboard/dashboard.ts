@@ -47,7 +47,7 @@ const LAYOUTS = {
   full: {
     processTree: { row: 0, col: 0, rowSpan: 6, colSpan: 4 },
     statsTable: { row: 0, col: 4, rowSpan: 6, colSpan: 8 },
-    memoryGauge: { row: 6, col: 0, rowSpan: 2, colSpan: 4 },
+    memoryGauge: { row: 6, col: 0, rowSpan: 4, colSpan: 4 },
     eventLog: { row: 6, col: 4, rowSpan: 5, colSpan: 8 },
     statusBar: { row: 11, col: 0, rowSpan: 1, colSpan: 12 },
   },
@@ -141,6 +141,12 @@ export class Dashboard {
     this.startPolling();
 
     this.state = 'running';
+
+    // Initial update with current snapshot
+    const snapshot = Observer.getSnapshot();
+    this.updateWidgets(snapshot);
+    this.logEvent('success', 'Dashboard started');
+
     this.render();
   }
 
