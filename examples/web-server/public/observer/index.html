@@ -1077,7 +1077,25 @@
       }
 
       html += '</div>';
+
+      // Add detail chart section based on process type
+      const chartTitle = isSupervisor ? 'Restart History' : 'Queue Size History';
+      const currentValue = isSupervisor ? stats.totalRestarts : stats.queueSize;
+
+      html += `
+        <div class="detail-section detail-chart-section">
+          <h3>
+            <span>${chartTitle}</span>
+            <span class="current-value" id="detailChartValue">${currentValue}</span>
+          </h3>
+          <canvas id="detailChart" class="detail-chart-canvas"></canvas>
+        </div>
+      `;
+
       detailContent.innerHTML = html;
+
+      // Schedule chart render after DOM update
+      requestAnimationFrame(() => updateDetailChart(node.id, node.type));
     }
 
     function findNodeById(nodes, id) {
@@ -1134,6 +1152,9 @@
       // Clean up metrics for terminated processes
       metricsStore.pruneInactiveProcesses(activeIds);
 
+      // Update charts on next animation frame to batch DOM updates
+      requestAnimationFrame(updateSystemCharts);
+
       if (selectedId) {
         const node = findNodeById(snapshot.tree, selectedId);
         if (node) {
@@ -1144,6 +1165,105 @@
           renderDetail(node);
         }
       }
+    }
+
+    /**
+     * Updates all system-level metric charts.
+     * Uses requestAnimationFrame to batch DOM updates and avoid layout thrashing.
+     */
+    function updateSystemCharts() {
+      const throughputCanvas = document.getElementById('throughputChart');
+      const processCountCanvas = document.getElementById('processCountChart');
+      const restartRateCanvas = document.getElementById('restartRateChart');
+
+      const throughputData = metricsStore.throughput.getAll();
+      const processCountData = metricsStore.processCount.getAll();
+      const restartRateData = metricsStore.restartRate.getAll();
+
+      // Update current value displays
+      const throughputValue = document.getElementById('throughputValue');
+      const processCountValue = document.getElementById('processCountValue');
+      const restartRateValue = document.getElementById('restartRateValue');
+
+      if (throughputData.length > 0) {
+        const lastThroughput = throughputData[throughputData.length - 1].value;
+        throughputValue.textContent = `${lastThroughput.toFixed(1)} msg/s`;
+      }
+
+      if (processCountData.length > 0) {
+        const lastProcessCount = processCountData[processCountData.length - 1].value;
+        processCountValue.textContent = lastProcessCount.toString();
+      }
+
+      if (restartRateData.length > 0) {
+        const lastRestartRate = restartRateData[restartRateData.length - 1].value;
+        restartRateValue.textContent = `${lastRestartRate.toFixed(1)} /s`;
+      }
+
+      // Render charts
+      if (throughputCanvas) {
+        ChartRenderer.renderLineChart(throughputCanvas, throughputData, {
+          color: ChartRenderer.colors.throughput,
+          minY: 0,
+        });
+      }
+
+      if (processCountCanvas) {
+        ChartRenderer.renderLineChart(processCountCanvas, processCountData, {
+          color: ChartRenderer.colors.processCount,
+          minY: 0,
+        });
+      }
+
+      if (restartRateCanvas) {
+        ChartRenderer.renderLineChart(restartRateCanvas, restartRateData, {
+          color: ChartRenderer.colors.restarts,
+          minY: 0,
+        });
+      }
+    }
+
+    /**
+     * Updates the detail chart for the selected process.
+     * Renders queue size history for GenServers, restart count for Supervisors.
+     */
+    function updateDetailChart(processId, processType) {
+      const canvas = document.getElementById('detailChart');
+      const valueElement = document.getElementById('detailChartValue');
+
+      if (!canvas) return;
+
+      const history = metricsStore.getProcessHistory(processId);
+      if (!history) {
+        ChartRenderer.renderLineChart(canvas, [], {
+          color: ChartRenderer.colors.queueSize,
+          minY: 0,
+        });
+        return;
+      }
+
+      let data;
+      let color;
+      let currentValue;
+
+      if (processType === 'genserver') {
+        data = history.queueSize.getAll();
+        color = ChartRenderer.colors.queueSize;
+        currentValue = data.length > 0 ? data[data.length - 1].value : 0;
+      } else {
+        data = history.restartCount.getAll();
+        color = ChartRenderer.colors.restarts;
+        currentValue = data.length > 0 ? data[data.length - 1].value : 0;
+      }
+
+      if (valueElement) {
+        valueElement.textContent = currentValue.toString();
+      }
+
+      ChartRenderer.renderLineChart(canvas, data, {
+        color,
+        minY: 0,
+      });
     }
 
     function connect() {

@@ -122,7 +122,7 @@ Přidat za summary cards:
 </div>
 ```
 
-### Krok 6: HTML pro detail chart
+### Krok 6: HTML pro detail chart ✅ DONE
 Přidat do detail panelu:
 ```html
 <div class="detail-section" id="detailChartSection">
@@ -131,7 +131,7 @@ Přidat do detail panelu:
 </div>
 ```
 
-### Krok 7: Integrace do handleStatsUpdate
+### Krok 7: Integrace do handleStatsUpdate ✅ DONE
 ```javascript
 function handleStatsUpdate(event) {
   // ... existující kód ...
@@ -147,7 +147,7 @@ function handleStatsUpdate(event) {
 }
 ```
 
-### Krok 8: updateCharts funkce
+### Krok 8: updateCharts funkce ✅ DONE
 ```javascript
 function updateCharts() {
   ChartRenderer.renderLineChart(throughputCanvas, metricsStore.throughput.getAll(), {...});
