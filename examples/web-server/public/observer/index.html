@@ -487,6 +487,36 @@
       </div>
     </div>
 
+    <section class="charts-section">
+      <div class="panel-header">
+        <span>System Metrics</span>
+        <span class="badge">Last 15 min</span>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <span>Message Throughput</span>
+            <span class="chart-value throughput" id="throughputValue">0 msg/s</span>
+          </div>
+          <canvas id="throughputChart" class="chart-canvas"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span>Active Processes</span>
+            <span class="chart-value process-count" id="processCountValue">0</span>
+          </div>
+          <canvas id="processCountChart" class="chart-canvas"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span>Restart Rate</span>
+            <span class="chart-value restarts" id="restartRateValue">0 /s</span>
+          </div>
+          <canvas id="restartRateChart" class="chart-canvas"></canvas>
+        </div>
+      </div>
+    </section>
+
     <div class="content">
       <div class="tree-panel">
         <div class="panel-header">

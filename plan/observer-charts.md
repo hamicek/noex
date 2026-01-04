@@ -107,7 +107,7 @@ const ChartRenderer = {
 .chart-canvas { width: 100%; height: 120px; }
 ```
 
-### Krok 5: HTML pro systémové grafy
+### Krok 5: HTML pro systémové grafy ✅ DONE
 Přidat za summary cards:
 ```html
 <div class="charts-section">
