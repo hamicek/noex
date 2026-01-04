@@ -355,6 +355,68 @@ export const Observer = {
   },
 
   /**
+   * Stops a process by its ID.
+   *
+   * Locates the process (GenServer or Supervisor) by ID and initiates
+   * graceful shutdown. For Supervisors, this also stops all child processes.
+   *
+   * @param id - The process ID to stop
+   * @param reason - Optional reason for stopping (logged and passed to terminate handler)
+   * @returns Object with success status and optional error message
+   *
+   * @example
+   * ```typescript
+   * const result = await Observer.stopProcess('genserver_1_abc123', 'Manual shutdown');
+   * if (result.success) {
+   *   console.log('Process stopped successfully');
+   * } else {
+   *   console.error('Failed to stop:', result.error);
+   * }
+   * ```
+   */
+  async stopProcess(
+    id: string,
+    reason?: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    // Convert string reason to TerminateReason type
+    // Use 'shutdown' for manual stops as it's the semantic equivalent
+    const terminateReason = reason === 'normal' ? 'normal' : 'shutdown';
+
+    // Try to find as GenServer first
+    const genServerRef = GenServer._getRefById(id);
+    if (genServerRef) {
+      try {
+        await GenServer.stop(genServerRef, terminateReason);
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+
+    // Try to find as Supervisor
+    const supervisorRef = Supervisor._getRefById(id);
+    if (supervisorRef) {
+      try {
+        await Supervisor.stop(supervisorRef, terminateReason);
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+
+    return {
+      success: false,
+      error: `Process with ID '${id}' not found`,
+    };
+  },
+
+  /**
    * Clears all event subscribers.
    * Useful for testing.
    *

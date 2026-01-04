@@ -550,9 +550,304 @@
       display: block;
       margin-top: 0.5rem;
     }
+
+    /* Process Actions */
+    .process-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.375rem;
+      padding: 0.5rem 1rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-danger {
+      background: var(--error);
+      color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: #dc2626;
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--border);
+    }
+
+    .btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Modal Dialog */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 420px;
+      margin: 1rem;
+      transform: scale(0.95);
+      transition: transform 0.2s;
+    }
+
+    .modal-overlay.open .modal {
+      transform: scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-header .modal-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--error);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-header .modal-icon svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .modal-header h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .modal-header p {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin: 0.25rem 0 0;
+    }
+
+    .modal-body {
+      padding: 1.25rem;
+    }
+
+    .modal-body label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .modal-body input,
+    .modal-body textarea {
+      width: 100%;
+      padding: 0.625rem 0.875rem;
+      font-size: 0.875rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: inherit;
+      resize: vertical;
+    }
+
+    .modal-body input:focus,
+    .modal-body textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .modal-body textarea {
+      min-height: 80px;
+    }
+
+    .modal-body .hint {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 0.375rem;
+    }
+
+    .modal-body .warning {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.625rem;
+      padding: 0.75rem;
+      background: rgba(234, 179, 8, 0.1);
+      border: 1px solid rgba(234, 179, 8, 0.3);
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.8125rem;
+      color: var(--warning);
+    }
+
+    .modal-body .warning svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.625rem;
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      border-radius: 0 0 12px 12px;
+    }
+
+    /* Toast Notification */
+    .toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 1001;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.875rem 1rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      font-size: 0.8125rem;
+      animation: toast-in 0.3s ease;
+    }
+
+    .toast.success {
+      border-color: var(--success);
+    }
+
+    .toast.error {
+      border-color: var(--error);
+    }
+
+    .toast svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    .toast.success svg {
+      color: var(--success);
+    }
+
+    .toast.error svg {
+      color: var(--error);
+    }
+
+    @keyframes toast-in {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
   </style>
 </head>
 <body>
+  <!-- Stop Process Modal -->
+  <div class="modal-overlay" id="stopModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div>
+          <h2>Stop Process</h2>
+          <p id="stopModalProcessName">Process ID</p>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="warning" id="stopModalWarning" style="display: none;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          </svg>
+          <span>This is a Supervisor. Stopping it will also stop all its child processes.</span>
+        </div>
+        <label for="stopReason">Reason for stopping (optional)</label>
+        <textarea id="stopReason" placeholder="e.g., Manual maintenance, Resource cleanup..."></textarea>
+        <p class="hint">This will be logged and passed to the process terminate handler.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="stopModalCancel">Cancel</button>
+        <button class="btn btn-danger" id="stopModalConfirm">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
+          </svg>
+          Stop Process
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
   <header>
     <h1>noex Observer</h1>
     <div class="header-actions">
@@ -1223,7 +1518,29 @@
         </div>
       `;
 
+      // Add process actions section with Stop button
+      if (stats.status === 'running') {
+        html += `
+          <div class="process-actions">
+            <button class="btn btn-danger" id="stopProcessBtn" data-id="${node.id}" data-type="${node.type}" data-name="${node.name || node.id}">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
+              </svg>
+              Stop Process
+            </button>
+          </div>
+        `;
+      }
+
       detailContent.innerHTML = html;
+
+      // Attach stop button event listener
+      const stopBtn = document.getElementById('stopProcessBtn');
+      if (stopBtn) {
+        stopBtn.addEventListener('click', () => {
+          openStopModal(stopBtn.dataset.id, stopBtn.dataset.type, stopBtn.dataset.name);
+        });
+      }
 
       // Schedule chart render after DOM update
       requestAnimationFrame(() => updateDetailChart(node.id, node.type));
@@ -1460,6 +1777,147 @@
       item.addEventListener('click', () => {
         exportDropdown.classList.remove('open');
       });
+    });
+
+    // ============================================================
+    // Stop Process Modal Management
+    // ============================================================
+
+    const stopModal = document.getElementById('stopModal');
+    const stopModalProcessName = document.getElementById('stopModalProcessName');
+    const stopModalWarning = document.getElementById('stopModalWarning');
+    const stopReason = document.getElementById('stopReason');
+    const stopModalCancel = document.getElementById('stopModalCancel');
+    const stopModalConfirm = document.getElementById('stopModalConfirm');
+    const toastContainer = document.getElementById('toastContainer');
+
+    let stopProcessTarget = null;
+
+    /**
+     * Opens the stop process modal for a specific process.
+     * @param {string} id - Process ID
+     * @param {string} type - Process type ('genserver' or 'supervisor')
+     * @param {string} name - Display name for the process
+     */
+    function openStopModal(id, type, name) {
+      stopProcessTarget = { id, type, name };
+      stopModalProcessName.textContent = name;
+      stopModalWarning.style.display = type === 'supervisor' ? 'flex' : 'none';
+      stopReason.value = '';
+      stopModal.classList.add('open');
+      stopReason.focus();
+    }
+
+    /**
+     * Closes the stop process modal.
+     */
+    function closeStopModal() {
+      stopModal.classList.remove('open');
+      stopProcessTarget = null;
+    }
+
+    /**
+     * Executes the stop process API call.
+     */
+    async function executeStopProcess() {
+      if (!stopProcessTarget) return;
+
+      const { id, name } = stopProcessTarget;
+      const reason = stopReason.value.trim() || undefined;
+
+      // Disable button while processing
+      stopModalConfirm.disabled = true;
+      stopModalConfirm.innerHTML = `
+        <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <circle cx="12" cy="12" r="10" stroke-width="4" stroke="currentColor" fill="none" opacity="0.25"/>
+          <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        Stopping...
+      `;
+
+      try {
+        const response = await fetch(`/api/processes/${encodeURIComponent(id)}/stop`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        });
+
+        const result = await response.json();
+
+        closeStopModal();
+
+        if (result.success) {
+          showToast('success', `Process "${name}" stopped successfully`);
+          // Clear selection since process no longer exists
+          selectedId = null;
+          detailContent.innerHTML = '<div class="detail-empty">Process stopped</div>';
+        } else {
+          showToast('error', result.message || 'Failed to stop process');
+        }
+      } catch (error) {
+        closeStopModal();
+        showToast('error', `Network error: ${error.message}`);
+      } finally {
+        // Re-enable button
+        stopModalConfirm.disabled = false;
+        stopModalConfirm.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
+          </svg>
+          Stop Process
+        `;
+      }
+    }
+
+    /**
+     * Shows a toast notification.
+     * @param {'success' | 'error'} type - Toast type
+     * @param {string} message - Message to display
+     */
+    function showToast(type, message) {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+
+      const icon = type === 'success'
+        ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>';
+
+      toast.innerHTML = `${icon}<span>${message}</span>`;
+      toastContainer.appendChild(toast);
+
+      // Auto-remove after 4 seconds
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = 'opacity 0.3s, transform 0.3s';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Modal event listeners
+    stopModalCancel.addEventListener('click', closeStopModal);
+    stopModalConfirm.addEventListener('click', executeStopProcess);
+
+    // Close modal on overlay click
+    stopModal.addEventListener('click', (e) => {
+      if (e.target === stopModal) {
+        closeStopModal();
+      }
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && stopModal.classList.contains('open')) {
+        closeStopModal();
+      }
+    });
+
+    // Submit on Enter in reason textarea (Shift+Enter for new line)
+    stopReason.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        executeStopProcess();
+      }
     });
   </script>
 </body>

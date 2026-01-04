@@ -278,6 +278,33 @@ async function main() {
   });
 
   // ============================================================
+  // Process Control Routes - Stop processes from UI
+  // ============================================================
+
+  // Stop a process by ID
+  app.post<{
+    Params: { id: string };
+    Body: { reason?: string };
+  }>('/api/processes/:id/stop', async (request, reply) => {
+    const { id } = request.params;
+    const { reason } = request.body ?? {};
+
+    const result = await Observer.stopProcess(id, reason);
+
+    if (result.success) {
+      return reply.status(200).send({
+        success: true,
+        message: `Process '${id}' stopped successfully`,
+      });
+    }
+
+    return reply.status(result.error?.includes('not found') ? 404 : 500).send({
+      success: false,
+      message: result.error ?? 'Unknown error',
+    });
+  });
+
+  // ============================================================
   // Export Routes - Data export API
   // ============================================================
 

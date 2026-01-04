@@ -137,7 +137,7 @@ export const AlertManager = {
 
 ---
 
-## Fáze 3: Zastavení procesu z UI
+## Fáze 3: Zastavení procesu z UI ✅ DOKONČENO
 
 ### 3.1 Nový REST endpoint (`examples/web-server/server.ts`)
 

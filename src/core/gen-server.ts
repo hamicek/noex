@@ -675,4 +675,20 @@ export const GenServer = {
   _getAllServerIds(): readonly string[] {
     return Array.from(serverRegistry.keys());
   },
+
+  /**
+   * Returns a GenServerRef for the given ID if the server exists.
+   * Used by Observer for process control operations.
+   *
+   * @param id - The server ID to look up
+   * @returns GenServerRef if found, undefined otherwise
+   *
+   * @internal
+   */
+  _getRefById(id: string): GenServerRef | undefined {
+    if (!serverRegistry.has(id)) {
+      return undefined;
+    }
+    return createRef(id);
+  },
 } as const;

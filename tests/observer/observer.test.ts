@@ -417,6 +417,82 @@ describe('Observer', () => {
     });
   });
 
+  describe('stopProcess()', () => {
+    it('stops a GenServer by ID', async () => {
+      const ref = await GenServer.start(createCounterBehavior());
+
+      expect(GenServer.isRunning(ref)).toBe(true);
+
+      const result = await Observer.stopProcess(ref.id);
+
+      expect(result.success).toBe(true);
+      expect(GenServer.isRunning(ref)).toBe(false);
+    });
+
+    it('stops a Supervisor by ID', async () => {
+      const supRef = await Supervisor.start({
+        strategy: 'one_for_one',
+        children: [
+          { id: 'worker', start: () => GenServer.start(createCounterBehavior()) },
+        ],
+      });
+
+      expect(Supervisor.isRunning(supRef)).toBe(true);
+
+      const result = await Observer.stopProcess(supRef.id);
+
+      expect(result.success).toBe(true);
+      expect(Supervisor.isRunning(supRef)).toBe(false);
+    });
+
+    it('returns error for non-existent process', async () => {
+      const result = await Observer.stopProcess('nonexistent_id');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('not found');
+    });
+
+    it('stops supervisor and all children', async () => {
+      const supRef = await Supervisor.start({
+        strategy: 'one_for_one',
+        children: [
+          { id: 'worker1', start: () => GenServer.start(createCounterBehavior()) },
+          { id: 'worker2', start: () => GenServer.start(createCounterBehavior()) },
+        ],
+      });
+
+      const child1 = Supervisor.getChild(supRef, 'worker1')!;
+      const child2 = Supervisor.getChild(supRef, 'worker2')!;
+
+      expect(GenServer.isRunning(child1.ref)).toBe(true);
+      expect(GenServer.isRunning(child2.ref)).toBe(true);
+
+      const result = await Observer.stopProcess(supRef.id);
+
+      expect(result.success).toBe(true);
+      expect(GenServer.isRunning(child1.ref)).toBe(false);
+      expect(GenServer.isRunning(child2.ref)).toBe(false);
+    });
+
+    it('uses shutdown as terminate reason', async () => {
+      let terminateReason: string | undefined;
+      const behaviorWithTerminate: GenServerBehavior<number, 'get', 'inc', number> = {
+        init: () => 0,
+        handleCall: (msg, state) => [state, state],
+        handleCast: (msg, state) => state,
+        terminate: (reason) => {
+          terminateReason = reason as string;
+        },
+      };
+
+      const ref = await GenServer.start(behaviorWithTerminate);
+
+      await Observer.stopProcess(ref.id, 'Manual shutdown from UI');
+
+      expect(terminateReason).toBe('shutdown');
+    });
+  });
+
   describe('memory tracking in snapshot', () => {
     it('includes memoryStats in snapshot', () => {
       const snapshot = Observer.getSnapshot();

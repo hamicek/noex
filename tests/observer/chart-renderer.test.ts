@@ -28,6 +28,26 @@ describe('ChartRenderer', () => {
       addEventListener: vi.fn(),
     };
 
+    // Mock elements for stop process modal
+    const mockStopModal = {
+      classList: { add: vi.fn(), remove: vi.fn(), contains: vi.fn(() => false) },
+      addEventListener: vi.fn(),
+    };
+    const mockStopModalProcessName = { textContent: '' };
+    const mockStopModalWarning = { style: { display: 'none' } };
+    const mockStopReason = {
+      value: '',
+      focus: vi.fn(),
+      addEventListener: vi.fn(),
+    };
+    const mockStopModalCancel = { addEventListener: vi.fn() };
+    const mockStopModalConfirm = {
+      addEventListener: vi.fn(),
+      disabled: false,
+      innerHTML: '',
+    };
+    const mockToastContainer = { appendChild: vi.fn() };
+
     // Create a sandbox to execute the script and extract ChartRenderer
     const sandbox = {
       window: { devicePixelRatio: 2 },
@@ -35,10 +55,23 @@ describe('ChartRenderer', () => {
         getElementById: vi.fn((id: string) => {
           if (id === 'exportDropdown') return mockExportDropdown;
           if (id === 'exportBtn') return mockExportBtn;
+          if (id === 'stopModal') return mockStopModal;
+          if (id === 'stopModalProcessName') return mockStopModalProcessName;
+          if (id === 'stopModalWarning') return mockStopModalWarning;
+          if (id === 'stopReason') return mockStopReason;
+          if (id === 'stopModalCancel') return mockStopModalCancel;
+          if (id === 'stopModalConfirm') return mockStopModalConfirm;
+          if (id === 'toastContainer') return mockToastContainer;
           return null;
         }),
         addEventListener: vi.fn(),
         querySelectorAll: vi.fn(() => []),
+        createElement: vi.fn(() => ({
+          className: '',
+          innerHTML: '',
+          style: {},
+          remove: vi.fn(),
+        })),
       },
       Date: { now: () => Date.now() },
       Map: Map,
@@ -50,6 +83,8 @@ describe('ChartRenderer', () => {
       requestAnimationFrame: vi.fn(),
       location: { protocol: 'http:', host: 'localhost:3000' },
       WebSocket: vi.fn(),
+      fetch: vi.fn(() => Promise.resolve({ json: () => Promise.resolve({}) })),
+      encodeURIComponent,
     };
 
     // Execute script in sandbox context
