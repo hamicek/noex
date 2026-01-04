@@ -25,8 +25,10 @@ import {
   StatsTableWidget,
   MemoryGaugeWidget,
   EventLogWidget,
+  ProcessDetailView,
   type GridPosition,
 } from './widgets/index.js';
+import type { ProcessTreeNode } from '../core/types.js';
 import { formatReason } from './utils/formatters.js';
 
 /**
@@ -75,6 +77,12 @@ export class Dashboard {
   private memoryGaugeWidget: MemoryGaugeWidget | null = null;
   private eventLogWidget: EventLogWidget | null = null;
   private statusBar: blessed.Widgets.BoxElement | null = null;
+
+  // Process Detail View
+  private processDetailView: ProcessDetailView | null = null;
+
+  // Current snapshot for detail lookups
+  private currentSnapshot: ObserverSnapshot | null = null;
 
   // Timing
   private startTime: number = 0;
@@ -234,6 +242,9 @@ export class Dashboard {
 
     // Status Bar
     this.createStatusBar();
+
+    // Process Detail View (modal, not part of grid)
+    this.processDetailView = new ProcessDetailView({ theme: this.theme });
   }
 
   /**
@@ -267,6 +278,11 @@ export class Dashboard {
 
     this.eventLogWidget?.destroy();
     this.eventLogWidget = null;
+
+    if (this.processDetailView?.isVisible()) {
+      this.processDetailView.close();
+    }
+    this.processDetailView = null;
 
     if (this.statusBar) {
       this.statusBar.destroy();
@@ -309,6 +325,11 @@ export class Dashboard {
       if (!this.screen) return;
       this.screen.focusPrevious();
       this.render();
+    });
+
+    // Enter key to show process detail
+    this.screen.key(['enter'], () => {
+      this.showSelectedProcessDetail();
     });
   }
 
@@ -366,6 +387,7 @@ export class Dashboard {
    * Updates all widgets with fresh data.
    */
   private updateWidgets(snapshot: ObserverSnapshot): void {
+    this.currentSnapshot = snapshot;
     this.processTreeWidget?.update({ tree: snapshot.tree });
     this.statsTableWidget?.update({ servers: snapshot.servers });
     this.memoryGaugeWidget?.update({ memoryStats: snapshot.memoryStats });
@@ -384,7 +406,7 @@ export class Dashboard {
     const supervisorCount = snapshot.supervisors.length;
 
     const content =
-      `  {${this.theme.textMuted}-fg}[q]uit  [r]efresh  [?]help{/${this.theme.textMuted}-fg}` +
+      `  {${this.theme.textMuted}-fg}[q]uit  [r]efresh  [Enter]detail  [?]help{/${this.theme.textMuted}-fg}` +
       `{|}` +
       `{${this.theme.textMuted}-fg}Processes: {/${this.theme.textMuted}-fg}${processCount} ` +
       `{${this.theme.textMuted}-fg}({/${this.theme.textMuted}-fg}${serverCount} servers, ${supervisorCount} supervisors{${this.theme.textMuted}-fg}){/${this.theme.textMuted}-fg}  ` +
@@ -411,7 +433,7 @@ export class Dashboard {
       top: 'center',
       left: 'center',
       width: 50,
-      height: 14,
+      height: 15,
       label: ' Keyboard Shortcuts ',
       tags: true,
       border: { type: 'line' },
@@ -425,6 +447,7 @@ export class Dashboard {
   {${this.theme.primary}-fg}?, h{/${this.theme.primary}-fg}               Show this help
   {${this.theme.primary}-fg}Tab{/${this.theme.primary}-fg}                Next widget
   {${this.theme.primary}-fg}Shift+Tab{/${this.theme.primary}-fg}          Previous widget
+  {${this.theme.primary}-fg}Enter{/${this.theme.primary}-fg}              Show process detail
   {${this.theme.primary}-fg}Arrow keys{/${this.theme.primary}-fg}         Navigate within widget
 
   {${this.theme.textMuted}-fg}Press any key to close{/${this.theme.textMuted}-fg}
@@ -469,5 +492,72 @@ export class Dashboard {
     const s = String(seconds % 60).padStart(2, '0');
 
     return `${h}:${m}:${s}`;
+  }
+
+  /**
+   * Shows the detail view for the currently selected process.
+   *
+   * Attempts to get the selected process ID from the stats table
+   * and displays a modal with detailed information.
+   */
+  private showSelectedProcessDetail(): void {
+    if (!this.screen || !this.processDetailView || !this.currentSnapshot) return;
+
+    // Prevent showing detail if another dialog is open
+    if (this.processDetailView.isVisible()) return;
+
+    // Get selected ID from stats table
+    const selectedId = this.statsTableWidget?.getSelectedId();
+    if (!selectedId) return;
+
+    // Find the process node
+    const node = this.findProcessNode(selectedId, this.currentSnapshot.tree);
+    if (!node) return;
+
+    // Show detail view
+    this.processDetailView.show(this.screen, { node }, () => {
+      this.render();
+    });
+  }
+
+  /**
+   * Finds a process node by ID in the tree hierarchy.
+   *
+   * @param id - Process ID to find
+   * @param nodes - Tree nodes to search
+   * @returns The matching node or null if not found
+   */
+  private findProcessNode(
+    id: string,
+    nodes: readonly ProcessTreeNode[],
+  ): ProcessTreeNode | null {
+    for (const node of nodes) {
+      if (node.id === id) {
+        return node;
+      }
+
+      if (node.children && node.children.length > 0) {
+        const found = this.findProcessNode(id, node.children);
+        if (found) return found;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Programatically selects a process in the stats table.
+   *
+   * @param processId - ID of the process to select
+   */
+  selectProcess(processId: string): void {
+    if (this.state !== 'running' || !this.currentSnapshot) return;
+
+    const node = this.findProcessNode(processId, this.currentSnapshot.tree);
+    if (!node || !this.screen || !this.processDetailView) return;
+
+    this.processDetailView.show(this.screen, { node }, () => {
+      this.render();
+    });
   }
 }

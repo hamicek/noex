@@ -24,3 +24,7 @@ export type { MemoryGaugeData } from './memory-gauge.js';
 // Event Log Widget
 export { EventLogWidget, createEventLogWidget } from './event-log.js';
 export type { LogEvent, EventSeverity, EventLogConfig } from './event-log.js';
+
+// Process Detail View
+export { ProcessDetailView } from './process-detail.js';
+export type { ProcessDetailData } from './process-detail.js';

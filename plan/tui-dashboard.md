@@ -118,10 +118,10 @@ dashboard.stop();
 7. ✅ Implementovat Memory Gauge widget
 8. ✅ Implementovat Event Log widget
 
-### Fáze 3: Interaktivita
-9. Implementovat keyboard handling
-10. Přidat navigaci mezi widgety
-11. Implementovat detail view pro proces
+### Fáze 3: Interaktivita ✅
+9. ✅ Implementovat keyboard handling
+10. ✅ Přidat navigaci mezi widgety
+11. ✅ Implementovat detail view pro proces
 
 ### Fáze 4: Polish
 12. Přidat barevné schéma a theming
