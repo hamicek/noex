@@ -369,6 +369,93 @@
       background: rgba(59, 130, 246, 0.2);
       color: var(--accent);
     }
+
+    /* Charts Section */
+    .charts-section {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+    }
+
+    @media (max-width: 1200px) {
+      .chart-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .chart-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .chart-card {
+      background: var(--bg-secondary);
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .chart-header .chart-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-primary);
+    }
+
+    .chart-header .chart-value.throughput { color: var(--success); }
+    .chart-header .chart-value.process-count { color: var(--accent); }
+    .chart-header .chart-value.restarts { color: var(--warning); }
+
+    .chart-canvas {
+      width: 100%;
+      height: 100px;
+      display: block;
+    }
+
+    /* Detail Chart (in process details panel) */
+    .detail-chart-section {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .detail-chart-section h3 {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .detail-chart-section .current-value {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .detail-chart-canvas {
+      width: 100%;
+      height: 80px;
+      display: block;
+      margin-top: 0.5rem;
+    }
   </style>
 </head>
 <body>

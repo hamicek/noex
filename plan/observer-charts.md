@@ -99,7 +99,7 @@ const ChartRenderer = {
 };
 ```
 
-### Krok 4: CSS pro grafy
+### Krok 4: CSS pro grafy ✅ DONE
 ```css
 .charts-section { background: var(--bg-secondary); }
 .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
