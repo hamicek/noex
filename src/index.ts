@@ -74,3 +74,18 @@ export {
 // Observer
 export { Observer } from './observer/index.js';
 export type { ObserverSnapshot, ObserverEventHandler } from './observer/index.js';
+
+// Observer export utilities
+export {
+  exportToJson,
+  exportToCsv,
+  createExportData,
+  createExportDataWithHistory,
+} from './observer/index.js';
+export type {
+  ExportData,
+  MetricsHistory,
+  MetricsDataPoint,
+  ProcessMetricsHistory,
+  CsvExportResult,
+} from './observer/index.js';

@@ -67,6 +67,100 @@
       color: var(--text-secondary);
     }
 
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .export-dropdown {
+      position: relative;
+    }
+
+    .export-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.5rem 0.875rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .export-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .export-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .export-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 0.25rem;
+      min-width: 160px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 100;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-4px);
+      transition: opacity 0.15s, transform 0.15s, visibility 0.15s;
+    }
+
+    .export-dropdown.open .export-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .export-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.625rem 0.875rem;
+      color: var(--text-primary);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      text-decoration: none;
+    }
+
+    .export-menu-item:first-child {
+      border-radius: 5px 5px 0 0;
+    }
+
+    .export-menu-item:last-child {
+      border-radius: 0 0 5px 5px;
+    }
+
+    .export-menu-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .export-menu-item svg {
+      width: 14px;
+      height: 14px;
+      color: var(--text-secondary);
+    }
+
+    .export-menu-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0.25rem 0;
+    }
+
     .status-indicator {
       width: 8px;
       height: 8px;
@@ -461,9 +555,46 @@
 <body>
   <header>
     <h1>noex Observer</h1>
-    <div class="connection-status">
-      <span class="status-indicator" id="wsStatus"></span>
-      <span id="wsStatusText">Connecting...</span>
+    <div class="header-actions">
+      <div class="export-dropdown" id="exportDropdown">
+        <button class="export-btn" id="exportBtn">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+          Export
+        </button>
+        <div class="export-menu">
+          <a href="/api/export/json" class="export-menu-item" download>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+            </svg>
+            Export JSON
+          </a>
+          <div class="export-menu-divider"></div>
+          <a href="/api/export/csv?type=summary" class="export-menu-item" download>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+            </svg>
+            CSV Summary
+          </a>
+          <a href="/api/export/csv?type=servers" class="export-menu-item" download>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+            </svg>
+            CSV Servers
+          </a>
+          <a href="/api/export/csv?type=supervisors" class="export-menu-item" download>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+            </svg>
+            CSV Supervisors
+          </a>
+        </div>
+      </div>
+      <div class="connection-status">
+        <span class="status-indicator" id="wsStatus"></span>
+        <span id="wsStatusText">Connecting...</span>
+      </div>
     </div>
   </header>
 
@@ -1306,6 +1437,30 @@
     }
 
     connect();
+
+    // Export dropdown functionality
+    const exportDropdown = document.getElementById('exportDropdown');
+    const exportBtn = document.getElementById('exportBtn');
+
+    exportBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      exportDropdown.classList.toggle('open');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!exportDropdown.contains(e.target)) {
+        exportDropdown.classList.remove('open');
+      }
+    });
+
+    // Close dropdown when clicking a menu item
+    const exportMenuItems = document.querySelectorAll('.export-menu-item');
+    exportMenuItems.forEach((item) => {
+      item.addEventListener('click', () => {
+        exportDropdown.classList.remove('open');
+      });
+    });
   </script>
 </body>
 </html>

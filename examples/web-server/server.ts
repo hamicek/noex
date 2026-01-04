@@ -38,6 +38,8 @@ import {
   EventBus,
   Cache,
   Observer,
+  exportToJson,
+  exportToCsv,
   type GenServerRef,
   type SupervisorRef,
 } from 'noex';
@@ -245,6 +247,71 @@ async function main() {
   // Supervisor statistics
   app.get('/observer/supervisors', async () => {
     return Observer.getSupervisorStats();
+  });
+
+  // ============================================================
+  // Export Routes - Data export API
+  // ============================================================
+
+  // Export snapshot as JSON
+  app.get('/api/export/json', async (_request, reply) => {
+    const exportData = Observer.prepareExportData();
+    const json = exportToJson(exportData);
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `noex-export-${timestamp}.json`;
+
+    return reply
+      .header('Content-Type', 'application/json')
+      .header('Content-Disposition', `attachment; filename="${filename}"`)
+      .send(json);
+  });
+
+  // Export snapshot as CSV (returns summary CSV by default)
+  app.get('/api/export/csv', async (request, reply) => {
+    const exportData = Observer.prepareExportData();
+    const csvs = exportToCsv(exportData);
+
+    const query = request.query as { type?: string };
+    const csvType = query.type ?? 'summary';
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+    let csvContent: string;
+    let filename: string;
+
+    switch (csvType) {
+      case 'servers':
+        csvContent = csvs.servers;
+        filename = `noex-servers-${timestamp}.csv`;
+        break;
+      case 'supervisors':
+        csvContent = csvs.supervisors;
+        filename = `noex-supervisors-${timestamp}.csv`;
+        break;
+      case 'summary':
+      default:
+        csvContent = csvs.summary;
+        filename = `noex-summary-${timestamp}.csv`;
+        break;
+    }
+
+    return reply
+      .header('Content-Type', 'text/csv')
+      .header('Content-Disposition', `attachment; filename="${filename}"`)
+      .send(csvContent);
+  });
+
+  // Export all CSVs as a combined response (for UI to process)
+  app.get('/api/export/csv/all', async (_request, reply) => {
+    const exportData = Observer.prepareExportData();
+    const csvs = exportToCsv(exportData);
+
+    return reply.send({
+      summary: csvs.summary,
+      servers: csvs.servers,
+      supervisors: csvs.supervisors,
+    });
   });
 
   // Observer WebSocket - real-time process monitoring

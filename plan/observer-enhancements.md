@@ -181,7 +181,7 @@ export const Observer = {
 
 ---
 
-## Fáze 4: Export dat
+## Fáze 4: Export dat ✅ DOKONČENO
 
 ### 4.1 Export utility (`src/observer/export-utils.ts`)
 

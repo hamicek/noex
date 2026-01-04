@@ -19,6 +19,7 @@ import { Supervisor } from '../core/supervisor.js';
 import type { ObserverSnapshot, ObserverEventHandler } from './types.js';
 import { buildProcessTree, countTreeNodes } from './tree-builder.js';
 import { getMemoryStats } from './memory-utils.js';
+import { createExportData, type ExportData } from './export-utils.js';
 
 /**
  * Internal state for lifecycle event subscriptions.
@@ -289,6 +290,28 @@ export const Observer = {
    */
   getProcessCount(): number {
     return GenServer._getAllServerIds().length + Supervisor._getAllSupervisorIds().length;
+  },
+
+  /**
+   * Prepares data for export in a standardized format.
+   *
+   * Returns a complete export data structure containing the current
+   * system snapshot, ready for JSON or CSV export. This is the
+   * recommended way to create exportable data.
+   *
+   * @returns Export data structure with current snapshot
+   *
+   * @example
+   * ```typescript
+   * import { Observer, exportToJson, exportToCsv } from 'noex/observer';
+   *
+   * const data = Observer.prepareExportData();
+   * const json = exportToJson(data);
+   * const csvs = exportToCsv(data);
+   * ```
+   */
+  prepareExportData(): ExportData {
+    return createExportData(this.getSnapshot());
   },
 
   /**

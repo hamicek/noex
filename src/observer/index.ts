@@ -18,3 +18,14 @@ export {
   getMemoryStats,
   formatBytes,
 } from './memory-utils.js';
+export {
+  exportToJson,
+  exportToCsv,
+  createExportData,
+  createExportDataWithHistory,
+  type ExportData,
+  type MetricsHistory,
+  type MetricsDataPoint,
+  type ProcessMetricsHistory,
+  type CsvExportResult,
+} from './export-utils.js';

@@ -19,10 +19,27 @@ describe('ChartRenderer', () => {
       throw new Error('Could not extract script from HTML');
     }
 
+    // Create mock DOM elements for export functionality
+    const mockExportDropdown = {
+      classList: { toggle: vi.fn(), remove: vi.fn() },
+      contains: vi.fn(() => false),
+    };
+    const mockExportBtn = {
+      addEventListener: vi.fn(),
+    };
+
     // Create a sandbox to execute the script and extract ChartRenderer
     const sandbox = {
       window: { devicePixelRatio: 2 },
-      document: { getElementById: vi.fn() },
+      document: {
+        getElementById: vi.fn((id: string) => {
+          if (id === 'exportDropdown') return mockExportDropdown;
+          if (id === 'exportBtn') return mockExportBtn;
+          return null;
+        }),
+        addEventListener: vi.fn(),
+        querySelectorAll: vi.fn(() => []),
+      },
       Date: { now: () => Date.now() },
       Map: Map,
       Set: Set,
