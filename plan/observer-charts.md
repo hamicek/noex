@@ -81,7 +81,7 @@ const metricsStore = {
 };
 ```
 
-### Krok 3: ChartRenderer objekt
+### Krok 3: ChartRenderer objekt ✅ DONE
 Minimální canvas-based line chart renderer.
 
 ```javascript
