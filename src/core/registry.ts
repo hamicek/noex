@@ -284,4 +284,14 @@ export const Registry = {
       lifecycleUnsubscribe = null;
     }
   },
+
+  /**
+   * Returns the registered name for a given ref ID.
+   * Used by Observer for process tree display.
+   *
+   * @internal
+   */
+  _getNameById(refId: string): string | undefined {
+    return refIdToName.get(refId);
+  },
 } as const;

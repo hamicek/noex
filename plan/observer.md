@@ -94,7 +94,7 @@ export type ObserverEvent =
 
 ---
 
-## Fáze 2: Observer modul
+## Fáze 2: Observer modul ✅
 
 ### Struktura `src/observer/`
 

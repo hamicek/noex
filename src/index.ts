@@ -70,3 +70,7 @@ export {
   type RateLimiterOptions,
   type RateLimitResult,
 } from './services/rate-limiter.js';
+
+// Observer
+export { Observer } from './observer/index.js';
+export type { ObserverSnapshot, ObserverEventHandler } from './observer/index.js';
