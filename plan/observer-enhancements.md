@@ -65,7 +65,7 @@ export function estimateObjectSize(obj: unknown): number;
 
 ---
 
-## Fáze 2: Alerting s automatickým prahem
+## Fáze 2: Alerting s automatickým prahem ✅ DOKONČENO
 
 ### 2.1 Nové typy pro alerting (`src/observer/types.ts`)
 

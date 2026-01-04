@@ -72,8 +72,16 @@ export {
 } from './services/rate-limiter.js';
 
 // Observer
-export { Observer } from './observer/index.js';
-export type { ObserverSnapshot, ObserverEventHandler } from './observer/index.js';
+export { Observer, AlertManager } from './observer/index.js';
+export type {
+  ObserverSnapshot,
+  ObserverEventHandler,
+  AlertConfig,
+  Alert,
+  AlertType,
+  AlertEvent,
+  AlertEventHandler,
+} from './observer/index.js';
 
 // Observer export utilities
 export {

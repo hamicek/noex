@@ -6,7 +6,16 @@
  */
 
 export { Observer } from './observer.js';
-export type { ObserverSnapshot, ObserverEventHandler, PollingConfig } from './types.js';
+export type {
+  ObserverSnapshot,
+  ObserverEventHandler,
+  PollingConfig,
+  AlertConfig,
+  Alert,
+  AlertType,
+  AlertEvent,
+  AlertEventHandler,
+} from './types.js';
 export {
   buildProcessTree,
   buildParentMap,
@@ -29,3 +38,4 @@ export {
   type ProcessMetricsHistory,
   type CsvExportResult,
 } from './export-utils.js';
+export { AlertManager } from './alert-manager.js';

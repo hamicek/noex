@@ -38,6 +38,7 @@ import {
   EventBus,
   Cache,
   Observer,
+  AlertManager,
   exportToJson,
   exportToCsv,
   type GenServerRef,
@@ -250,6 +251,33 @@ async function main() {
   });
 
   // ============================================================
+  // Alert Routes - Alerting API
+  // ============================================================
+
+  // Get active alerts
+  app.get('/observer/alerts', async () => {
+    return AlertManager.getActiveAlerts();
+  });
+
+  // Get alert configuration
+  app.get('/observer/alerts/config', async () => {
+    return AlertManager.getConfig();
+  });
+
+  // Update alert configuration
+  app.put('/observer/alerts/config', async (request, reply) => {
+    const body = request.body as Partial<{
+      enabled: boolean;
+      sensitivityMultiplier: number;
+      minSamples: number;
+      cooldownMs: number;
+    }>;
+
+    AlertManager.configure(body);
+    return AlertManager.getConfig();
+  });
+
+  // ============================================================
   // Export Routes - Data export API
   // ============================================================
 
@@ -318,15 +346,23 @@ async function main() {
   app.get('/observer/ws', { websocket: true }, (socket) => {
     console.log('[Observer] WebSocket client connected');
 
-    // Send initial snapshot
+    // Send initial snapshot with active alerts
     socket.send(JSON.stringify({
       type: 'snapshot',
-      data: Observer.getSnapshot(),
+      data: {
+        ...Observer.getSnapshot(),
+        activeAlerts: AlertManager.getActiveAlerts(),
+      },
     }));
 
     // Subscribe to lifecycle events
     const unsubEvents = Observer.subscribe((event) => {
       socket.send(JSON.stringify({ type: 'event', data: event }));
+    });
+
+    // Subscribe to alert events
+    const unsubAlerts = AlertManager.subscribe((event) => {
+      socket.send(JSON.stringify({ type: 'alert', data: event }));
     });
 
     // Start polling for stats updates (every second)
@@ -337,6 +373,7 @@ async function main() {
     socket.on('close', () => {
       console.log('[Observer] WebSocket client disconnected');
       unsubEvents();
+      unsubAlerts();
       stopPolling();
     });
 

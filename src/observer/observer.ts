@@ -16,10 +16,11 @@ import type {
 } from '../core/types.js';
 import { GenServer } from '../core/gen-server.js';
 import { Supervisor } from '../core/supervisor.js';
-import type { ObserverSnapshot, ObserverEventHandler } from './types.js';
+import type { ObserverSnapshot, ObserverEventHandler, AlertEventHandler } from './types.js';
 import { buildProcessTree, countTreeNodes } from './tree-builder.js';
 import { getMemoryStats } from './memory-utils.js';
 import { createExportData, type ExportData } from './export-utils.js';
+import { AlertManager } from './alert-manager.js';
 
 /**
  * Internal state for lifecycle event subscriptions.
@@ -249,6 +250,8 @@ export const Observer = {
    * containing current statistics for all servers and supervisors.
    * This is useful for dashboards that need regular updates.
    *
+   * Also triggers alert checks via AlertManager during each poll cycle.
+   *
    * @param intervalMs - Polling interval in milliseconds
    * @param handler - Function called with each stats update
    * @returns Function to stop polling
@@ -259,10 +262,16 @@ export const Observer = {
     const poll = () => {
       if (!active) return;
 
+      const servers = GenServer._getAllStats();
+      const supervisors = Supervisor._getAllStats();
+
+      // Check for alerts based on current stats
+      AlertManager.checkAlerts(servers);
+
       const event: ObserverEvent = {
         type: 'stats_update',
-        servers: GenServer._getAllStats(),
-        supervisors: Supervisor._getAllStats(),
+        servers,
+        supervisors,
       };
 
       try {
@@ -315,6 +324,37 @@ export const Observer = {
   },
 
   /**
+   * Subscribes to alert events from the AlertManager.
+   *
+   * This is a convenience method that delegates to AlertManager.subscribe().
+   * Events are emitted when alerts are triggered or resolved.
+   *
+   * @param handler - Function called for each alert event
+   * @returns Unsubscribe function
+   *
+   * @example
+   * ```typescript
+   * const unsubscribe = Observer.subscribeToAlerts((event) => {
+   *   if (event.type === 'alert_triggered') {
+   *     console.log(`Alert: ${event.alert.message}`);
+   *   }
+   * });
+   * ```
+   */
+  subscribeToAlerts(handler: AlertEventHandler): () => void {
+    return AlertManager.subscribe(handler);
+  },
+
+  /**
+   * Returns all currently active alerts.
+   *
+   * @returns Array of active alerts
+   */
+  getActiveAlerts(): ReturnType<typeof AlertManager.getActiveAlerts> {
+    return AlertManager.getActiveAlerts();
+  },
+
+  /**
    * Clears all event subscribers.
    * Useful for testing.
    *
@@ -341,5 +381,7 @@ export const Observer = {
       supervisorUnsubscribe = null;
     }
     coreSubscribed = false;
+    AlertManager.reset();
+    AlertManager._clearSubscribers();
   },
 } as const;
