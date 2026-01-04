@@ -408,6 +408,25 @@ export interface GenServerStats {
   readonly startedAt: number;
   /** Time elapsed since start in milliseconds */
   readonly uptimeMs: number;
+  /** Estimated memory usage of the server's state in bytes */
+  readonly stateMemoryBytes?: number;
+}
+
+/**
+ * Global memory statistics from process.memoryUsage().
+ * Provides system-wide memory introspection.
+ */
+export interface MemoryStats {
+  /** V8 heap memory currently in use (bytes) */
+  readonly heapUsed: number;
+  /** Total V8 heap memory allocated (bytes) */
+  readonly heapTotal: number;
+  /** Memory used by C++ objects bound to JavaScript (bytes) */
+  readonly external: number;
+  /** Resident Set Size - total memory allocated for the process (bytes) */
+  readonly rss: number;
+  /** Unix timestamp when the stats were collected */
+  readonly timestamp: number;
 }
 
 /**

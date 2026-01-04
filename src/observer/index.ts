@@ -13,3 +13,8 @@ export {
   countTreeNodes,
   findNodeById,
 } from './tree-builder.js';
+export {
+  estimateObjectSize,
+  getMemoryStats,
+  formatBytes,
+} from './memory-utils.js';

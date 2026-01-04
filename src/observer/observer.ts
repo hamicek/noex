@@ -12,11 +12,13 @@ import type {
   ProcessTreeNode,
   ObserverEvent,
   LifecycleEvent,
+  MemoryStats,
 } from '../core/types.js';
 import { GenServer } from '../core/gen-server.js';
 import { Supervisor } from '../core/supervisor.js';
 import type { ObserverSnapshot, ObserverEventHandler } from './types.js';
 import { buildProcessTree, countTreeNodes } from './tree-builder.js';
+import { getMemoryStats } from './memory-utils.js';
 
 /**
  * Internal state for lifecycle event subscriptions.
@@ -171,7 +173,20 @@ export const Observer = {
       processCount: countTreeNodes(tree),
       totalMessages,
       totalRestarts,
+      memoryStats: getMemoryStats(),
     };
+  },
+
+  /**
+   * Returns current process memory statistics.
+   *
+   * Provides heap usage, RSS, and external memory metrics
+   * from the Node.js runtime.
+   *
+   * @returns Current memory statistics
+   */
+  getMemoryStats(): MemoryStats {
+    return getMemoryStats();
   },
 
   /**

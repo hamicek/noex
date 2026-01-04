@@ -405,4 +405,77 @@ describe('Observer', () => {
       await Supervisor.stop(supRef);
     });
   });
+
+  describe('getMemoryStats()', () => {
+    it('returns valid memory statistics', () => {
+      const stats = Observer.getMemoryStats();
+
+      expect(stats.heapUsed).toBeGreaterThan(0);
+      expect(stats.heapTotal).toBeGreaterThan(0);
+      expect(stats.rss).toBeGreaterThan(0);
+      expect(stats.timestamp).toBeGreaterThan(0);
+    });
+  });
+
+  describe('memory tracking in snapshot', () => {
+    it('includes memoryStats in snapshot', () => {
+      const snapshot = Observer.getSnapshot();
+
+      expect(snapshot.memoryStats).toBeDefined();
+      expect(snapshot.memoryStats.heapUsed).toBeGreaterThan(0);
+      expect(snapshot.memoryStats.heapTotal).toBeGreaterThan(0);
+      expect(snapshot.memoryStats.rss).toBeGreaterThan(0);
+      expect(snapshot.memoryStats.timestamp).toBeGreaterThan(0);
+    });
+
+    it('includes stateMemoryBytes in server stats', async () => {
+      const ref = await GenServer.start(createCounterBehavior());
+
+      const snapshot = Observer.getSnapshot();
+
+      expect(snapshot.servers).toHaveLength(1);
+      expect(snapshot.servers[0]!.stateMemoryBytes).toBeDefined();
+      expect(snapshot.servers[0]!.stateMemoryBytes).toBeGreaterThan(0);
+
+      await GenServer.stop(ref);
+    });
+
+    it('tracks state memory growth', async () => {
+      // Behavior with growing state
+      interface State {
+        items: string[];
+      }
+      const growingBehavior: GenServerBehavior<State, 'get', 'add', number> = {
+        init: () => ({ items: [] }),
+        handleCall: (msg, state) => {
+          if (msg === 'get') return [state.items.length, state];
+          throw new Error('Unknown');
+        },
+        handleCast: (msg, state) => {
+          if (msg === 'add') {
+            return { items: [...state.items, 'x'.repeat(1000)] };
+          }
+          return state;
+        },
+      };
+
+      const ref = await GenServer.start(growingBehavior);
+
+      const beforeSnapshot = Observer.getSnapshot();
+      const beforeMemory = beforeSnapshot.servers[0]!.stateMemoryBytes!;
+
+      // Add items to grow state
+      for (let i = 0; i < 10; i++) {
+        GenServer.cast(ref, 'add');
+      }
+      await new Promise((r) => setTimeout(r, 50));
+
+      const afterSnapshot = Observer.getSnapshot();
+      const afterMemory = afterSnapshot.servers[0]!.stateMemoryBytes!;
+
+      expect(afterMemory).toBeGreaterThan(beforeMemory);
+
+      await GenServer.stop(ref);
+    });
+  });
 });

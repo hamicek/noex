@@ -24,6 +24,7 @@ import {
   InitializationError,
   DEFAULTS,
 } from './types.js';
+import { estimateObjectSize } from '../observer/memory-utils.js';
 
 /**
  * Internal message type for the processing queue.
@@ -99,7 +100,16 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
       messageCount: this.messageCount,
       startedAt: this.startedAt,
       uptimeMs: Date.now() - this.startedAt,
+      stateMemoryBytes: this.getStateMemoryEstimate(),
     };
+  }
+
+  /**
+   * Estimates the memory footprint of the current state.
+   * Uses heuristic-based calculation for approximation.
+   */
+  getStateMemoryEstimate(): number {
+    return estimateObjectSize(this.state);
   }
 
   /**

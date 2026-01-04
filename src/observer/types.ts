@@ -9,6 +9,7 @@ import type {
   GenServerStats,
   SupervisorStats,
   ProcessTreeNode,
+  MemoryStats,
 } from '../core/types.js';
 
 /**
@@ -30,6 +31,8 @@ export interface ObserverSnapshot {
   readonly totalMessages: number;
   /** Total restarts across all supervisors */
   readonly totalRestarts: number;
+  /** Global memory statistics */
+  readonly memoryStats: MemoryStats;
 }
 
 /**
