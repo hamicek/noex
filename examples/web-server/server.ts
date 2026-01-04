@@ -39,10 +39,12 @@ import {
   Cache,
   Observer,
   AlertManager,
+  DashboardServer,
   exportToJson,
   exportToCsv,
   type GenServerRef,
   type SupervisorRef,
+  type DashboardServerRef,
 } from 'noex';
 
 import {
@@ -175,10 +177,24 @@ async function main() {
     ],
   });
 
-  console.log('Core services started:');
-  console.log('  - EventBus (pub/sub messaging)');
-  console.log('  - Cache (session storage)');
-  console.log('  - Metrics (statistics)\n');
+  // 1b. Start Dashboard Server for remote TUI connections
+  const dashboardPort = parseInt(process.env.DASHBOARD_PORT || '9876', 10);
+  let dashboardRef: DashboardServerRef | null = null;
+
+  try {
+    dashboardRef = await DashboardServer.start({ port: dashboardPort });
+    console.log('Core services started:');
+    console.log('  - EventBus (pub/sub messaging)');
+    console.log('  - Cache (session storage)');
+    console.log('  - Metrics (statistics)');
+    console.log(`  - DashboardServer (port ${dashboardPort})\n`);
+  } catch (err) {
+    console.log('Core services started:');
+    console.log('  - EventBus (pub/sub messaging)');
+    console.log('  - Cache (session storage)');
+    console.log('  - Metrics (statistics)');
+    console.log(`  - DashboardServer: FAILED to start on port ${dashboardPort}\n`);
+  }
 
   // 2. Get references to services
   const eventBus = Registry.lookup('event-bus');
@@ -466,7 +482,13 @@ async function main() {
 
   console.log(`Server listening on http://${host}:${port}`);
   console.log(`WebSocket endpoint: ws://${host}:${port}/ws`);
-  console.log(`\nOpen http://localhost:${port} in your browser to test the chat.\n`);
+  console.log(`\nOpen http://localhost:${port} in your browser to test the chat.`);
+
+  if (dashboardRef) {
+    console.log(`\nRemote TUI Dashboard available. Connect with:`);
+    console.log(`  npx noex-dashboard --port ${dashboardPort}`);
+  }
+  console.log('');
 
   // 8. Graceful shutdown
   const shutdown = async (signal: string) => {
@@ -478,6 +500,12 @@ async function main() {
       await GenServer.stop(ref);
     }
     connections.clear();
+
+    // Stop Dashboard Server
+    if (dashboardRef) {
+      console.log('  Stopping DashboardServer...');
+      await DashboardServer.stop(dashboardRef);
+    }
 
     // Stop supervisor (stops all services)
     await Supervisor.stop(supervisor);

@@ -25,10 +25,12 @@ import {
   GenServer,
   Supervisor,
   Observer,
+  DashboardServer,
   type GenServerBehavior,
   type GenServerRef,
   type SupervisorRef,
   type ChildSpec,
+  type DashboardServerRef,
 } from '../../dist/index.js';
 
 // ============================================================================
@@ -403,6 +405,8 @@ let serviceRefs: ServiceRefs | null = null;
 let servicesSupervisor: SupervisorRef | null = null;
 let appSupervisor: SupervisorRef | null = null;
 let observerInterval: ReturnType<typeof setInterval> | null = null;
+let dashboardRef: DashboardServerRef | null = null;
+const DASHBOARD_PORT = 9876;
 
 // Simple console logging (bypasses the GenServer logger for system messages)
 function log(source: string, level: 'info' | 'warn' | 'error', message: string): void {
@@ -491,6 +495,14 @@ async function startSupervisionTree(): Promise<void> {
   };
 
   log('system', 'info', 'Supervision Tree started successfully!');
+
+  // Start Dashboard Server for remote TUI connections
+  try {
+    dashboardRef = await DashboardServer.start({ port: DASHBOARD_PORT });
+    log('system', 'info', `DashboardServer started on port ${DASHBOARD_PORT}`);
+  } catch (err) {
+    log('system', 'warn', `DashboardServer failed to start: ${err}`);
+  }
 }
 
 // ============================================================================
@@ -558,6 +570,9 @@ function displayHelp(): void {
   \x1b[33mauto [on|off]\x1b[0m   - Toggle auto Observer refresh (every 5s)
   \x1b[33mhelp\x1b[0m, \x1b[33mh\x1b[0m         - Show this help
   \x1b[33mquit\x1b[0m, \x1b[33mq\x1b[0m         - Exit the application
+
+\x1b[36mRemote TUI Dashboard:\x1b[0m
+  Connect from another terminal with: \x1b[33mnpx noex-dashboard --port ${DASHBOARD_PORT}\x1b[0m
 `);
 }
 
@@ -776,6 +791,11 @@ async function shutdown(): Promise<void> {
 
   if (observerInterval) {
     clearInterval(observerInterval);
+  }
+
+  if (dashboardRef) {
+    await DashboardServer.stop(dashboardRef);
+    log('system', 'info', 'DashboardServer stopped');
   }
 
   if (servicesSupervisor) {
