@@ -72,6 +72,7 @@ export class EventLogWidget extends BaseWidget<void> {
       contrib.log,
       {
         label: ' Event Log ',
+        tags: true,
         fg: this.theme.text,
         selectedFg: this.theme.background,
         border: this.getBorderStyle(),

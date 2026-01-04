@@ -47,18 +47,18 @@ const LAYOUTS = {
   full: {
     processTree: { row: 0, col: 0, rowSpan: 6, colSpan: 4 },
     statsTable: { row: 0, col: 4, rowSpan: 6, colSpan: 8 },
-    memoryGauge: { row: 6, col: 0, rowSpan: 4, colSpan: 4 },
-    eventLog: { row: 6, col: 4, rowSpan: 5, colSpan: 8 },
-    statusBar: { row: 11, col: 0, rowSpan: 1, colSpan: 12 },
+    memoryGauge: { row: 6, col: 0, rowSpan: 3, colSpan: 4 },
+    eventLog: { row: 6, col: 4, rowSpan: 4, colSpan: 8 },
+    statusBar: { row: 10, col: 0, rowSpan: 2, colSpan: 12 },
   },
   compact: {
-    processTree: { row: 0, col: 0, rowSpan: 10, colSpan: 4 },
-    statsTable: { row: 0, col: 4, rowSpan: 10, colSpan: 8 },
-    statusBar: { row: 10, col: 0, rowSpan: 1, colSpan: 12 },
+    processTree: { row: 0, col: 0, rowSpan: 9, colSpan: 4 },
+    statsTable: { row: 0, col: 4, rowSpan: 9, colSpan: 8 },
+    statusBar: { row: 10, col: 0, rowSpan: 2, colSpan: 12 },
   },
   minimal: {
-    statsTable: { row: 0, col: 0, rowSpan: 11, colSpan: 12 },
-    statusBar: { row: 11, col: 0, rowSpan: 1, colSpan: 12 },
+    statsTable: { row: 0, col: 0, rowSpan: 10, colSpan: 12 },
+    statusBar: { row: 10, col: 0, rowSpan: 2, colSpan: 12 },
   },
 } as const satisfies Record<string, Record<string, GridPosition>>;
 
@@ -364,9 +364,11 @@ export class Dashboard {
     const pos = layout.statusBar;
     this.statusBar = this.grid.set(pos.row, pos.col, pos.rowSpan, pos.colSpan, blessed.box, {
       tags: true,
+      border: { type: 'line' },
       style: {
-        fg: this.theme.textMuted,
+        fg: this.theme.text,
         bg: this.theme.background,
+        border: { fg: this.theme.primary },
       },
     });
   }
@@ -528,12 +530,10 @@ export class Dashboard {
     const layoutIndicator = this.getLayoutIndicator();
 
     const content =
-      `  {${this.theme.textMuted}-fg}[q]uit [r]efresh [?]help [1-3]layout{/${this.theme.textMuted}-fg}` +
-      `{|}` +
-      `{${this.theme.secondary}-fg}${layoutIndicator}{/${this.theme.secondary}-fg}  ` +
-      `{${this.theme.textMuted}-fg}Processes:{/${this.theme.textMuted}-fg} ${processCount} ` +
-      `{${this.theme.textMuted}-fg}({/${this.theme.textMuted}-fg}${serverCount}s, ${supervisorCount}sup{${this.theme.textMuted}-fg}){/${this.theme.textMuted}-fg}  ` +
-      `{${this.theme.textMuted}-fg}Up:{/${this.theme.textMuted}-fg} ${uptime}  `;
+      ` [q]uit [r]efresh [?]help [1-3]layout` +
+      `  |  ${layoutIndicator}` +
+      `  |  Processes: ${processCount} (${serverCount} servers, ${supervisorCount} supervisors)` +
+      `  |  Up: ${uptime}`;
 
     this.statusBar.setContent(content);
   }
