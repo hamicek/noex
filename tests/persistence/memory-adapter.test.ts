@@ -249,13 +249,14 @@ describe('MemoryAdapter', () => {
   });
 
   describe('close', () => {
-    it('clears all stored data', async () => {
+    it('is a no-op and does not clear data', async () => {
       await adapter.save('key1', createPersistedState({}));
       await adapter.save('key2', createPersistedState({}));
 
       await adapter.close();
 
-      expect(adapter.size).toBe(0);
+      // close() should not clear data - use clear() for that
+      expect(adapter.size).toBe(2);
     });
   });
 

@@ -110,7 +110,8 @@ export class MemoryAdapter implements StorageAdapter {
   }
 
   async close(): Promise<void> {
-    this.storage.clear();
+    // No-op for in-memory storage - nothing to close
+    // Data persists until adapter is garbage collected or explicitly cleared
   }
 
   /**

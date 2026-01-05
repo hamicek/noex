@@ -65,6 +65,7 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
 
   private persistenceManager: PersistenceManager<State> | undefined;
   private snapshotTimer: ReturnType<typeof setInterval> | undefined;
+  private cleanupTimer: ReturnType<typeof setInterval> | undefined;
   private persistenceConfig: PersistenceConfig<State> | undefined;
   private readonly serverName: string | undefined;
 
@@ -208,6 +209,10 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
   forceTerminate(reason: TerminateReason): void {
     this.status = 'stopped';
 
+    // Stop all periodic timers
+    this.stopPeriodicSnapshots();
+    this.stopPeriodicCleanup();
+
     // Reject all pending calls
     for (const msg of this.queue) {
       if (msg.kind === 'call') {
@@ -227,6 +232,9 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
         // Ignore errors during force terminate
       }
     }
+
+    // Fire and forget cleanup of persistence resources
+    void this.cleanupPersistence();
   }
 
   /**
@@ -331,8 +339,9 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
   }): Promise<void> {
     this.status = 'stopping';
 
-    // Stop periodic snapshots first
+    // Stop periodic timers first
     this.stopPeriodicSnapshots();
+    this.stopPeriodicCleanup();
 
     try {
       // Persist state on shutdown if configured
@@ -344,6 +353,9 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
           // The onError callback in persistence config handles error reporting
         }
       }
+
+      // Cleanup persistence resources (delete data if configured, close adapter)
+      await this.cleanupPersistence();
 
       if (this.behavior.terminate) {
         await Promise.resolve(this.behavior.terminate(message.reason, this.state));
@@ -414,6 +426,36 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
   }
 
   /**
+   * Starts periodic cleanup timer if configured.
+   * Periodically removes old persisted states based on maxStateAgeMs.
+   */
+  startPeriodicCleanup(): void {
+    const { cleanupIntervalMs, maxStateAgeMs } = this.persistenceConfig ?? {};
+    if (!cleanupIntervalMs || !maxStateAgeMs || !this.persistenceManager) {
+      return;
+    }
+
+    this.cleanupTimer = setInterval(() => {
+      void this.persistenceManager?.cleanup(maxStateAgeMs);
+    }, cleanupIntervalMs);
+
+    // Don't prevent process exit
+    if (this.cleanupTimer.unref) {
+      this.cleanupTimer.unref();
+    }
+  }
+
+  /**
+   * Stops periodic cleanup timer.
+   */
+  stopPeriodicCleanup(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
+  }
+
+  /**
    * Saves current state to persistence.
    * Returns the metadata of the saved state.
    */
@@ -473,6 +515,29 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
    */
   getPersistenceConfig(): PersistenceConfig<State> | undefined {
     return this.persistenceConfig;
+  }
+
+  /**
+   * Performs cleanup of persistence resources on server termination.
+   * Deletes persisted data if cleanupOnTerminate is configured,
+   * then closes the adapter connection.
+   */
+  private async cleanupPersistence(): Promise<void> {
+    if (!this.persistenceManager) {
+      return;
+    }
+
+    // Delete persisted data if configured
+    if (this.persistenceConfig?.cleanupOnTerminate) {
+      await this.persistenceManager.delete().catch(() => {
+        // Ignore deletion errors during cleanup
+      });
+    }
+
+    // Close the adapter connection
+    await this.persistenceManager.close().catch(() => {
+      // Ignore close errors during cleanup
+    });
   }
 }
 
@@ -710,8 +775,9 @@ export const GenServer = {
       }
     }
 
-    // Start periodic snapshots after successful startup
+    // Start periodic snapshots and cleanup after successful startup
     instance.startPeriodicSnapshots();
+    instance.startPeriodicCleanup();
 
     emitLifecycleEvent('started', ref as GenServerRef);
 
