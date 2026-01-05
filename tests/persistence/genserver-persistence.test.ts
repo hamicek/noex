@@ -676,4 +676,369 @@ describe('GenServer Persistence Integration', () => {
       await GenServer.stop(ref);
     });
   });
+
+  describe('Cleanup on Terminate', () => {
+    it('deletes persisted data when cleanupOnTerminate is true', async () => {
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter,
+          cleanupOnTerminate: true,
+        },
+      });
+
+      GenServer.cast(ref, 'inc');
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Create a checkpoint to ensure data exists
+      await GenServer.checkpoint(ref);
+      expect(await adapter.exists('counter')).toBe(true);
+
+      // Stop should delete the data
+      await GenServer.stop(ref);
+
+      expect(await adapter.exists('counter')).toBe(false);
+    });
+
+    it('retains persisted data when cleanupOnTerminate is false (default)', async () => {
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter,
+          cleanupOnTerminate: false,
+        },
+      });
+
+      GenServer.cast(ref, 'inc');
+      await new Promise((r) => setTimeout(r, 50));
+
+      await GenServer.stop(ref);
+
+      // Data should still exist
+      expect(await adapter.exists('counter')).toBe(true);
+      const persisted = await adapter.load('counter');
+      expect(persisted?.state).toEqual({ count: 1, lastUpdated: expect.any(Number) });
+    });
+
+    it('retains persisted data when cleanupOnTerminate is not specified', async () => {
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: { adapter },
+      });
+
+      GenServer.cast(ref, 'inc');
+      await new Promise((r) => setTimeout(r, 50));
+
+      await GenServer.stop(ref);
+
+      // Data should still exist (default behavior)
+      expect(await adapter.exists('counter')).toBe(true);
+    });
+
+    it('cleans up data on force terminate when cleanupOnTerminate is true', async () => {
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter,
+          cleanupOnTerminate: true,
+        },
+      });
+
+      GenServer.cast(ref, 'inc');
+      await new Promise((r) => setTimeout(r, 50));
+
+      await GenServer.checkpoint(ref);
+      expect(await adapter.exists('counter')).toBe(true);
+
+      // Force terminate
+      GenServer._forceTerminate(ref, 'shutdown');
+
+      // Wait for async cleanup to complete
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(await adapter.exists('counter')).toBe(false);
+    });
+  });
+
+  describe('Adapter Close', () => {
+    it('calls adapter.close() on graceful shutdown', async () => {
+      const closeSpy = vi.fn().mockResolvedValue(undefined);
+      const adapterWithClose = {
+        ...adapter,
+        close: closeSpy,
+      };
+
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter: adapterWithClose,
+          persistOnShutdown: false,
+        },
+      });
+
+      await GenServer.stop(ref);
+
+      expect(closeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls adapter.close() on force terminate', async () => {
+      const closeSpy = vi.fn().mockResolvedValue(undefined);
+      const adapterWithClose = {
+        ...adapter,
+        close: closeSpy,
+      };
+
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter: adapterWithClose,
+          persistOnShutdown: false,
+        },
+      });
+
+      GenServer._forceTerminate(ref, 'shutdown');
+
+      // Wait for async close to complete
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(closeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles adapters without close() method gracefully', async () => {
+      const adapterWithoutClose: typeof adapter = {
+        save: adapter.save.bind(adapter),
+        load: adapter.load.bind(adapter),
+        delete: adapter.delete.bind(adapter),
+        exists: adapter.exists.bind(adapter),
+        listKeys: adapter.listKeys.bind(adapter),
+        // No close method
+      };
+
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter: adapterWithoutClose,
+        },
+      });
+
+      GenServer.cast(ref, 'inc');
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Should not throw
+      await expect(GenServer.stop(ref)).resolves.toBeUndefined();
+    });
+
+    it('ignores close errors during shutdown', async () => {
+      const closeSpy = vi.fn().mockRejectedValue(new Error('Close failed'));
+      const adapterWithClose = {
+        ...adapter,
+        close: closeSpy,
+      };
+
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter: adapterWithClose,
+          persistOnShutdown: false,
+        },
+      });
+
+      // Should not throw despite close error
+      await expect(GenServer.stop(ref)).resolves.toBeUndefined();
+      expect(closeSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Periodic Cleanup', () => {
+    it('performs periodic cleanup at configured interval', async () => {
+      vi.useFakeTimers();
+
+      const cleanupSpy = vi.fn().mockResolvedValue(0);
+      const adapterWithCleanup = {
+        ...adapter,
+        cleanup: cleanupSpy,
+      };
+
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter: adapterWithCleanup,
+          cleanupIntervalMs: 100,
+          maxStateAgeMs: 5000,
+          persistOnShutdown: false,
+        },
+      });
+
+      // No cleanup yet
+      expect(cleanupSpy).not.toHaveBeenCalled();
+
+      // Advance to first cleanup
+      await vi.advanceTimersByTimeAsync(100);
+      expect(cleanupSpy).toHaveBeenCalledTimes(1);
+      expect(cleanupSpy).toHaveBeenCalledWith(5000);
+
+      // Advance to second cleanup
+      await vi.advanceTimersByTimeAsync(100);
+      expect(cleanupSpy).toHaveBeenCalledTimes(2);
+
+      await GenServer.stop(ref);
+      vi.useRealTimers();
+    });
+
+    it('does not start cleanup timer when cleanupIntervalMs is not set', async () => {
+      vi.useFakeTimers();
+
+      const cleanupSpy = vi.fn().mockResolvedValue(0);
+      const adapterWithCleanup = {
+        ...adapter,
+        cleanup: cleanupSpy,
+      };
+
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter: adapterWithCleanup,
+          maxStateAgeMs: 5000, // maxStateAgeMs set but no cleanupIntervalMs
+          persistOnShutdown: false,
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(10000);
+
+      expect(cleanupSpy).not.toHaveBeenCalled();
+
+      await GenServer.stop(ref);
+      vi.useRealTimers();
+    });
+
+    it('does not start cleanup timer when maxStateAgeMs is not set', async () => {
+      vi.useFakeTimers();
+
+      const cleanupSpy = vi.fn().mockResolvedValue(0);
+      const adapterWithCleanup = {
+        ...adapter,
+        cleanup: cleanupSpy,
+      };
+
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter: adapterWithCleanup,
+          cleanupIntervalMs: 100, // cleanupIntervalMs set but no maxStateAgeMs
+          persistOnShutdown: false,
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(10000);
+
+      expect(cleanupSpy).not.toHaveBeenCalled();
+
+      await GenServer.stop(ref);
+      vi.useRealTimers();
+    });
+
+    it('stops cleanup timer on graceful shutdown', async () => {
+      vi.useFakeTimers();
+
+      const cleanupSpy = vi.fn().mockResolvedValue(0);
+      const adapterWithCleanup = {
+        ...adapter,
+        cleanup: cleanupSpy,
+      };
+
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter: adapterWithCleanup,
+          cleanupIntervalMs: 100,
+          maxStateAgeMs: 5000,
+          persistOnShutdown: false,
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(cleanupSpy).toHaveBeenCalledTimes(1);
+
+      await GenServer.stop(ref);
+
+      // Advance time - no more cleanups should occur
+      await vi.advanceTimersByTimeAsync(500);
+      expect(cleanupSpy).toHaveBeenCalledTimes(1);
+
+      vi.useRealTimers();
+    });
+
+    it('stops cleanup timer on force terminate', async () => {
+      vi.useFakeTimers();
+
+      const cleanupSpy = vi.fn().mockResolvedValue(0);
+      const adapterWithCleanup = {
+        ...adapter,
+        cleanup: cleanupSpy,
+      };
+
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter: adapterWithCleanup,
+          cleanupIntervalMs: 100,
+          maxStateAgeMs: 5000,
+          persistOnShutdown: false,
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(cleanupSpy).toHaveBeenCalledTimes(1);
+
+      GenServer._forceTerminate(ref, 'shutdown');
+
+      // Advance time - no more cleanups should occur
+      await vi.advanceTimersByTimeAsync(500);
+      expect(cleanupSpy).toHaveBeenCalledTimes(1);
+
+      vi.useRealTimers();
+    });
+
+    it('handles adapters without cleanup() method gracefully', async () => {
+      vi.useFakeTimers();
+
+      const adapterWithoutCleanup: typeof adapter = {
+        save: adapter.save.bind(adapter),
+        load: adapter.load.bind(adapter),
+        delete: adapter.delete.bind(adapter),
+        exists: adapter.exists.bind(adapter),
+        listKeys: adapter.listKeys.bind(adapter),
+        // No cleanup method
+      };
+
+      const behavior = createCounterBehavior();
+      const ref = await GenServer.start(behavior, {
+        name: 'counter',
+        persistence: {
+          adapter: adapterWithoutCleanup,
+          cleanupIntervalMs: 100,
+          maxStateAgeMs: 5000,
+        },
+      });
+
+      // Advancing time should not throw
+      await vi.advanceTimersByTimeAsync(500);
+
+      await GenServer.stop(ref);
+      vi.useRealTimers();
+    });
+  });
 });
