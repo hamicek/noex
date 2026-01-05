@@ -33,3 +33,7 @@ export {
 
 // Serializers
 export { defaultSerializer, createPrettySerializer } from './serializers.js';
+
+// Storage adapters
+export { MemoryAdapter, FileAdapter } from './adapters/index.js';
+export type { MemoryAdapterOptions, FileAdapterOptions } from './adapters/index.js';
