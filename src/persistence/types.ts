@@ -150,6 +150,20 @@ export interface PersistenceConfig<State> {
   readonly maxStateAgeMs?: number;
 
   /**
+   * Whether to delete persisted state on server termination.
+   * When true, all persisted data for this server will be removed on shutdown.
+   * @default false
+   */
+  readonly cleanupOnTerminate?: boolean;
+
+  /**
+   * Interval in milliseconds for automatic cleanup of stale entries.
+   * Requires maxStateAgeMs to be set. When configured, periodically removes
+   * entries older than maxStateAgeMs from storage.
+   */
+  readonly cleanupIntervalMs?: number;
+
+  /**
    * Schema version for migration support.
    * @default 1
    */
