@@ -34,6 +34,10 @@ export {
 // Serializers
 export { defaultSerializer, createPrettySerializer } from './serializers.js';
 
+// Manager
+export { PersistenceManager } from './manager.js';
+export type { SaveOptions, ManagerLoadResult, LoadSuccess, LoadFailure } from './manager.js';
+
 // Storage adapters
 export { MemoryAdapter, FileAdapter } from './adapters/index.js';
 export type { MemoryAdapterOptions, FileAdapterOptions } from './adapters/index.js';
