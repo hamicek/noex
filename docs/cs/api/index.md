@@ -33,6 +33,14 @@ Nástroje pro monitoring a ladění.
 | [Dashboard](./dashboard.md) | Terminálové UI pro monitoring |
 | [DashboardServer](./dashboard-server.md) | HTTP dashboard server |
 
+## Persistence
+
+Ukládání stavu pro GenServer procesy.
+
+| Modul | Popis |
+|-------|-------|
+| [Persistence](./persistence.md) | Ukládání stavu se zásuvnými adaptéry |
+
 ## Typy a chyby
 
 | Modul | Popis |

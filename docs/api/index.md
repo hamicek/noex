@@ -33,6 +33,14 @@ Tools for monitoring and debugging.
 | [Dashboard](./dashboard.md) | Terminal UI for monitoring |
 | [DashboardServer](./dashboard-server.md) | HTTP dashboard server |
 
+## Persistence
+
+State persistence for GenServer processes.
+
+| Module | Description |
+|--------|-------------|
+| [Persistence](./persistence.md) | State persistence with pluggable adapters |
+
 ## Types & Errors
 
 | Module | Description |
