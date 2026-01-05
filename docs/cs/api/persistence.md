@@ -75,6 +75,20 @@ interface PersistenceConfig<State> {
   readonly maxStateAgeMs?: number;
 
   /**
+   * Zda smazat persistovaný stav při ukončení serveru.
+   * Při true budou všechna persistovaná data pro tento server odstraněna při shutdown.
+   * @default false
+   */
+  readonly cleanupOnTerminate?: boolean;
+
+  /**
+   * Interval v milisekundách pro automatický úklid zastaralých záznamů.
+   * Vyžaduje nastavení maxStateAgeMs. Periodicky odstraňuje záznamy starší
+   * než maxStateAgeMs ze storage.
+   */
+  readonly cleanupIntervalMs?: number;
+
+  /**
    * Verze schématu pro podporu migrace.
    * @default 1
    */
@@ -402,6 +416,71 @@ await GenServer.clearPersistedState(ref);
 
 ---
 
+## Úklid stavu
+
+Systém persistence poskytuje automatické funkce úklidu pro správu úložiště v čase.
+
+### Úklid při ukončení
+
+Smazání persistovaného stavu při vypnutí serveru:
+
+```typescript
+const ref = await GenServer.start(behavior, {
+  persistence: {
+    adapter,
+    cleanupOnTerminate: true, // Smazat stav při shutdown
+  },
+});
+
+// Když se tento server zastaví, jeho persistovaný stav bude odstraněn
+await GenServer.stop(ref);
+```
+
+Toto je užitečné pro:
+- Dočasné servery s efemérním stavem
+- Testovací prostředí kde stav nemá přetrvávat
+- Servery které kompletně obnoví stav při restartu
+
+### Periodický úklid
+
+Automatické odstraňování zastaralých záznamů ze storage v pravidelných intervalech:
+
+```typescript
+const ref = await GenServer.start(behavior, {
+  persistence: {
+    adapter,
+    maxStateAgeMs: 24 * 60 * 60 * 1000, // 24 hodin
+    cleanupIntervalMs: 60 * 60 * 1000,   // Spustit úklid každou hodinu
+  },
+});
+```
+
+Periodický úklid vyžaduje nastavení `maxStateAgeMs`. Záznamy starší než `maxStateAgeMs` budou odstraněny během každého cyklu úklidu.
+
+### Metody PersistenceManageru
+
+`PersistenceManager` vystavuje cleanup metody přímo:
+
+```typescript
+const manager = new PersistenceManager({
+  adapter,
+  key: 'my-server',
+  maxStateAgeMs: 86400000, // 24 hodin
+});
+
+// Ruční spuštění úklidu zastaralých záznamů
+const removedCount = await manager.cleanup();
+console.log(`Odstraněno ${removedCount} zastaralých záznamů`);
+
+// Úklid s vlastním prahem stáří
+const count = await manager.cleanup(3600000); // Odstranit záznamy starší než 1 hodina
+
+// Zavření adaptéru po dokončení (uvolní spojení/file handles)
+await manager.close();
+```
+
+---
+
 ## Hooky behavioru
 
 GenServer behaviory mohou implementovat hooky pro přizpůsobení persistence:
@@ -678,6 +757,8 @@ async function main() {
       persistOnShutdown: true,
       restoreOnStart: true,
       maxStateAgeMs: 24 * 60 * 60 * 1000, // Zahození stavu staršího než 24 hodin
+      cleanupIntervalMs: 60 * 60 * 1000,   // Úklid zastaralých záznamů každou hodinu
+      cleanupOnTerminate: false,           // Zachovat stav po shutdown (default)
       schemaVersion: 1,
       onError: (err) => console.error('Chyba persistence:', err),
     },

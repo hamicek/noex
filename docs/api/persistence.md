@@ -75,6 +75,20 @@ interface PersistenceConfig<State> {
   readonly maxStateAgeMs?: number;
 
   /**
+   * Whether to delete persisted state on server termination.
+   * When true, all persisted data for this server will be removed on shutdown.
+   * @default false
+   */
+  readonly cleanupOnTerminate?: boolean;
+
+  /**
+   * Interval in milliseconds for automatic cleanup of stale entries.
+   * Requires maxStateAgeMs to be set. When configured, periodically removes
+   * entries older than maxStateAgeMs from storage.
+   */
+  readonly cleanupIntervalMs?: number;
+
+  /**
    * Schema version for migration support.
    * @default 1
    */
@@ -402,6 +416,71 @@ await GenServer.clearPersistedState(ref);
 
 ---
 
+## State Cleanup
+
+The persistence system provides automatic cleanup capabilities to manage storage over time.
+
+### Cleanup on Termination
+
+Delete persisted state when the server shuts down:
+
+```typescript
+const ref = await GenServer.start(behavior, {
+  persistence: {
+    adapter,
+    cleanupOnTerminate: true, // Delete state on shutdown
+  },
+});
+
+// When this server stops, its persisted state will be removed
+await GenServer.stop(ref);
+```
+
+This is useful for:
+- Temporary servers with ephemeral state
+- Test environments where state should not persist
+- Servers that fully rebuild state on restart
+
+### Periodic Cleanup
+
+Automatically remove stale entries from storage at regular intervals:
+
+```typescript
+const ref = await GenServer.start(behavior, {
+  persistence: {
+    adapter,
+    maxStateAgeMs: 24 * 60 * 60 * 1000, // 24 hours
+    cleanupIntervalMs: 60 * 60 * 1000,   // Run cleanup every hour
+  },
+});
+```
+
+Periodic cleanup requires `maxStateAgeMs` to be set. Entries older than `maxStateAgeMs` will be removed during each cleanup cycle.
+
+### PersistenceManager Methods
+
+The `PersistenceManager` exposes cleanup methods directly:
+
+```typescript
+const manager = new PersistenceManager({
+  adapter,
+  key: 'my-server',
+  maxStateAgeMs: 86400000, // 24 hours
+});
+
+// Manually trigger cleanup of stale entries
+const removedCount = await manager.cleanup();
+console.log(`Removed ${removedCount} stale entries`);
+
+// Cleanup with custom age threshold
+const count = await manager.cleanup(3600000); // Remove entries older than 1 hour
+
+// Close the adapter when done (releases connections/file handles)
+await manager.close();
+```
+
+---
+
 ## Behavior Hooks
 
 GenServer behaviors can implement hooks for persistence customization:
@@ -678,6 +757,8 @@ async function main() {
       persistOnShutdown: true,
       restoreOnStart: true,
       maxStateAgeMs: 24 * 60 * 60 * 1000, // Discard state older than 24 hours
+      cleanupIntervalMs: 60 * 60 * 1000,   // Cleanup stale entries every hour
+      cleanupOnTerminate: false,           // Keep state after shutdown (default)
       schemaVersion: 1,
       onError: (err) => console.error('Persistence error:', err),
     },
