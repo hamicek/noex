@@ -26,6 +26,8 @@ import {
 } from './types.js';
 import { estimateObjectSize } from '../observer/memory-utils.js';
 import { Registry } from './registry.js';
+import { PersistenceManager, type ManagerLoadResult } from '../persistence/manager.js';
+import type { PersistenceConfig, StateMetadata } from '../persistence/types.js';
 
 /**
  * Internal message type for the processing queue.
@@ -61,12 +63,25 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
   private readonly startedAt: number = Date.now();
   private messageCount = 0;
 
+  private persistenceManager?: PersistenceManager<State>;
+  private snapshotTimer?: ReturnType<typeof setInterval>;
+  private persistenceConfig?: PersistenceConfig<State>;
+  private readonly serverName?: string;
+
   constructor(
     readonly id: string,
     private readonly behavior: GenServerBehavior<State, CallMsg, CastMsg, CallReply>,
     initialState: State,
+    options?: { name?: string; persistence?: PersistenceConfig<State> },
   ) {
     this.state = initialState;
+    this.serverName = options?.name;
+    this.persistenceConfig = options?.persistence;
+
+    if (this.persistenceConfig) {
+      const key = this.persistenceConfig.key ?? this.serverName ?? this.id;
+      this.persistenceManager = new PersistenceManager<State>(this.persistenceConfig).withKey(key);
+    }
   }
 
   /**
@@ -316,7 +331,20 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
   }): Promise<void> {
     this.status = 'stopping';
 
+    // Stop periodic snapshots first
+    this.stopPeriodicSnapshots();
+
     try {
+      // Persist state on shutdown if configured
+      if (this.persistenceConfig?.persistOnShutdown !== false && this.persistenceManager) {
+        try {
+          await this.saveSnapshot();
+        } catch {
+          // Persistence errors during shutdown are logged but don't fail the shutdown
+          // The onError callback in persistence config handles error reporting
+        }
+      }
+
       if (this.behavior.terminate) {
         await Promise.resolve(this.behavior.terminate(message.reason, this.state));
       }
@@ -326,6 +354,125 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
       this.status = 'stopped';
       message.reject(error instanceof Error ? error : new Error(String(error)));
     }
+  }
+
+  /**
+   * Attempts to restore state from persistence.
+   * Returns the restored state and metadata, or undefined if no state was found
+   * or restore is disabled.
+   *
+   * @throws For actual persistence errors (not StateNotFoundError)
+   */
+  async initializePersistence(): Promise<{ state: State; metadata: StateMetadata } | undefined> {
+    if (!this.persistenceManager || this.persistenceConfig?.restoreOnStart === false) {
+      return undefined;
+    }
+
+    const result = await this.persistenceManager.load();
+    if (!result.success) {
+      // StateNotFoundError is expected for new servers - not an error
+      if (result.error.name === 'StateNotFoundError') {
+        return undefined;
+      }
+      // Actual persistence errors should be thrown and reported
+      throw result.error;
+    }
+
+    return { state: result.state, metadata: result.metadata };
+  }
+
+  /**
+   * Starts periodic snapshot timer if configured.
+   */
+  startPeriodicSnapshots(): void {
+    const intervalMs = this.persistenceConfig?.snapshotIntervalMs;
+    if (!intervalMs || intervalMs <= 0 || !this.persistenceManager) {
+      return;
+    }
+
+    this.snapshotTimer = setInterval(() => {
+      // Fire and forget - errors are handled by onError callback
+      void this.saveSnapshot().catch(() => {
+        // Silently ignore - onError callback handles error reporting
+      });
+    }, intervalMs);
+
+    // Don't prevent process exit
+    if (this.snapshotTimer.unref) {
+      this.snapshotTimer.unref();
+    }
+  }
+
+  /**
+   * Stops periodic snapshot timer.
+   */
+  stopPeriodicSnapshots(): void {
+    if (this.snapshotTimer) {
+      clearInterval(this.snapshotTimer);
+      this.snapshotTimer = undefined;
+    }
+  }
+
+  /**
+   * Saves current state to persistence.
+   * Returns the metadata of the saved state.
+   */
+  async saveSnapshot(): Promise<StateMetadata> {
+    if (!this.persistenceManager) {
+      throw new Error('Persistence not configured for this server');
+    }
+
+    // Apply beforePersist hook if defined
+    let stateToSave = this.state;
+    if (this.behavior.beforePersist) {
+      const transformed = this.behavior.beforePersist(this.state);
+      if (transformed === undefined) {
+        throw new Error('beforePersist returned undefined, skipping persistence');
+      }
+      stateToSave = transformed;
+    }
+
+    await this.persistenceManager.save(stateToSave, {
+      serverId: this.id,
+      serverName: this.serverName,
+    });
+
+    const metadata = await this.persistenceManager.getMetadata();
+    if (!metadata) {
+      throw new Error('Failed to retrieve metadata after save');
+    }
+
+    return metadata;
+  }
+
+  /**
+   * Updates the internal state.
+   * Used during state restoration.
+   */
+  setState(newState: State): void {
+    this.state = newState;
+  }
+
+  /**
+   * Returns current state.
+   * Used for persistence operations.
+   */
+  getState(): State {
+    return this.state;
+  }
+
+  /**
+   * Returns the persistence manager if configured.
+   */
+  getPersistenceManager(): PersistenceManager<State> | undefined {
+    return this.persistenceManager;
+  }
+
+  /**
+   * Returns the persistence configuration if set.
+   */
+  getPersistenceConfig(): PersistenceConfig<State> | undefined {
+    return this.persistenceConfig;
   }
 }
 
@@ -370,9 +517,24 @@ function emitLifecycleEvent(
   reason: TerminateReason,
 ): void;
 function emitLifecycleEvent(
-  type: 'started' | 'crashed' | 'terminated',
+  type: 'state_restored',
   ref: GenServerRef,
-  errorOrReason?: Error | TerminateReason,
+  metadata: StateMetadata,
+): void;
+function emitLifecycleEvent(
+  type: 'state_persisted',
+  ref: GenServerRef,
+  metadata: StateMetadata,
+): void;
+function emitLifecycleEvent(
+  type: 'persistence_error',
+  ref: GenServerRef,
+  error: Error,
+): void;
+function emitLifecycleEvent(
+  type: 'started' | 'crashed' | 'terminated' | 'state_restored' | 'state_persisted' | 'persistence_error',
+  ref: GenServerRef,
+  extra?: Error | TerminateReason | StateMetadata,
 ): void {
   if (lifecycleHandlers.size === 0) return;
 
@@ -382,10 +544,19 @@ function emitLifecycleEvent(
       event = { type, ref } as const;
       break;
     case 'crashed':
-      event = { type, ref, error: errorOrReason as Error } as const;
+      event = { type, ref, error: extra as Error } as const;
       break;
     case 'terminated':
-      event = { type, ref, reason: errorOrReason as TerminateReason } as const;
+      event = { type, ref, reason: extra as TerminateReason } as const;
+      break;
+    case 'state_restored':
+      event = { type, ref, metadata: extra as StateMetadata } as const;
+      break;
+    case 'state_persisted':
+      event = { type, ref, metadata: extra as StateMetadata } as const;
+      break;
+    case 'persistence_error':
+      event = { type, ref, error: extra as Error } as const;
       break;
   }
 
@@ -457,14 +628,14 @@ export const GenServer = {
    * Starts a new GenServer with the given behavior.
    *
    * @param behavior - The behavior implementation
-   * @param options - Start options (name, initTimeout)
+   * @param options - Start options (name, initTimeout, persistence)
    * @returns A reference to the started server
    * @throws {InitializationError} If init() fails or times out
    * @throws {AlreadyRegisteredError} If options.name is already registered
    */
   async start<State, CallMsg, CastMsg, CallReply>(
     behavior: GenServerBehavior<State, CallMsg, CastMsg, CallReply>,
-    options: StartOptions = {},
+    options: StartOptions<State> = {},
   ): Promise<GenServerRef<State, CallMsg, CastMsg, CallReply>> {
     const id = generateServerId();
     const initTimeout = options.initTimeout ?? DEFAULTS.INIT_TIMEOUT;
@@ -493,12 +664,39 @@ export const GenServer = {
       );
     }
 
-    // Create and register the server instance
-    const instance = new ServerInstance(id, behavior, initialState);
+    // Create and register the server instance with persistence config
+    const instance = new ServerInstance(id, behavior, initialState, {
+      name: options.name,
+      persistence: options.persistence,
+    });
     serverRegistry.set(id, instance as ServerInstance<unknown, unknown, unknown, unknown>);
-    instance.markRunning();
 
     const ref = createRef<State, CallMsg, CastMsg, CallReply>(id);
+
+    // Try to restore state from persistence if configured
+    if (options.persistence) {
+      try {
+        const restored = await instance.initializePersistence();
+        if (restored) {
+          // Apply onStateRestore hook if defined
+          let stateToUse = restored.state;
+          if (behavior.onStateRestore) {
+            stateToUse = await Promise.resolve(
+              behavior.onStateRestore(restored.state, restored.metadata)
+            );
+          }
+          instance.setState(stateToUse);
+          emitLifecycleEvent('state_restored', ref as GenServerRef, restored.metadata);
+        }
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        options.persistence.onError?.(err);
+        emitLifecycleEvent('persistence_error', ref as GenServerRef, err);
+        // Continue with init state - persistence errors don't fail startup
+      }
+    }
+
+    instance.markRunning();
 
     // Register in Registry if name is provided
     if (options.name) {
@@ -506,10 +704,14 @@ export const GenServer = {
         Registry.register(options.name, ref);
       } catch (error) {
         // Rollback: clean up the server instance on registration failure
+        instance.stopPeriodicSnapshots();
         serverRegistry.delete(id);
         throw error;
       }
     }
+
+    // Start periodic snapshots after successful startup
+    instance.startPeriodicSnapshots();
 
     emitLifecycleEvent('started', ref as GenServerRef);
 
@@ -610,6 +812,111 @@ export const GenServer = {
     return () => {
       lifecycleHandlers.delete(handler);
     };
+  },
+
+  /**
+   * Manually triggers a state checkpoint (persistence snapshot).
+   *
+   * This is useful for creating savepoints at critical moments,
+   * independent of the automatic periodic snapshots.
+   *
+   * @param ref - Reference to the server
+   * @throws {Error} If persistence is not configured for this server
+   * @throws {ServerNotRunningError} If the server is not running
+   *
+   * @example
+   * ```typescript
+   * // After completing a critical operation
+   * await GenServer.checkpoint(ref);
+   * ```
+   */
+  async checkpoint<State, CallMsg, CastMsg, CallReply>(
+    ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
+  ): Promise<void> {
+    const instance = serverRegistry.get(ref.id);
+    if (!instance) {
+      throw new ServerNotRunningError(ref.id);
+    }
+
+    const typedInstance = instance as ServerInstance<State, CallMsg, CastMsg, CallReply>;
+    if (typedInstance.getStatus() !== 'running') {
+      throw new ServerNotRunningError(ref.id);
+    }
+
+    try {
+      const metadata = await typedInstance.saveSnapshot();
+      emitLifecycleEvent('state_persisted', ref as GenServerRef, metadata);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      typedInstance.getPersistenceConfig()?.onError?.(err);
+      emitLifecycleEvent('persistence_error', ref as GenServerRef, err);
+      throw err;
+    }
+  },
+
+  /**
+   * Returns metadata from the last persisted checkpoint.
+   *
+   * @param ref - Reference to the server
+   * @returns Metadata if checkpoint exists, undefined otherwise
+   * @throws {Error} If persistence is not configured for this server
+   *
+   * @example
+   * ```typescript
+   * const meta = await GenServer.getLastCheckpointMeta(ref);
+   * if (meta) {
+   *   console.log(`Last saved: ${new Date(meta.persistedAt)}`);
+   * }
+   * ```
+   */
+  async getLastCheckpointMeta<State, CallMsg, CastMsg, CallReply>(
+    ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
+  ): Promise<StateMetadata | undefined> {
+    const instance = serverRegistry.get(ref.id);
+    if (!instance) {
+      return undefined;
+    }
+
+    const typedInstance = instance as ServerInstance<State, CallMsg, CastMsg, CallReply>;
+    const manager = typedInstance.getPersistenceManager();
+    if (!manager) {
+      throw new Error('Persistence not configured for this server');
+    }
+
+    return manager.getMetadata();
+  },
+
+  /**
+   * Clears any persisted state for this server.
+   *
+   * Use this to remove stale or corrupted persisted state.
+   * The server continues running with its current in-memory state.
+   *
+   * @param ref - Reference to the server
+   * @returns true if state was deleted, false if no state existed
+   * @throws {Error} If persistence is not configured for this server
+   *
+   * @example
+   * ```typescript
+   * // Clear corrupted state before restart
+   * await GenServer.clearPersistedState(ref);
+   * ```
+   */
+  async clearPersistedState<State, CallMsg, CastMsg, CallReply>(
+    ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
+  ): Promise<boolean> {
+    const instance = serverRegistry.get(ref.id);
+    if (!instance) {
+      throw new ServerNotRunningError(ref.id);
+    }
+
+    const typedInstance = instance as ServerInstance<State, CallMsg, CastMsg, CallReply>;
+    const manager = typedInstance.getPersistenceManager();
+    if (!manager) {
+      throw new Error('Persistence not configured for this server');
+    }
+
+    return manager.delete();
   },
 
   /**

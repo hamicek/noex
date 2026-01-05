@@ -5,6 +5,11 @@
  * actor model implementation in TypeScript.
  */
 
+import type { PersistenceConfig, StateMetadata } from '../persistence/types.js';
+
+// Re-export for use in GenServerBehavior and LifecycleEvent
+export type { StateMetadata } from '../persistence/types.js';
+
 /**
  * Opaque branded type for GenServer references.
  * Prevents accidental mixing of unrelated references.
@@ -48,8 +53,10 @@ export type CallResult<Reply, State> = readonly [Reply, State];
 
 /**
  * Options for GenServer.start()
+ *
+ * @typeParam State - The type of the server's internal state (required for persistence)
  */
-export interface StartOptions {
+export interface StartOptions<State = unknown> {
   /**
    * Optional name for registry registration.
    * If provided, the server will be automatically registered in the Registry
@@ -73,6 +80,30 @@ export interface StartOptions {
    * @default 5000
    */
   readonly initTimeout?: number;
+
+  /**
+   * Optional persistence configuration for automatic state persistence.
+   *
+   * When configured, the GenServer can:
+   * - Restore state from storage on startup (restoreOnStart)
+   * - Periodically snapshot state to storage (snapshotIntervalMs)
+   * - Persist state on graceful shutdown (persistOnShutdown)
+   * - Support manual checkpoints via GenServer.checkpoint()
+   *
+   * @example
+   * ```typescript
+   * const ref = await GenServer.start(behavior, {
+   *   name: 'counter',
+   *   persistence: {
+   *     adapter: new FileAdapter({ directory: './data' }),
+   *     snapshotIntervalMs: 30000,
+   *     persistOnShutdown: true,
+   *     restoreOnStart: true,
+   *   },
+   * });
+   * ```
+   */
+  readonly persistence?: PersistenceConfig<State>;
 }
 
 /**
@@ -141,6 +172,25 @@ export interface GenServerBehavior<
    * @param state - Final server state
    */
   terminate?(reason: TerminateReason, state: State): void | Promise<void>;
+
+  /**
+   * Called after state is restored from persistence.
+   * Allows transformation or validation of the restored state.
+   *
+   * @param restoredState - The state loaded from persistence
+   * @param metadata - Metadata about the persisted state
+   * @returns The state to use (can be modified) or Promise thereof
+   */
+  onStateRestore?(restoredState: State, metadata: StateMetadata): State | Promise<State>;
+
+  /**
+   * Called before state is persisted.
+   * Allows transformation or filtering of state before persistence.
+   *
+   * @param state - Current server state
+   * @returns The state to persist, or undefined to skip this persistence
+   */
+  beforePersist?(state: State): State | undefined;
 }
 
 /**
@@ -319,7 +369,10 @@ export type LifecycleEvent =
   | { readonly type: 'started'; readonly ref: GenServerRef | SupervisorRef }
   | { readonly type: 'crashed'; readonly ref: GenServerRef; readonly error: Error }
   | { readonly type: 'restarted'; readonly ref: GenServerRef; readonly attempt: number }
-  | { readonly type: 'terminated'; readonly ref: GenServerRef | SupervisorRef; readonly reason: TerminateReason };
+  | { readonly type: 'terminated'; readonly ref: GenServerRef | SupervisorRef; readonly reason: TerminateReason }
+  | { readonly type: 'state_restored'; readonly ref: GenServerRef; readonly metadata: StateMetadata }
+  | { readonly type: 'state_persisted'; readonly ref: GenServerRef; readonly metadata: StateMetadata }
+  | { readonly type: 'persistence_error'; readonly ref: GenServerRef; readonly error: Error };
 
 /**
  * Handler for lifecycle events.

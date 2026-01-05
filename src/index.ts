@@ -31,6 +31,8 @@ export type {
   SupervisorStats,
   ProcessTreeNode,
   ObserverEvent,
+  // Persistence types (re-exported from core/types.ts)
+  StateMetadata,
 } from './core/types.js';
 
 // Error classes
@@ -108,3 +110,30 @@ export type {
   DashboardServerConfig,
   DashboardServerRef,
 } from './dashboard/server/dashboard-server.js';
+
+// Persistence
+export { MemoryAdapter, FileAdapter } from './persistence/adapters/index.js';
+export type {
+  StorageAdapter,
+  PersistenceConfig,
+  PersistenceKey,
+  PersistedState,
+  LoadResult,
+  StateSerializer,
+  MemoryAdapterOptions,
+  FileAdapterOptions,
+} from './persistence/index.js';
+export {
+  PersistenceError,
+  StateNotFoundError,
+  SerializationError,
+  DeserializationError,
+  CorruptedStateError,
+  StaleStateError,
+  StorageError,
+  MigrationError,
+  ChecksumMismatchError,
+} from './persistence/index.js';
+export { PersistenceManager } from './persistence/index.js';
+export type { SaveOptions, ManagerLoadResult, LoadSuccess, LoadFailure } from './persistence/index.js';
+export { defaultSerializer, createPrettySerializer } from './persistence/index.js';
