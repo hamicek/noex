@@ -112,7 +112,7 @@ export type {
 } from './dashboard/server/dashboard-server.js';
 
 // Persistence
-export { MemoryAdapter, FileAdapter } from './persistence/adapters/index.js';
+export { MemoryAdapter, FileAdapter, SQLiteAdapter } from './persistence/adapters/index.js';
 export type {
   StorageAdapter,
   PersistenceConfig,
@@ -122,6 +122,7 @@ export type {
   StateSerializer,
   MemoryAdapterOptions,
   FileAdapterOptions,
+  SQLiteAdapterOptions,
 } from './persistence/index.js';
 export {
   PersistenceError,
