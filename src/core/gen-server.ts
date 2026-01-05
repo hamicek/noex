@@ -63,16 +63,16 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
   private readonly startedAt: number = Date.now();
   private messageCount = 0;
 
-  private persistenceManager?: PersistenceManager<State>;
-  private snapshotTimer?: ReturnType<typeof setInterval>;
-  private persistenceConfig?: PersistenceConfig<State>;
-  private readonly serverName?: string;
+  private persistenceManager: PersistenceManager<State> | undefined;
+  private snapshotTimer: ReturnType<typeof setInterval> | undefined;
+  private persistenceConfig: PersistenceConfig<State> | undefined;
+  private readonly serverName: string | undefined;
 
   constructor(
     readonly id: string,
     private readonly behavior: GenServerBehavior<State, CallMsg, CastMsg, CallReply>,
     initialState: State,
-    options?: { name?: string; persistence?: PersistenceConfig<State> },
+    options?: { name?: string | undefined; persistence?: PersistenceConfig<State> | undefined },
   ) {
     this.state = initialState;
     this.serverName = options?.name;

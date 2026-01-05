@@ -27,9 +27,9 @@ export interface SaveOptions {
   /** Unique identifier of the GenServer instance */
   readonly serverId: string;
   /** Optional registered name of the GenServer */
-  readonly serverName?: string;
+  readonly serverName?: string | undefined;
   /** Optional checksum for integrity verification */
-  readonly checksum?: string;
+  readonly checksum?: string | undefined;
 }
 
 /**
