@@ -674,4 +674,217 @@ describe('PersistenceManager', () => {
       expect(result2.success && result2.state.value).toBe('second');
     });
   });
+
+  describe('close', () => {
+    it('calls adapter close when available', async () => {
+      const closeFn = vi.fn().mockResolvedValue(undefined);
+      const adapterWithClose: StorageAdapter = {
+        ...adapter,
+        close: closeFn,
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithClose,
+        key: 'test',
+      });
+
+      await manager.close();
+
+      expect(closeFn).toHaveBeenCalledOnce();
+    });
+
+    it('is no-op when adapter has no close method', async () => {
+      const manager = new PersistenceManager({ adapter, key: 'test' });
+
+      // Should not throw
+      await expect(manager.close()).resolves.toBeUndefined();
+    });
+
+    it('wraps adapter errors in StorageError', async () => {
+      const adapterWithClose: StorageAdapter = {
+        ...adapter,
+        close: vi.fn().mockRejectedValue(new Error('Connection lost')),
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithClose,
+        key: 'test',
+      });
+
+      await expect(manager.close()).rejects.toThrow(StorageError);
+      await expect(manager.close()).rejects.toThrow('Connection lost');
+    });
+
+    it('calls onError callback on failure', async () => {
+      const onError = vi.fn();
+      const adapterWithClose: StorageAdapter = {
+        ...adapter,
+        close: vi.fn().mockRejectedValue(new Error('Close failed')),
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithClose,
+        key: 'test',
+        onError,
+      });
+
+      await expect(manager.close()).rejects.toThrow(StorageError);
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError.mock.calls[0][0]).toBeInstanceOf(StorageError);
+    });
+
+    it('preserves StorageError from adapter', async () => {
+      const storageError = new StorageError('close', 'Custom storage error');
+      const adapterWithClose: StorageAdapter = {
+        ...adapter,
+        close: vi.fn().mockRejectedValue(storageError),
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithClose,
+        key: 'test',
+      });
+
+      await expect(manager.close()).rejects.toBe(storageError);
+    });
+  });
+
+  describe('cleanup', () => {
+    it('calls adapter cleanup with explicit maxAgeMs', async () => {
+      const cleanupFn = vi.fn().mockResolvedValue(5);
+      const adapterWithCleanup: StorageAdapter = {
+        ...adapter,
+        cleanup: cleanupFn,
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithCleanup,
+        key: 'test',
+      });
+
+      const result = await manager.cleanup(60000);
+
+      expect(cleanupFn).toHaveBeenCalledWith(60000);
+      expect(result).toBe(5);
+    });
+
+    it('uses config maxStateAgeMs when no explicit value provided', async () => {
+      const cleanupFn = vi.fn().mockResolvedValue(3);
+      const adapterWithCleanup: StorageAdapter = {
+        ...adapter,
+        cleanup: cleanupFn,
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithCleanup,
+        key: 'test',
+        maxStateAgeMs: 30000,
+      });
+
+      const result = await manager.cleanup();
+
+      expect(cleanupFn).toHaveBeenCalledWith(30000);
+      expect(result).toBe(3);
+    });
+
+    it('returns 0 when adapter has no cleanup method', async () => {
+      const manager = new PersistenceManager({
+        adapter,
+        key: 'test',
+        maxStateAgeMs: 60000,
+      });
+
+      const result = await manager.cleanup();
+
+      expect(result).toBe(0);
+    });
+
+    it('returns 0 when no maxAgeMs available', async () => {
+      const cleanupFn = vi.fn();
+      const adapterWithCleanup: StorageAdapter = {
+        ...adapter,
+        cleanup: cleanupFn,
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithCleanup,
+        key: 'test',
+        // No maxStateAgeMs configured
+      });
+
+      const result = await manager.cleanup();
+
+      expect(result).toBe(0);
+      expect(cleanupFn).not.toHaveBeenCalled();
+    });
+
+    it('prefers explicit maxAgeMs over config', async () => {
+      const cleanupFn = vi.fn().mockResolvedValue(2);
+      const adapterWithCleanup: StorageAdapter = {
+        ...adapter,
+        cleanup: cleanupFn,
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithCleanup,
+        key: 'test',
+        maxStateAgeMs: 30000,
+      });
+
+      await manager.cleanup(90000);
+
+      expect(cleanupFn).toHaveBeenCalledWith(90000);
+    });
+
+    it('wraps adapter errors in StorageError', async () => {
+      const adapterWithCleanup: StorageAdapter = {
+        ...adapter,
+        cleanup: vi.fn().mockRejectedValue(new Error('Cleanup failed')),
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithCleanup,
+        key: 'test',
+        maxStateAgeMs: 60000,
+      });
+
+      await expect(manager.cleanup()).rejects.toThrow(StorageError);
+      await expect(manager.cleanup()).rejects.toThrow('Cleanup failed');
+    });
+
+    it('calls onError callback on failure', async () => {
+      const onError = vi.fn();
+      const adapterWithCleanup: StorageAdapter = {
+        ...adapter,
+        cleanup: vi.fn().mockRejectedValue(new Error('Cleanup error')),
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithCleanup,
+        key: 'test',
+        maxStateAgeMs: 60000,
+        onError,
+      });
+
+      await expect(manager.cleanup()).rejects.toThrow(StorageError);
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError.mock.calls[0][0]).toBeInstanceOf(StorageError);
+    });
+
+    it('preserves StorageError from adapter', async () => {
+      const storageError = new StorageError('cleanup', 'Custom cleanup error');
+      const adapterWithCleanup: StorageAdapter = {
+        ...adapter,
+        cleanup: vi.fn().mockRejectedValue(storageError),
+      };
+
+      const manager = new PersistenceManager({
+        adapter: adapterWithCleanup,
+        key: 'test',
+        maxStateAgeMs: 60000,
+      });
+
+      await expect(manager.cleanup()).rejects.toBe(storageError);
+    });
+  });
 });

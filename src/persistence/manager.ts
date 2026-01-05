@@ -336,4 +336,66 @@ export class PersistenceManager<State = unknown> {
   getSchemaVersion(): number {
     return this.schemaVersion;
   }
+
+  /**
+   * Closes the underlying storage adapter.
+   *
+   * Should be called when the manager is no longer needed to release
+   * any resources held by the adapter (database connections, file handles, etc.).
+   *
+   * This is a no-op if the adapter does not implement the optional close() method.
+   */
+  async close(): Promise<void> {
+    if (this.config.adapter.close) {
+      try {
+        await this.config.adapter.close();
+      } catch (error) {
+        const wrappedError =
+          error instanceof StorageError
+            ? error
+            : new StorageError(
+                'close',
+                error instanceof Error ? error.message : String(error),
+                error instanceof Error ? error : undefined
+              );
+
+        this.config.onError?.(wrappedError);
+        throw wrappedError;
+      }
+    }
+  }
+
+  /**
+   * Removes stale entries from storage that exceed the specified age.
+   *
+   * Uses the adapter's cleanup() method if available. Falls back to the
+   * configured maxStateAgeMs if no explicit age is provided.
+   *
+   * @param maxAgeMs - Maximum age in milliseconds. Entries older than this will be removed.
+   *                   Defaults to config.maxStateAgeMs if not specified.
+   * @returns Number of entries removed, or 0 if cleanup is not supported or no age configured.
+   */
+  async cleanup(maxAgeMs?: number): Promise<number> {
+    const effectiveMaxAge = maxAgeMs ?? this.config.maxStateAgeMs;
+
+    if (!this.config.adapter.cleanup || effectiveMaxAge === undefined) {
+      return 0;
+    }
+
+    try {
+      return await this.config.adapter.cleanup(effectiveMaxAge);
+    } catch (error) {
+      const wrappedError =
+        error instanceof StorageError
+          ? error
+          : new StorageError(
+              'cleanup',
+              error instanceof Error ? error.message : String(error),
+              error instanceof Error ? error : undefined
+            );
+
+      this.config.onError?.(wrappedError);
+      throw wrappedError;
+    }
+  }
 }
