@@ -33,6 +33,7 @@ export type {
   // Messages
   CallId,
   SpawnId,
+  MonitorId,
   ClusterMessage,
   HeartbeatMessage,
   CallMessage,
@@ -50,6 +51,13 @@ export type {
   SpawnErrorMessage,
   SpawnRequestOptions,
   SpawnErrorType,
+
+  // Process monitoring messages
+  ProcessDownReason,
+  MonitorRequestMessage,
+  MonitorAckMessage,
+  DemonitorRequestMessage,
+  ProcessDownMessage,
 
   // Wire protocol
   MessageEnvelope,
@@ -105,6 +113,8 @@ export {
   isValidCallId,
   generateSpawnId,
   isValidSpawnId,
+  generateMonitorId,
+  isValidMonitorId,
   type SerializeOptions,
   type DeserializeOptions,
 } from './serialization.js';

@@ -9,6 +9,7 @@ export const VERSION = '0.1.0' as const;
 // Core types
 export type {
   GenServerRef,
+  MonitorRef,
   TerminateReason,
   CallResult,
   StartOptions,
@@ -34,6 +35,9 @@ export type {
   ObserverEvent,
   // Persistence types (re-exported from core/types.ts)
   StateMetadata,
+  // Monitoring types (re-exported from distribution/types.ts via core/types.ts)
+  MonitorId,
+  ProcessDownReason,
 } from './core/types.js';
 
 // Error classes
@@ -151,6 +155,8 @@ export {
   isValidCallId,
   generateSpawnId,
   isValidSpawnId,
+  generateMonitorId,
+  isValidMonitorId,
   // Transport
   Connection,
   Transport,

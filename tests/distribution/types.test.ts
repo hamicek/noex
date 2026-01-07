@@ -14,6 +14,7 @@ import type {
   NodeInfo,
   ClusterConfig,
   CallId,
+  MonitorId,
   ClusterMessage,
   HeartbeatMessage,
   CallMessage,
@@ -24,6 +25,11 @@ import type {
   NodeDownMessage,
   RemoteErrorType,
   NodeDownReason,
+  ProcessDownReason,
+  MonitorRequestMessage,
+  MonitorAckMessage,
+  DemonitorRequestMessage,
+  ProcessDownMessage,
   MessageEnvelope,
   SerializedRef,
   RegistrySyncEntry,
@@ -31,6 +37,7 @@ import type {
   NodeDownHandler,
   ClusterStatusHandler,
   ClusterStatus,
+  MonitorRef,
 } from '../../src/index.js';
 
 describe('Distribution Types', () => {
@@ -337,6 +344,158 @@ describe('Distribution Types', () => {
 
       expect(entry.name).toBe('counter');
       expect(entry.priority).toBe(1);
+    });
+  });
+});
+
+describe('Process Monitoring Types', () => {
+  const testNodeId = NodeId.parse('app1@localhost:4369');
+  const testMonitorId = 'mabc123-0123456789abcdef' as MonitorId;
+
+  describe('ProcessDownReason', () => {
+    it('accepts normal termination', () => {
+      const reason: ProcessDownReason = { type: 'normal' };
+      expect(reason.type).toBe('normal');
+    });
+
+    it('accepts shutdown termination', () => {
+      const reason: ProcessDownReason = { type: 'shutdown' };
+      expect(reason.type).toBe('shutdown');
+    });
+
+    it('accepts error with message', () => {
+      const reason: ProcessDownReason = { type: 'error', message: 'Something went wrong' };
+      expect(reason.type).toBe('error');
+      if (reason.type === 'error') {
+        expect(reason.message).toBe('Something went wrong');
+      }
+    });
+
+    it('accepts noproc (process did not exist)', () => {
+      const reason: ProcessDownReason = { type: 'noproc' };
+      expect(reason.type).toBe('noproc');
+    });
+
+    it('accepts noconnection (node down)', () => {
+      const reason: ProcessDownReason = { type: 'noconnection' };
+      expect(reason.type).toBe('noconnection');
+    });
+  });
+
+  describe('MonitorRef', () => {
+    it('can be constructed with monitorId and monitoredRef', () => {
+      const ref: MonitorRef = {
+        monitorId: testMonitorId,
+        monitoredRef: { id: 'remote-server', nodeId: testNodeId },
+      };
+
+      expect(ref.monitorId).toBe(testMonitorId);
+      expect(ref.monitoredRef.id).toBe('remote-server');
+      expect(ref.monitoredRef.nodeId).toBe(testNodeId);
+    });
+  });
+
+  describe('MonitorRequestMessage', () => {
+    it('can be constructed', () => {
+      const msg: MonitorRequestMessage = {
+        type: 'monitor_request',
+        monitorId: testMonitorId,
+        monitoringRef: { id: 'local-server', nodeId: testNodeId },
+        monitoredRef: { id: 'remote-server', nodeId: testNodeId },
+      };
+
+      expect(msg.type).toBe('monitor_request');
+      expect(msg.monitorId).toBe(testMonitorId);
+    });
+  });
+
+  describe('MonitorAckMessage', () => {
+    it('can be constructed for success', () => {
+      const msg: MonitorAckMessage = {
+        type: 'monitor_ack',
+        monitorId: testMonitorId,
+        success: true,
+      };
+
+      expect(msg.type).toBe('monitor_ack');
+      expect(msg.success).toBe(true);
+      expect(msg.reason).toBeUndefined();
+    });
+
+    it('can be constructed for failure', () => {
+      const msg: MonitorAckMessage = {
+        type: 'monitor_ack',
+        monitorId: testMonitorId,
+        success: false,
+        reason: 'Process not found',
+      };
+
+      expect(msg.success).toBe(false);
+      expect(msg.reason).toBe('Process not found');
+    });
+  });
+
+  describe('DemonitorRequestMessage', () => {
+    it('can be constructed', () => {
+      const msg: DemonitorRequestMessage = {
+        type: 'demonitor_request',
+        monitorId: testMonitorId,
+      };
+
+      expect(msg.type).toBe('demonitor_request');
+      expect(msg.monitorId).toBe(testMonitorId);
+    });
+  });
+
+  describe('ProcessDownMessage', () => {
+    it('can be constructed with normal reason', () => {
+      const msg: ProcessDownMessage = {
+        type: 'process_down',
+        monitorId: testMonitorId,
+        monitoredRef: { id: 'server-1', nodeId: testNodeId },
+        reason: { type: 'normal' },
+      };
+
+      expect(msg.type).toBe('process_down');
+      expect(msg.reason.type).toBe('normal');
+    });
+
+    it('can be constructed with error reason', () => {
+      const msg: ProcessDownMessage = {
+        type: 'process_down',
+        monitorId: testMonitorId,
+        monitoredRef: { id: 'server-1', nodeId: testNodeId },
+        reason: { type: 'error', message: 'Crash' },
+      };
+
+      expect(msg.type).toBe('process_down');
+      if (msg.reason.type === 'error') {
+        expect(msg.reason.message).toBe('Crash');
+      }
+    });
+  });
+
+  describe('ClusterMessage includes monitor messages', () => {
+    it('handles MonitorRequestMessage in union', () => {
+      const msg: ClusterMessage = {
+        type: 'monitor_request',
+        monitorId: testMonitorId,
+        monitoringRef: { id: 'local', nodeId: testNodeId },
+        monitoredRef: { id: 'remote', nodeId: testNodeId },
+      };
+
+      expect(msg.type).toBe('monitor_request');
+    });
+
+    it('handles ProcessDownMessage in union', () => {
+      const msg: ClusterMessage = {
+        type: 'process_down',
+        monitorId: testMonitorId,
+        monitoredRef: { id: 'server', nodeId: testNodeId },
+        reason: { type: 'noconnection' },
+      };
+
+      expect(msg.type).toBe('process_down');
     });
   });
 });

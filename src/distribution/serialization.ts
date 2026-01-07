@@ -14,6 +14,7 @@ import {
   CLUSTER_DEFAULTS,
   MessageSerializationError,
   type CallId,
+  type MonitorId,
   type SpawnId,
   type ClusterMessage,
   type MessageEnvelope,
@@ -578,5 +579,36 @@ export function generateSpawnId(): SpawnId {
 export function isValidSpawnId(value: string): value is SpawnId {
   // Format: s + timestamp(base36) + - + random(16 hex chars)
   const pattern = /^s[0-9a-z]+-[0-9a-f]{16}$/;
+  return pattern.test(value);
+}
+
+// =============================================================================
+// MonitorId Generation
+// =============================================================================
+
+/**
+ * Generates a unique MonitorId for process monitor correlation.
+ *
+ * Uses a combination of timestamp and random bytes to ensure
+ * uniqueness across nodes. Prefixed with 'm' to distinguish from
+ * CallId and SpawnId.
+ *
+ * @returns Unique MonitorId
+ */
+export function generateMonitorId(): MonitorId {
+  const timestamp = Date.now().toString(36);
+  const random = crypto.randomBytes(8).toString('hex');
+  return `m${timestamp}-${random}` as MonitorId;
+}
+
+/**
+ * Validates that a string is a valid MonitorId format.
+ *
+ * @param value - String to validate
+ * @returns true if valid MonitorId format
+ */
+export function isValidMonitorId(value: string): value is MonitorId {
+  // Format: m + timestamp(base36) + - + random(16 hex chars)
+  const pattern = /^m[0-9a-z]+-[0-9a-f]{16}$/;
   return pattern.test(value);
 }

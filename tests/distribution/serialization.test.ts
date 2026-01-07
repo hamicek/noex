@@ -4,6 +4,8 @@ import {
   Serializer,
   generateCallId,
   isValidCallId,
+  generateMonitorId,
+  isValidMonitorId,
   MessageSerializationError,
   CLUSTER_DEFAULTS,
 } from '../../src/index.js';
@@ -459,6 +461,64 @@ describe('isValidCallId', () => {
     expect(isValidCallId('invalid')).toBe(false);
     expect(isValidCallId('abc-123')).toBe(false);
     expect(isValidCallId('abc-' + 'x'.repeat(16))).toBe(false);
+  });
+});
+
+describe('generateMonitorId', () => {
+  it('generates unique MonitorIds', () => {
+    const ids = new Set<string>();
+
+    for (let i = 0; i < 100; i++) {
+      ids.add(generateMonitorId());
+    }
+
+    expect(ids.size).toBe(100);
+  });
+
+  it('generates valid MonitorId format', () => {
+    const monitorId = generateMonitorId();
+    expect(isValidMonitorId(monitorId)).toBe(true);
+  });
+
+  it('generates MonitorId with m prefix', () => {
+    const monitorId = generateMonitorId();
+    expect(monitorId.startsWith('m')).toBe(true);
+  });
+});
+
+describe('isValidMonitorId', () => {
+  it('returns true for valid MonitorId', () => {
+    const monitorId = generateMonitorId();
+    expect(isValidMonitorId(monitorId)).toBe(true);
+  });
+
+  it('returns false for invalid formats', () => {
+    expect(isValidMonitorId('')).toBe(false);
+    expect(isValidMonitorId('invalid')).toBe(false);
+    expect(isValidMonitorId('abc-123')).toBe(false);
+    // Missing 'm' prefix
+    expect(isValidMonitorId('abc-' + 'a'.repeat(16))).toBe(false);
+  });
+
+  it('has m prefix for MonitorId', () => {
+    // MonitorId always starts with 'm' prefix
+    for (let i = 0; i < 10; i++) {
+      const monitorId = generateMonitorId();
+      expect(monitorId.startsWith('m')).toBe(true);
+    }
+  });
+
+  it('validates format correctly', () => {
+    // Valid MonitorId format: m[timestamp]-[16 hex chars]
+    expect(isValidMonitorId('mabc123-0123456789abcdef')).toBe(true);
+    expect(isValidMonitorId('m12345-fedcba9876543210')).toBe(true);
+
+    // Invalid: missing m prefix
+    expect(isValidMonitorId('abc123-0123456789abcdef')).toBe(false);
+    // Invalid: s prefix (SpawnId)
+    expect(isValidMonitorId('sabc123-0123456789abcdef')).toBe(false);
+    // Invalid: wrong hex length
+    expect(isValidMonitorId('mabc123-0123456789')).toBe(false);
   });
 });
 

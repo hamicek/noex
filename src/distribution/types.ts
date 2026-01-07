@@ -170,6 +170,14 @@ export type CallId = string & { readonly __brand: 'CallId' };
 export type SpawnId = string & { readonly __brand: 'SpawnId' };
 
 /**
+ * Unique identifier for process monitors.
+ *
+ * Used to correlate monitor setup, acknowledgement, and down notifications
+ * across distributed nodes.
+ */
+export type MonitorId = string & { readonly __brand: 'MonitorId' };
+
+/**
  * Registry synchronization entry for distributed registry.
  */
 export interface RegistrySyncEntry {
@@ -222,7 +230,11 @@ export type ClusterMessage =
   | NodeDownMessage
   | SpawnRequestMessage
   | SpawnReplyMessage
-  | SpawnErrorMessage;
+  | SpawnErrorMessage
+  | MonitorRequestMessage
+  | MonitorAckMessage
+  | DemonitorRequestMessage
+  | ProcessDownMessage;
 
 /**
  * Heartbeat message for health monitoring.
@@ -436,6 +448,98 @@ export type SpawnErrorType =
   | 'init_timeout'
   | 'registration_failed'
   | 'unknown_error';
+
+// =============================================================================
+// Process Monitoring Messages
+// =============================================================================
+
+/**
+ * Reason why a monitored process went down.
+ *
+ * Following Erlang semantics:
+ * - `normal`: Process terminated gracefully via stop()
+ * - `shutdown`: Process was shut down by its supervisor
+ * - `error`: Process crashed with an exception
+ * - `noproc`: Process did not exist when monitor was established
+ * - `noconnection`: Node hosting the process became unreachable
+ */
+export type ProcessDownReason =
+  | { readonly type: 'normal' }
+  | { readonly type: 'shutdown' }
+  | { readonly type: 'error'; readonly message: string }
+  | { readonly type: 'noproc' }
+  | { readonly type: 'noconnection' };
+
+/**
+ * Request to establish a monitor on a remote process.
+ *
+ * Sent from the monitoring node to the node hosting the monitored process.
+ * The target node should respond with MonitorAckMessage.
+ */
+export interface MonitorRequestMessage {
+  readonly type: 'monitor_request';
+
+  /** Unique identifier for this monitor */
+  readonly monitorId: MonitorId;
+
+  /** Reference to the process requesting the monitor */
+  readonly monitoringRef: SerializedRef;
+
+  /** Reference to the process being monitored */
+  readonly monitoredRef: SerializedRef;
+}
+
+/**
+ * Acknowledgement of a monitor request.
+ *
+ * Sent from the monitored node back to the monitoring node.
+ * If the process doesn't exist, success will be false and a
+ * ProcessDownMessage with reason 'noproc' will follow immediately.
+ */
+export interface MonitorAckMessage {
+  readonly type: 'monitor_ack';
+
+  /** Monitor identifier matching the request */
+  readonly monitorId: MonitorId;
+
+  /** Whether the monitor was successfully established */
+  readonly success: boolean;
+
+  /** Reason for failure (when success is false) */
+  readonly reason?: string;
+}
+
+/**
+ * Request to remove an existing monitor.
+ *
+ * Sent from the monitoring node when demonitor() is called.
+ * No acknowledgement is expected.
+ */
+export interface DemonitorRequestMessage {
+  readonly type: 'demonitor_request';
+
+  /** Monitor identifier to remove */
+  readonly monitorId: MonitorId;
+}
+
+/**
+ * Notification that a monitored process has terminated.
+ *
+ * Sent from the node hosting the monitored process to the monitoring node.
+ * This is a one-way notification with no expected response.
+ */
+export interface ProcessDownMessage {
+  readonly type: 'process_down';
+
+  /** Monitor identifier for correlation */
+  readonly monitorId: MonitorId;
+
+  /** Reference to the process that terminated */
+  readonly monitoredRef: SerializedRef;
+
+  /** Reason for termination */
+  readonly reason: ProcessDownReason;
+}
 
 // =============================================================================
 // Wire Protocol

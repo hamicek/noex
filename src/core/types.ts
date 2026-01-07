@@ -6,9 +6,13 @@
  */
 
 import type { PersistenceConfig, StateMetadata } from '../persistence/types.js';
+import type { MonitorId, ProcessDownReason, SerializedRef } from '../distribution/types.js';
 
 // Re-export for use in GenServerBehavior and LifecycleEvent
 export type { StateMetadata } from '../persistence/types.js';
+
+// Re-export monitoring types for GenServer API
+export type { MonitorId, ProcessDownReason, SerializedRef } from '../distribution/types.js';
 
 /**
  * Opaque branded type for GenServer references.
@@ -51,6 +55,36 @@ export interface GenServerRef<
     readonly castMsg: CastMsg;
     readonly callReply: CallReply;
   };
+}
+
+/**
+ * Reference to an established process monitor.
+ *
+ * Returned by GenServer.monitor() and used with GenServer.demonitor().
+ * Contains the information needed to:
+ * - Correlate incoming process_down notifications
+ * - Cancel the monitor when no longer needed
+ *
+ * @example
+ * ```typescript
+ * const monitorRef = await GenServer.monitor(localServer, remoteServer);
+ *
+ * GenServer.onLifecycleEvent((event) => {
+ *   if (event.type === 'process_down' && event.monitorId === monitorRef.monitorId) {
+ *     console.log(`Monitored process went down: ${event.reason.type}`);
+ *   }
+ * });
+ *
+ * // Later, to stop monitoring:
+ * await GenServer.demonitor(monitorRef);
+ * ```
+ */
+export interface MonitorRef {
+  /** Unique identifier for this monitor instance */
+  readonly monitorId: MonitorId;
+
+  /** Reference to the process being monitored */
+  readonly monitoredRef: SerializedRef;
 }
 
 /**
@@ -435,7 +469,14 @@ export type LifecycleEvent =
   | { readonly type: 'terminated'; readonly ref: GenServerRef | SupervisorRef; readonly reason: TerminateReason }
   | { readonly type: 'state_restored'; readonly ref: GenServerRef; readonly metadata: StateMetadata }
   | { readonly type: 'state_persisted'; readonly ref: GenServerRef; readonly metadata: StateMetadata }
-  | { readonly type: 'persistence_error'; readonly ref: GenServerRef; readonly error: Error };
+  | { readonly type: 'persistence_error'; readonly ref: GenServerRef; readonly error: Error }
+  | {
+      readonly type: 'process_down';
+      readonly ref: GenServerRef;
+      readonly monitoredRef: SerializedRef;
+      readonly reason: ProcessDownReason;
+      readonly monitorId: MonitorId;
+    };
 
 /**
  * Handler for lifecycle events.
