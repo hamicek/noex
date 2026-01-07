@@ -150,12 +150,17 @@ export {
   // Remote spawn
   BehaviorRegistry,
   PendingSpawns,
+  RemoteSpawn,
+  SpawnHandler,
+  _resetRemoteSpawnState,
   type RemoteCallOptions,
   type RemoteCallStats,
   type PendingCallsStats,
   type BehaviorRegistryStats,
   type PendingSpawnsStats,
   type SpawnResult,
+  type RemoteSpawnOptions,
+  type RemoteSpawnStats,
 } from './remote/index.js';
 
 // =============================================================================

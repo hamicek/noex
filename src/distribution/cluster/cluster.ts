@@ -25,6 +25,9 @@ import type {
   CallErrorMessage,
   CastMessage,
   RegistrySyncMessage,
+  SpawnRequestMessage,
+  SpawnReplyMessage,
+  SpawnErrorMessage,
   MessageEnvelope,
   NodeUpHandler,
   NodeDownHandler,
@@ -569,6 +572,18 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
       case 'registry_sync':
         this.handleRegistrySync(payload, envelope.from);
         break;
+
+      case 'spawn_request':
+        this.handleSpawnRequest(payload, fromNodeId);
+        break;
+
+      case 'spawn_reply':
+        this.handleSpawnReply(payload);
+        break;
+
+      case 'spawn_error':
+        this.handleSpawnError(payload);
+        break;
     }
   }
 
@@ -657,6 +672,46 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
     // Import and delegate to GlobalRegistry
     import('../registry/index.js').then(({ GlobalRegistry }) => {
       GlobalRegistry.handleRegistrySync(message, fromNodeId);
+    }).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+
+  private handleSpawnRequest(message: SpawnRequestMessage, fromNodeId: NodeId): void {
+    const { transport } = this.state;
+    if (!transport) return;
+
+    // Import and delegate to SpawnHandler
+    import('../remote/index.js').then(({ SpawnHandler }) => {
+      SpawnHandler.handleIncomingSpawn(
+        message,
+        fromNodeId,
+        async (reply) => {
+          if (transport.isConnectedTo(fromNodeId)) {
+            await transport.send(fromNodeId, reply);
+          }
+        },
+      ).catch((err) => {
+        this.emit('error', err instanceof Error ? err : new Error(String(err)));
+      });
+    }).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+
+  private handleSpawnReply(message: SpawnReplyMessage): void {
+    // Import and delegate to RemoteSpawn
+    import('../remote/index.js').then(({ RemoteSpawn }) => {
+      RemoteSpawn._handleSpawnReply(message);
+    }).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+
+  private handleSpawnError(message: SpawnErrorMessage): void {
+    // Import and delegate to RemoteSpawn
+    import('../remote/index.js').then(({ RemoteSpawn }) => {
+      RemoteSpawn._handleSpawnError(message);
     }).catch((err) => {
       this.emit('error', err instanceof Error ? err : new Error(String(err)));
     });

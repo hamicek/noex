@@ -148,6 +148,8 @@ export {
   Serializer,
   generateCallId,
   isValidCallId,
+  generateSpawnId,
+  isValidSpawnId,
   // Transport
   Connection,
   Transport,
@@ -159,6 +161,12 @@ export {
   CallHandler,
   PendingCalls,
   _resetRemoteCallState,
+  // Remote Spawn
+  BehaviorRegistry,
+  PendingSpawns,
+  RemoteSpawn,
+  SpawnHandler,
+  _resetRemoteSpawnState,
   // Error classes
   InvalidNodeIdError,
   RemoteServerNotRunningError,
@@ -167,6 +175,10 @@ export {
   MessageSerializationError,
   ClusterNotStartedError,
   InvalidClusterConfigError,
+  BehaviorNotFoundError,
+  RemoteSpawnTimeoutError,
+  RemoteSpawnInitError,
+  RemoteSpawnRegistrationError,
   // Constants
   CLUSTER_DEFAULTS,
 } from './distribution/index.js';
@@ -180,6 +192,7 @@ export type {
   ClusterConfig,
   // Messages
   CallId,
+  SpawnId,
   ClusterMessage,
   HeartbeatMessage,
   CallMessage,
@@ -190,6 +203,12 @@ export type {
   NodeDownMessage,
   RemoteErrorType,
   NodeDownReason,
+  // Remote spawn messages
+  SpawnRequestMessage,
+  SpawnReplyMessage,
+  SpawnErrorMessage,
+  SpawnRequestOptions,
+  SpawnErrorType,
   // Wire protocol
   MessageEnvelope,
   SerializedRef,
@@ -219,4 +238,10 @@ export type {
   RemoteCallOptions,
   RemoteCallStats,
   PendingCallsStats,
+  // Remote spawn types
+  BehaviorRegistryStats,
+  PendingSpawnsStats,
+  SpawnResult,
+  RemoteSpawnOptions,
+  RemoteSpawnStats,
 } from './distribution/index.js';

@@ -27,3 +27,12 @@ export {
   type PendingSpawnsStats,
   type SpawnResult,
 } from './pending-spawns.js';
+
+export {
+  RemoteSpawn,
+  _resetRemoteSpawnState,
+  type RemoteSpawnOptions,
+  type RemoteSpawnStats,
+} from './remote-spawn.js';
+
+export { SpawnHandler } from './spawn-handler.js';
