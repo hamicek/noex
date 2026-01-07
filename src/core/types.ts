@@ -19,6 +19,16 @@ declare const RefBrand: unique symbol;
 /**
  * A reference to a running GenServer instance.
  * This is the primary handle used to interact with a GenServer.
+ *
+ * @remarks
+ * The `nodeId` field enables distributed communication:
+ * - When `nodeId` is undefined, the server is local
+ * - When `nodeId` matches the local node, the server is local
+ * - When `nodeId` differs from local node, calls are routed remotely
+ *
+ * Note: `nodeId` is typed as `string` to avoid circular imports with
+ * the distribution module. At runtime, it should be a valid NodeId
+ * from `distribution/node-id.ts`.
  */
 export interface GenServerRef<
   State = unknown,
@@ -28,6 +38,13 @@ export interface GenServerRef<
 > {
   readonly [RefBrand]: 'GenServerRef';
   readonly id: string;
+  /**
+   * Node identifier where this GenServer is running.
+   * undefined means local node (for backward compatibility).
+   *
+   * Should be a valid NodeId string in format: `name@host:port`
+   */
+  readonly nodeId?: string;
   readonly _phantom?: {
     readonly state: State;
     readonly callMsg: CallMsg;

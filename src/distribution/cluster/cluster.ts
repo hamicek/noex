@@ -20,6 +20,10 @@ import type {
   NodeDownReason,
   HeartbeatMessage,
   NodeDownMessage,
+  CallMessage,
+  CallReplyMessage,
+  CallErrorMessage,
+  CastMessage,
   MessageEnvelope,
   NodeUpHandler,
   NodeDownHandler,
@@ -545,9 +549,24 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
         this.handleNodeDown(payload);
         break;
 
-      // Other message types will be handled by remote call module
-      default:
-        // Forward to message handlers when implemented
+      case 'call':
+        this.handleCall(payload, fromNodeId);
+        break;
+
+      case 'call_reply':
+        this.handleCallReply(payload);
+        break;
+
+      case 'call_error':
+        this.handleCallError(payload);
+        break;
+
+      case 'cast':
+        this.handleCast(payload);
+        break;
+
+      case 'registry_sync':
+        // Will be handled in Phase 4
         break;
     }
   }
@@ -579,6 +598,58 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
     if (!membership) return;
 
     membership.markNodeDown(message.nodeId, message.reason);
+  }
+
+  private handleCall(message: CallMessage, fromNodeId: NodeId): void {
+    const { transport } = this.state;
+    if (!transport) return;
+
+    // Import and delegate to CallHandler
+    import('../remote/index.js').then(({ CallHandler }) => {
+      CallHandler.handleIncomingCall(
+        message,
+        fromNodeId,
+        async (reply) => {
+          if (transport.isConnectedTo(fromNodeId)) {
+            await transport.send(fromNodeId, reply);
+          }
+        },
+      ).catch((err) => {
+        this.emit('error', err instanceof Error ? err : new Error(String(err)));
+      });
+    }).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+
+  private handleCallReply(message: CallReplyMessage): void {
+    // Import and delegate to RemoteCall
+    import('../remote/index.js').then(({ RemoteCall }) => {
+      RemoteCall._handleCallReply(message);
+    }).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+
+  private handleCallError(message: CallErrorMessage): void {
+    // Import and delegate to RemoteCall
+    import('../remote/index.js').then(({ RemoteCall }) => {
+      RemoteCall._handleCallError(message);
+    }).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+
+  private handleCast(message: CastMessage): void {
+    // Import and delegate to CallHandler
+    import('../remote/index.js').then(({ CallHandler }) => {
+      CallHandler.handleIncomingCast(message).catch((err) => {
+        // Casts are fire-and-forget, log but don't propagate errors
+        this.emit('error', err instanceof Error ? err : new Error(String(err)));
+      });
+    }).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
   }
 
   private createLocalNodeInfo(): NodeInfo {

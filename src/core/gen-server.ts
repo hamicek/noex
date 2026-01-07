@@ -647,6 +647,26 @@ function createRef<State, CallMsg, CastMsg, CallReply>(
 }
 
 /**
+ * Checks if a nodeId refers to a remote node.
+ *
+ * @param nodeId - Node identifier to check
+ * @returns true if the node is remote, false if local or cluster not running
+ */
+async function isRemoteRef(nodeId: string): Promise<boolean> {
+  try {
+    const { Cluster } = await import('../distribution/cluster/cluster.js');
+    if (Cluster.getStatus() !== 'running') {
+      return false;
+    }
+    const localNodeId = Cluster.getLocalNodeId();
+    return nodeId !== localNodeId;
+  } catch {
+    // Cluster module not available or not running
+    return false;
+  }
+}
+
+/**
  * Gets the server instance for a ref, or throws if not found.
  */
 function getServerInstance<State, CallMsg, CastMsg, CallReply>(
@@ -787,20 +807,43 @@ export const GenServer = {
   /**
    * Sends a synchronous message and waits for a reply.
    *
+   * Automatically routes to remote nodes when the ref has a nodeId
+   * that differs from the local node.
+   *
    * @param ref - Reference to the target server
    * @param msg - The message to send
    * @param options - Call options (timeout)
    * @returns The reply from the server
    * @throws {CallTimeoutError} If the call times out
    * @throws {ServerNotRunningError} If the server is not running
+   * @throws {RemoteCallTimeoutError} If remote call times out
+   * @throws {NodeNotReachableError} If remote node is not connected
    */
   async call<State, CallMsg, CastMsg, CallReply>(
     ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
     msg: CallMsg,
     options: CallOptions = {},
   ): Promise<CallReply> {
-    const instance = getServerInstance(ref);
     const timeout = options.timeout ?? DEFAULTS.CALL_TIMEOUT;
+
+    // Check if this is a remote call
+    if (ref.nodeId !== undefined) {
+      const isRemote = await isRemoteRef(ref.nodeId);
+      if (isRemote) {
+        const { RemoteCall } = await import('../distribution/remote/index.js');
+        const { NodeId: NodeIdUtils } = await import('../distribution/node-id.js');
+        // Cast to NodeId type for remote call (nodeId is already validated at this point)
+        const remoteNodeId = ref.nodeId as ReturnType<typeof NodeIdUtils.parse>;
+        return RemoteCall.call<CallReply>(
+          { id: ref.id, nodeId: remoteNodeId },
+          msg,
+          { timeout },
+        );
+      }
+    }
+
+    // Local call
+    const instance = getServerInstance(ref);
 
     if (instance.getStatus() !== 'running') {
       throw new ServerNotRunningError(ref.id);
@@ -813,14 +856,45 @@ export const GenServer = {
    * Sends an asynchronous message without waiting for a reply.
    * This is a fire-and-forget operation.
    *
+   * Automatically routes to remote nodes when the ref has a nodeId
+   * that differs from the local node.
+   *
    * @param ref - Reference to the target server
    * @param msg - The message to send
-   * @throws {ServerNotRunningError} If the server is not running
+   * @throws {ServerNotRunningError} If the server is not running (local only)
    */
   cast<State, CallMsg, CastMsg, CallReply>(
     ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
     msg: CastMsg,
   ): void {
+    // Check if this is potentially a remote cast
+    if (ref.nodeId !== undefined) {
+      // Fire and forget remote cast attempt
+      void (async () => {
+        try {
+          const isRemote = await isRemoteRef(ref.nodeId!);
+          if (isRemote) {
+            const { RemoteCall } = await import('../distribution/remote/index.js');
+            const { NodeId: NodeIdUtils } = await import('../distribution/node-id.js');
+            // Cast to NodeId type for remote call (nodeId is already validated at this point)
+            const remoteNodeId = ref.nodeId as ReturnType<typeof NodeIdUtils.parse>;
+            RemoteCall.cast({ id: ref.id, nodeId: remoteNodeId }, msg);
+            return;
+          }
+        } catch {
+          // If remote check fails, fall through to local
+        }
+
+        // Local fallback
+        const instance = serverRegistry.get(ref.id);
+        if (instance && instance.getStatus() === 'running') {
+          instance.enqueueCast(msg);
+        }
+      })();
+      return;
+    }
+
+    // Local cast
     const instance = getServerInstance(ref);
 
     if (instance.getStatus() !== 'running') {

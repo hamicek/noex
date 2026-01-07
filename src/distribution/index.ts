@@ -122,3 +122,17 @@ export {
   type MembershipConfig,
   type MembershipEvents,
 } from './cluster/index.js';
+
+// =============================================================================
+// Remote Call/Cast
+// =============================================================================
+
+export {
+  RemoteCall,
+  CallHandler,
+  PendingCalls,
+  _resetRemoteCallState,
+  type RemoteCallOptions,
+  type RemoteCallStats,
+  type PendingCallsStats,
+} from './remote/index.js';

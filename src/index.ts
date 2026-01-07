@@ -154,6 +154,11 @@ export {
   // Cluster
   Cluster,
   Membership,
+  // Remote Call/Cast
+  RemoteCall,
+  CallHandler,
+  PendingCalls,
+  _resetRemoteCallState,
   // Error classes
   InvalidNodeIdError,
   RemoteServerNotRunningError,
@@ -210,4 +215,8 @@ export type {
   ClusterEvents,
   MembershipConfig,
   MembershipEvents,
+  // Remote call types
+  RemoteCallOptions,
+  RemoteCallStats,
+  PendingCallsStats,
 } from './distribution/index.js';
