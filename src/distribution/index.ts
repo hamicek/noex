@@ -136,3 +136,15 @@ export {
   type RemoteCallStats,
   type PendingCallsStats,
 } from './remote/index.js';
+
+// =============================================================================
+// Global Registry
+// =============================================================================
+
+export {
+  GlobalRegistry,
+  GlobalNameConflictError,
+  GlobalNameNotFoundError,
+  type GlobalRegistryEvents,
+  type GlobalRegistryStats,
+} from './registry/index.js';

@@ -24,6 +24,7 @@ import type {
   CallReplyMessage,
   CallErrorMessage,
   CastMessage,
+  RegistrySyncMessage,
   MessageEnvelope,
   NodeUpHandler,
   NodeDownHandler,
@@ -566,7 +567,7 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
         break;
 
       case 'registry_sync':
-        // Will be handled in Phase 4
+        this.handleRegistrySync(payload, envelope.from);
         break;
     }
   }
@@ -647,6 +648,15 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
         // Casts are fire-and-forget, log but don't propagate errors
         this.emit('error', err instanceof Error ? err : new Error(String(err)));
       });
+    }).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+
+  private handleRegistrySync(message: RegistrySyncMessage, fromNodeId: NodeId): void {
+    // Import and delegate to GlobalRegistry
+    import('../registry/index.js').then(({ GlobalRegistry }) => {
+      GlobalRegistry.handleRegistrySync(message, fromNodeId);
     }).catch((err) => {
       this.emit('error', err instanceof Error ? err : new Error(String(err)));
     });

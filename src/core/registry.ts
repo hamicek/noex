@@ -294,4 +294,173 @@ export const Registry = {
   _getNameById(refId: string): string | undefined {
     return refIdToName.get(refId);
   },
+
+  // ===========================================================================
+  // Global Registry Methods (Distributed)
+  // ===========================================================================
+
+  /**
+   * Registers a process globally across the cluster.
+   *
+   * The registration is broadcast to all connected nodes. Global names
+   * must be unique across the entire cluster. Earlier registrations win
+   * in case of conflicts.
+   *
+   * Requires the cluster to be started via `Cluster.start()`.
+   *
+   * @param name - Unique global name for the registration
+   * @param ref - The process reference to register
+   * @throws {GlobalNameConflictError} If name is already registered
+   * @throws {ClusterNotStartedError} If cluster is not running
+   *
+   * @example
+   * ```typescript
+   * import { GenServer, Registry, Cluster } from 'noex';
+   *
+   * await Cluster.start({ nodeName: 'app1', port: 4369 });
+   * const ref = await GenServer.start(behavior);
+   * await Registry.registerGlobal('main-counter', ref);
+   * ```
+   */
+  async registerGlobal<
+    State = unknown,
+    CallMsg = unknown,
+    CastMsg = unknown,
+    CallReply = unknown,
+  >(
+    name: string,
+    ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
+  ): Promise<void> {
+    // Dynamic import to avoid circular dependencies
+    const { GlobalRegistry, Cluster } = await import('../distribution/index.js');
+
+    const localNodeId = Cluster.getLocalNodeId();
+
+    await GlobalRegistry.register(name, {
+      id: ref.id,
+      nodeId: localNodeId,
+    });
+
+    // Also register locally for automatic cleanup on termination
+    ensureLifecycleHandler();
+
+    // Set up cleanup when process terminates
+    const unsubscribe = GenServer.onLifecycleEvent((event) => {
+      if (event.type === 'terminated' && event.ref.id === ref.id) {
+        GlobalRegistry.unregister(name).catch(() => {
+          // Ignore unregister errors during cleanup
+        });
+        unsubscribe();
+      }
+    });
+  },
+
+  /**
+   * Looks up a globally registered process.
+   *
+   * Returns a reference that can be used with `GenServer.call()` and
+   * `GenServer.cast()` even if the process is on a remote node.
+   *
+   * @param name - The global name to look up
+   * @returns The registered process reference
+   * @throws {GlobalNameNotFoundError} If name is not registered
+   *
+   * @example
+   * ```typescript
+   * const counter = await Registry.globalLookup('main-counter');
+   * const value = await GenServer.call(counter, { type: 'get' });
+   * ```
+   */
+  async globalLookup<
+    State = unknown,
+    CallMsg = unknown,
+    CastMsg = unknown,
+    CallReply = unknown,
+  >(name: string): Promise<GenServerRef<State, CallMsg, CastMsg, CallReply>> {
+    const { GlobalRegistry } = await import('../distribution/index.js');
+
+    const serializedRef = GlobalRegistry.lookup(name);
+
+    // Convert SerializedRef back to GenServerRef
+    // We create a minimal ref that can be used for remote calls
+    // The brand is only for compile-time checking, so we can safely cast
+    return {
+      id: serializedRef.id,
+      nodeId: serializedRef.nodeId,
+    } as unknown as GenServerRef<State, CallMsg, CastMsg, CallReply>;
+  },
+
+  /**
+   * Looks up a globally registered process, returning undefined if not found.
+   *
+   * This is the non-throwing variant of `globalLookup()`.
+   *
+   * @param name - The global name to look up
+   * @returns The registered process reference, or undefined
+   *
+   * @example
+   * ```typescript
+   * const counter = await Registry.whereisGlobal('main-counter');
+   * if (counter) {
+   *   const value = await GenServer.call(counter, { type: 'get' });
+   * }
+   * ```
+   */
+  async whereisGlobal<
+    State = unknown,
+    CallMsg = unknown,
+    CastMsg = unknown,
+    CallReply = unknown,
+  >(name: string): Promise<GenServerRef<State, CallMsg, CastMsg, CallReply> | undefined> {
+    const { GlobalRegistry } = await import('../distribution/index.js');
+
+    const serializedRef = GlobalRegistry.whereis(name);
+
+    if (!serializedRef) {
+      return undefined;
+    }
+
+    return {
+      id: serializedRef.id,
+      nodeId: serializedRef.nodeId,
+    } as unknown as GenServerRef<State, CallMsg, CastMsg, CallReply>;
+  },
+
+  /**
+   * Unregisters a globally registered process.
+   *
+   * Only the owning node can unregister a process.
+   *
+   * @param name - The global name to unregister
+   *
+   * @example
+   * ```typescript
+   * await Registry.unregisterGlobal('old-service');
+   * ```
+   */
+  async unregisterGlobal(name: string): Promise<void> {
+    const { GlobalRegistry } = await import('../distribution/index.js');
+    await GlobalRegistry.unregister(name);
+  },
+
+  /**
+   * Checks if a name is globally registered.
+   *
+   * @param name - The name to check
+   * @returns true if the name is globally registered
+   */
+  async isGloballyRegistered(name: string): Promise<boolean> {
+    const { GlobalRegistry } = await import('../distribution/index.js');
+    return GlobalRegistry.isRegistered(name);
+  },
+
+  /**
+   * Returns all globally registered names.
+   *
+   * @returns Array of globally registered names
+   */
+  async getGlobalNames(): Promise<readonly string[]> {
+    const { GlobalRegistry } = await import('../distribution/index.js');
+    return GlobalRegistry.getNames();
+  },
 } as const;
