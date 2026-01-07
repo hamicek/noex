@@ -76,3 +76,9 @@ export {
   DistributedChildClaimError,
   DistributedSupervisorError,
 } from './types.js';
+
+// =============================================================================
+// Node Selection
+// =============================================================================
+
+export { NodeSelectorImpl } from './node-selector.js';
