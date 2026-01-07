@@ -15,6 +15,7 @@ import {
   type TerminateReason,
   type CallResult,
   type StartOptions,
+  type RemoteStartOptions,
   type CallOptions,
   type ServerStatus,
   type LifecycleHandler,
@@ -802,6 +803,92 @@ export const GenServer = {
     emitLifecycleEvent('started', ref as GenServerRef);
 
     return ref;
+  },
+
+  /**
+   * Starts a GenServer on a remote cluster node.
+   *
+   * The behavior must be pre-registered on the target node using BehaviorRegistry,
+   * as JavaScript functions cannot be serialized and transmitted over the network.
+   *
+   * @param behaviorName - Name of the behavior registered in BehaviorRegistry on the target node
+   * @param options - Remote start options including target node and registration strategy
+   * @returns A reference to the remotely started server
+   * @throws {ClusterNotStartedError} If the cluster is not running
+   * @throws {NodeNotReachableError} If the target node is not connected
+   * @throws {BehaviorNotFoundError} If the behavior is not registered on the target node
+   * @throws {RemoteSpawnTimeoutError} If the spawn operation times out
+   * @throws {RemoteSpawnInitError} If initialization fails on the target node
+   * @throws {RemoteSpawnRegistrationError} If name registration fails on the target node
+   *
+   * @example
+   * ```typescript
+   * import { GenServer, BehaviorRegistry, Cluster } from 'noex';
+   *
+   * // 1. Register behavior on ALL nodes (including target)
+   * BehaviorRegistry.register('counter', counterBehavior);
+   *
+   * // 2. Start cluster
+   * await Cluster.start({ nodeName: 'app1', port: 4369 });
+   *
+   * // 3. Spawn on remote node
+   * const ref = await GenServer.startRemote('counter', {
+   *   targetNode: 'app2@192.168.1.2:4370',
+   *   name: 'remote-counter',
+   *   registration: 'global',
+   * });
+   *
+   * // 4. Use transparently (calls are automatically routed)
+   * const count = await GenServer.call(ref, { type: 'get' });
+   * ```
+   */
+  async startRemote<State, CallMsg, CastMsg, CallReply>(
+    behaviorName: string,
+    options: RemoteStartOptions<State>,
+  ): Promise<GenServerRef<State, CallMsg, CastMsg, CallReply>> {
+    // Import distribution modules dynamically to avoid circular dependencies
+    const { RemoteSpawn, NodeId } = await import('../distribution/index.js');
+
+    // Parse target node ID (accepts both string and NodeId)
+    const targetNodeId = NodeId.isValid(options.targetNode)
+      ? NodeId.parse(options.targetNode)
+      : NodeId.parse(options.targetNode);
+
+    // Build spawn options from RemoteStartOptions (exactOptionalPropertyTypes compliant)
+    const spawnOptions: Parameters<typeof RemoteSpawn.spawn>[2] = {};
+
+    // Only include timeout if provided
+    if (options.spawnTimeout !== undefined) {
+      (spawnOptions as { timeout: number }).timeout = options.spawnTimeout;
+    }
+
+    // Only include name if provided
+    if (options.name !== undefined) {
+      (spawnOptions as { name: string }).name = options.name;
+    }
+
+    // Only include initTimeout if provided
+    if (options.initTimeout !== undefined) {
+      (spawnOptions as { initTimeout: number }).initTimeout = options.initTimeout;
+    }
+
+    // Map registration strategy (default to 'local' if name is provided)
+    if (options.registration !== undefined) {
+      (spawnOptions as { registration: 'local' | 'global' | 'none' }).registration = options.registration;
+    } else if (options.name !== undefined) {
+      // Default to 'local' registration when name is provided
+      (spawnOptions as { registration: 'local' | 'global' | 'none' }).registration = 'local';
+    }
+
+    // Execute remote spawn
+    const result = await RemoteSpawn.spawn(behaviorName, targetNodeId, spawnOptions);
+
+    // Construct and return GenServerRef with nodeId for transparent remote routing
+    // Use unknown intermediate cast for branded type (RefBrand is internal)
+    return {
+      id: result.serverId,
+      nodeId: result.nodeId,
+    } as unknown as GenServerRef<State, CallMsg, CastMsg, CallReply>;
   },
 
   /**

@@ -124,6 +124,52 @@ export interface StartOptions<State = unknown> {
 }
 
 /**
+ * Options for GenServer.startRemote()
+ *
+ * Extends StartOptions with distribution-specific configuration for
+ * spawning GenServers on remote cluster nodes.
+ *
+ * @typeParam State - The type of the server's internal state
+ */
+export interface RemoteStartOptions<State = unknown> extends StartOptions<State> {
+  /**
+   * Target node where the GenServer should be spawned.
+   * Can be a NodeId or a string in format `name@host:port`.
+   *
+   * @example
+   * ```typescript
+   * // Using string format
+   * { targetNode: 'app2@192.168.1.2:4369' }
+   *
+   * // Using NodeId
+   * { targetNode: NodeId.parse('app2@192.168.1.2:4369') }
+   * ```
+   */
+  readonly targetNode: string;
+
+  /**
+   * Registration strategy for the spawned GenServer.
+   *
+   * - `'local'`: Register only in the local registry of the target node (default)
+   * - `'global'`: Register in the distributed GlobalRegistry for cluster-wide lookup
+   * - `'none'`: Do not register the server under any name
+   *
+   * Note: Requires `name` option to be set for `'local'` and `'global'` strategies.
+   *
+   * @default 'local'
+   */
+  readonly registration?: 'local' | 'global' | 'none';
+
+  /**
+   * Timeout in milliseconds for the entire spawn operation.
+   * Includes network round-trip, initialization, and optional registration.
+   *
+   * @default 10000
+   */
+  readonly spawnTimeout?: number;
+}
+
+/**
  * Options for GenServer.call()
  */
 export interface CallOptions {

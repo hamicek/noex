@@ -12,6 +12,7 @@ export type {
   TerminateReason,
   CallResult,
   StartOptions,
+  RemoteStartOptions,
   CallOptions,
   GenServerBehavior,
   ChildRestartStrategy,
