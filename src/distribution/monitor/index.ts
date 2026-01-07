@@ -22,3 +22,11 @@ export {
   type SendFunction,
   type ProcessExistsFunction,
 } from './monitor-handler.js';
+
+export {
+  RemoteMonitor,
+  RemoteMonitorTimeoutError,
+  _resetRemoteMonitorState,
+  type RemoteMonitorOptions,
+  type RemoteMonitorStats,
+} from './remote-monitor.js';

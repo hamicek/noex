@@ -20,6 +20,9 @@ import {
   type ServerStatus,
   type LifecycleHandler,
   type GenServerStats,
+  type MonitorId,
+  type ProcessDownReason,
+  type SerializedRef,
   CallTimeoutError,
   ServerNotRunningError,
   InitializationError,
@@ -1238,5 +1241,42 @@ export const GenServer = {
       return undefined;
     }
     return createRef(id);
+  },
+
+  /**
+   * Emits a process_down lifecycle event for a monitored process termination.
+   *
+   * Called by RemoteMonitor when a monitored process goes down.
+   *
+   * @param monitoringRef - Reference to the local process doing the monitoring
+   * @param monitoredRef - Reference to the process that went down
+   * @param reason - Reason for the process going down
+   * @param monitorId - Monitor identifier
+   *
+   * @internal
+   */
+  _emitProcessDown(
+    monitoringRef: GenServerRef,
+    monitoredRef: SerializedRef,
+    reason: ProcessDownReason,
+    monitorId: MonitorId,
+  ): void {
+    if (lifecycleHandlers.size === 0) return;
+
+    const event = {
+      type: 'process_down' as const,
+      ref: monitoringRef,
+      monitoredRef,
+      reason,
+      monitorId,
+    };
+
+    for (const handler of lifecycleHandlers) {
+      try {
+        handler(event);
+      } catch {
+        // Lifecycle handlers should not throw, but if they do, ignore it
+      }
+    }
   },
 } as const;
