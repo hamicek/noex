@@ -45,7 +45,7 @@ import {
 import { NodeId as NodeIdUtils } from '../node-id.js';
 import { Transport } from '../transport/index.js';
 import { Membership } from './membership.js';
-import { MonitorHandler } from '../monitor/index.js';
+import { MonitorHandler, RemoteMonitor } from '../monitor/index.js';
 import { GenServer } from '../../core/gen-server.js';
 
 // =============================================================================
@@ -918,6 +918,9 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
 
   private async cleanup(): Promise<void> {
     this.stopHeartbeat();
+
+    // Clear outgoing monitors first (rejects pending, cleans up registry)
+    RemoteMonitor._clear();
 
     if (this.state.monitorHandler) {
       this.state.monitorHandler.stop();
