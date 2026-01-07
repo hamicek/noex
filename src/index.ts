@@ -138,3 +138,57 @@ export {
 export { PersistenceManager } from './persistence/index.js';
 export type { SaveOptions, ManagerLoadResult, LoadSuccess, LoadFailure } from './persistence/index.js';
 export { defaultSerializer, createPrettySerializer } from './persistence/index.js';
+
+// Distribution (Cluster Communication)
+export {
+  // NodeId utilities
+  NodeId,
+  isNodeId,
+  // Serialization
+  Serializer,
+  generateCallId,
+  isValidCallId,
+  // Error classes
+  InvalidNodeIdError,
+  RemoteServerNotRunningError,
+  RemoteCallTimeoutError,
+  NodeNotReachableError,
+  MessageSerializationError,
+  ClusterNotStartedError,
+  InvalidClusterConfigError,
+  // Constants
+  CLUSTER_DEFAULTS,
+} from './distribution/index.js';
+export type {
+  // Node identification
+  NodeIdType,
+  NodeIdComponents,
+  NodeStatus,
+  NodeInfo,
+  // Configuration
+  ClusterConfig,
+  // Messages
+  CallId,
+  ClusterMessage,
+  HeartbeatMessage,
+  CallMessage,
+  CallReplyMessage,
+  CallErrorMessage,
+  CastMessage,
+  RegistrySyncMessage,
+  NodeDownMessage,
+  RemoteErrorType,
+  NodeDownReason,
+  // Wire protocol
+  MessageEnvelope,
+  SerializedRef,
+  RegistrySyncEntry,
+  // Event handlers
+  NodeUpHandler,
+  NodeDownHandler,
+  ClusterStatusHandler,
+  ClusterStatus,
+  // Serialization options
+  SerializeOptions,
+  DeserializeOptions,
+} from './distribution/index.js';
