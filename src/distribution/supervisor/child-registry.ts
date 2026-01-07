@@ -288,11 +288,12 @@ export const DistributedChildRegistry = {
 
     const metadata = decodeMetadata(ref.id);
 
+    // Use spread pattern for optional properties (exactOptionalPropertyTypes)
     return {
       exists: true,
       nodeId: ref.nodeId,
       ref,
-      supervisorId: metadata?.supervisorId,
+      ...(metadata?.supervisorId !== undefined && { supervisorId: metadata.supervisorId }),
     };
   },
 

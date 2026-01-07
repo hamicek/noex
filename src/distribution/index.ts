@@ -195,3 +195,40 @@ export {
   type IncomingMonitor,
   type MonitorRegistryStats,
 } from './monitor/index.js';
+
+// =============================================================================
+// Distributed Supervisor
+// =============================================================================
+
+export {
+  DistributedSupervisor,
+  DistributedChildRegistry,
+  NodeSelectorImpl,
+  // Error classes
+  NoAvailableNodeError,
+  DistributedBehaviorNotFoundError,
+  DistributedDuplicateChildError,
+  DistributedChildNotFoundError,
+  DistributedMaxRestartsExceededError,
+  DistributedInvalidSimpleOneForOneError,
+  DistributedMissingChildTemplateError,
+  DistributedChildClaimError,
+  DistributedSupervisorError,
+  // Constants
+  DISTRIBUTED_SUPERVISOR_DEFAULTS,
+  // Types
+  type NodeSelectorType,
+  type NodeSelectorFn,
+  type NodeSelector,
+  type DistributedChildSpec,
+  type DistributedChildTemplate,
+  type DistributedAutoShutdown,
+  type DistributedSupervisorOptions,
+  type DistributedSupervisorRef,
+  type DistributedChildInfo,
+  type DistributedRunningChild,
+  type DistributedSupervisorStats,
+  type DistributedSupervisorEvent,
+  type DistributedSupervisorEventHandler,
+  type ChildRegistrationStatus,
+} from './supervisor/index.js';
