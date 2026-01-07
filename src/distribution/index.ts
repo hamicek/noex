@@ -93,3 +93,20 @@ export {
   type SerializeOptions,
   type DeserializeOptions,
 } from './serialization.js';
+
+// =============================================================================
+// Transport Layer
+// =============================================================================
+
+export {
+  Connection,
+  Transport,
+  type ConnectionState,
+  type ConnectionConfig,
+  type ConnectionEvents,
+  type ConnectionStats,
+  type TransportState,
+  type TransportConfig,
+  type TransportEvents,
+  type TransportStats,
+} from './transport/index.js';

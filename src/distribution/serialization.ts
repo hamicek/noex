@@ -273,7 +273,7 @@ function verifySignature(
  */
 export interface SerializeOptions {
   /** Cluster secret for HMAC signature (optional) */
-  readonly clusterSecret?: string;
+  readonly clusterSecret?: string | undefined;
 }
 
 /**
@@ -281,7 +281,7 @@ export interface SerializeOptions {
  */
 export interface DeserializeOptions {
   /** Cluster secret for signature verification (optional) */
-  readonly clusterSecret?: string;
+  readonly clusterSecret?: string | undefined;
 
   /** Whether to require valid signature when secret is provided */
   readonly requireSignature?: boolean;

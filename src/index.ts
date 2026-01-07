@@ -148,6 +148,9 @@ export {
   Serializer,
   generateCallId,
   isValidCallId,
+  // Transport
+  Connection,
+  Transport,
   // Error classes
   InvalidNodeIdError,
   RemoteServerNotRunningError,
@@ -191,4 +194,13 @@ export type {
   // Serialization options
   SerializeOptions,
   DeserializeOptions,
+  // Transport types
+  ConnectionState,
+  ConnectionConfig,
+  ConnectionEvents,
+  ConnectionStats,
+  TransportState,
+  TransportConfig,
+  TransportEvents,
+  TransportStats,
 } from './distribution/index.js';
