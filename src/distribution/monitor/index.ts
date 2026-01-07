@@ -14,3 +14,11 @@ export {
   type IncomingMonitor,
   type MonitorRegistryStats,
 } from './monitor-registry.js';
+
+export {
+  MonitorHandler,
+  type MonitorHandlerConfig,
+  type MonitorHandlerStats,
+  type SendFunction,
+  type ProcessExistsFunction,
+} from './monitor-handler.js';

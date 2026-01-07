@@ -28,6 +28,10 @@ import type {
   SpawnRequestMessage,
   SpawnReplyMessage,
   SpawnErrorMessage,
+  MonitorRequestMessage,
+  MonitorAckMessage,
+  DemonitorRequestMessage,
+  ProcessDownMessage,
   MessageEnvelope,
   NodeUpHandler,
   NodeDownHandler,
@@ -41,6 +45,8 @@ import {
 import { NodeId as NodeIdUtils } from '../node-id.js';
 import { Transport } from '../transport/index.js';
 import { Membership } from './membership.js';
+import { MonitorHandler } from '../monitor/index.js';
+import { GenServer } from '../../core/gen-server.js';
 
 // =============================================================================
 // Types
@@ -81,6 +87,9 @@ interface ClusterState {
 
   /** Membership manager */
   membership: Membership | null;
+
+  /** Monitor handler for incoming process monitors */
+  monitorHandler: MonitorHandler | null;
 
   /** Heartbeat timer */
   heartbeatTimer: ReturnType<typeof setInterval> | null;
@@ -230,6 +239,7 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
     config: null,
     transport: null,
     membership: null,
+    monitorHandler: null,
     heartbeatTimer: null,
     startedAt: null,
   };
@@ -283,6 +293,20 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
         heartbeatMissThreshold: resolvedConfig.heartbeatMissThreshold,
       });
 
+      // Initialize monitor handler
+      const monitorHandler = new MonitorHandler({
+        send: async (nodeId, message) => {
+          if (transport.isConnectedTo(nodeId)) {
+            await transport.send(nodeId, message);
+          }
+        },
+        processExists: (serverId) => {
+          const ref = GenServer._getRefById(serverId);
+          return ref !== undefined && GenServer.isRunning(ref);
+        },
+        localNodeId,
+      });
+
       // Set up event forwarding
       this.setupEventHandlers(transport, membership);
 
@@ -291,10 +315,14 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
       this.state.localNodeId = localNodeId;
       this.state.transport = transport;
       this.state.membership = membership;
+      this.state.monitorHandler = monitorHandler;
       this.state.startedAt = Date.now();
 
       // Start transport
       await transport.start();
+
+      // Start monitor handler (subscribes to lifecycle events)
+      monitorHandler.start();
 
       // Start heartbeat broadcasting
       this.startHeartbeat();
@@ -519,6 +547,10 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
     });
 
     membership.on('nodeDown', (nodeId, reason) => {
+      // Clean up incoming monitors from the disconnected node
+      if (this.state.monitorHandler) {
+        this.state.monitorHandler.handleNodeDown(nodeId);
+      }
       this.emit('nodeDown', nodeId, reason);
     });
 
@@ -583,6 +615,22 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
 
       case 'spawn_error':
         this.handleSpawnError(payload);
+        break;
+
+      case 'monitor_request':
+        this.handleMonitorRequest(payload, fromNodeId);
+        break;
+
+      case 'monitor_ack':
+        this.handleMonitorAck(payload);
+        break;
+
+      case 'demonitor_request':
+        this.handleDemonitorRequest(payload);
+        break;
+
+      case 'process_down':
+        this.handleProcessDown(payload);
         break;
     }
   }
@@ -717,6 +765,54 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
     });
   }
 
+  private handleMonitorRequest(message: MonitorRequestMessage, fromNodeId: NodeId): void {
+    const { monitorHandler } = this.state;
+    if (!monitorHandler) return;
+
+    monitorHandler.handleMonitorRequest(message, fromNodeId).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+
+  private handleMonitorAck(message: MonitorAckMessage): void {
+    // Import and delegate to RemoteMonitor (will be implemented in Phase 4)
+    import('../monitor/index.js').then((module) => {
+      // RemoteMonitor._handleMonitorAck will be added in Phase 4
+      const moduleRecord = module as Record<string, unknown>;
+      if ('RemoteMonitor' in module && typeof moduleRecord['RemoteMonitor'] === 'object') {
+        const RemoteMonitor = moduleRecord['RemoteMonitor'] as { _handleMonitorAck?: (msg: MonitorAckMessage) => void };
+        if (RemoteMonitor._handleMonitorAck) {
+          RemoteMonitor._handleMonitorAck(message);
+        }
+      }
+    }).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+
+  private handleDemonitorRequest(message: DemonitorRequestMessage): void {
+    const { monitorHandler } = this.state;
+    if (!monitorHandler) return;
+
+    monitorHandler.handleDemonitorRequest(message);
+  }
+
+  private handleProcessDown(message: ProcessDownMessage): void {
+    // Import and delegate to RemoteMonitor (will be implemented in Phase 4)
+    import('../monitor/index.js').then((module) => {
+      // RemoteMonitor._handleProcessDown will be added in Phase 4
+      const moduleRecord = module as Record<string, unknown>;
+      if ('RemoteMonitor' in module && typeof moduleRecord['RemoteMonitor'] === 'object') {
+        const RemoteMonitor = moduleRecord['RemoteMonitor'] as { _handleProcessDown?: (msg: ProcessDownMessage) => void };
+        if (RemoteMonitor._handleProcessDown) {
+          RemoteMonitor._handleProcessDown(message);
+        }
+      }
+    }).catch((err) => {
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+
   private createLocalNodeInfo(): NodeInfo {
     return {
       id: this.state.localNodeId!,
@@ -822,6 +918,11 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
 
   private async cleanup(): Promise<void> {
     this.stopHeartbeat();
+
+    if (this.state.monitorHandler) {
+      this.state.monitorHandler.stop();
+      this.state.monitorHandler = null;
+    }
 
     if (this.state.membership) {
       this.state.membership.clear();
