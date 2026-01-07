@@ -82,3 +82,10 @@ export {
 // =============================================================================
 
 export { NodeSelectorImpl } from './node-selector.js';
+
+// =============================================================================
+// Child Registry
+// =============================================================================
+
+export { DistributedChildRegistry } from './child-registry.js';
+export type { ChildRegistrationStatus } from './child-registry.js';
