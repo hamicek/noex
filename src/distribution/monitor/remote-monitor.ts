@@ -581,4 +581,63 @@ export const RemoteMonitor = {
     // Clear registry
     registry.clear();
   },
+
+  /**
+   * Handles the termination of a local monitoring process.
+   *
+   * Cleans up all outgoing monitors created by this process:
+   * - Removes monitors from the registry
+   * - Sends demonitor requests to remote nodes (best effort)
+   * - Cancels any pending monitor requests
+   *
+   * This follows Erlang semantics where monitors are automatically
+   * cleaned up when the monitoring process terminates.
+   *
+   * @param serverId - The server ID of the terminated monitoring process
+   * @internal
+   */
+  _handleMonitoringProcessTerminated(serverId: string): void {
+    // Cancel and clean up any pending monitor requests from this server
+    for (const [monitorId, pending] of pendingMonitors) {
+      if (pending.monitoringRef.id === serverId && pending.state === 'pending') {
+        clearTimeout(pending.timeoutHandle);
+        pending.state = 'rejected';
+        pendingMonitors.delete(monitorId);
+        // Reject with a clear message - the monitoring process is gone
+        pending.reject(new Error('Monitoring process terminated'));
+      }
+    }
+
+    // Remove all active outgoing monitors for this server
+    const removedMonitors = registry.removeOutgoingByMonitoringServer(serverId);
+
+    if (removedMonitors.length === 0) {
+      return;
+    }
+
+    // Send demonitor requests to remote nodes (best effort, fire and forget)
+    // We don't await these - the monitoring process is already gone
+    void (async () => {
+      try {
+        const transport = Cluster._getTransport();
+
+        for (const monitor of removedMonitors) {
+          const demonitorRequest: DemonitorRequestMessage = {
+            type: 'demonitor_request',
+            monitorId: monitor.monitorId,
+          };
+
+          try {
+            if (transport.isConnectedTo(monitor.monitoredRef.nodeId)) {
+              await transport.send(monitor.monitoredRef.nodeId, demonitorRequest);
+            }
+          } catch {
+            // Ignore individual send failures
+          }
+        }
+      } catch {
+        // Ignore cluster errors - we're just doing best-effort cleanup
+      }
+    })();
+  },
 } as const;

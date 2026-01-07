@@ -699,6 +699,25 @@ function mapTerminateReason(reason: TerminateReason): ProcessDownReason {
 }
 
 /**
+ * Cleans up remote monitors created by a terminating server.
+ *
+ * Called when a local GenServer terminates to remove any remote monitors
+ * it had established. This follows Erlang semantics where monitors are
+ * automatically cleaned up when the monitoring process terminates.
+ *
+ * @param serverId - The server ID of the terminated monitoring process
+ */
+async function cleanupRemoteMonitorsForServer(serverId: string): Promise<void> {
+  try {
+    const { RemoteMonitor } = await import('../distribution/monitor/index.js');
+    RemoteMonitor._handleMonitoringProcessTerminated(serverId);
+  } catch {
+    // Distribution module may not be available or cluster not running
+    // This is fine - no remote monitors to clean up
+  }
+}
+
+/**
  * Notifies all monitoring processes when a monitored process terminates.
  * Emits process_down lifecycle events and cleans up the monitor registry.
  */
@@ -1210,8 +1229,11 @@ export const GenServer = {
       // Notify all processes monitoring this server
       notifyLocalMonitorsOfTermination(ref.id, reason);
 
-      // Cleanup monitors created by this server
+      // Cleanup monitors created by this server (local)
       removeLocalMonitorsByMonitoring(ref.id);
+
+      // Cleanup remote monitors created by this server (fire and forget)
+      void cleanupRemoteMonitorsForServer(ref.id);
 
       emitLifecycleEvent('terminated', ref as GenServerRef, reason);
     }
@@ -1512,8 +1534,11 @@ export const GenServer = {
       // Notify local monitors synchronously (fire and forget async operation)
       void notifyLocalMonitorsOfTermination(ref.id, reason);
 
-      // Cleanup monitors created by this server
+      // Cleanup monitors created by this server (local)
       removeLocalMonitorsByMonitoring(ref.id);
+
+      // Cleanup remote monitors created by this server (fire and forget)
+      void cleanupRemoteMonitorsForServer(ref.id);
 
       emitLifecycleEvent('terminated', ref as GenServerRef, reason);
     }

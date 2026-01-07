@@ -807,6 +807,174 @@ describe('RemoteMonitor', () => {
   });
 
   // ==========================================================================
+  // Monitoring Process Termination Tests (Phase 7)
+  // ==========================================================================
+
+  describe('monitoring process termination', () => {
+    it('cleans up active outgoing monitors when monitoring process terminates', async () => {
+      const monitoringRef = createMockRef('localServer', localNodeId as string);
+      const monitoredRef = createMockRef('remoteServer', remoteNodeId as string);
+
+      const monitorPromise = RemoteMonitor.monitor(monitoringRef, monitoredRef, {
+        timeout: 1000,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const sentMessages = ClusterTest._getSentMessages();
+      const request = sentMessages[0].message as { monitorId: string };
+
+      RemoteMonitor._handleMonitorAck({
+        type: 'monitor_ack',
+        monitorId: request.monitorId as ReturnType<typeof generateMonitorId>,
+        success: true,
+      });
+
+      await monitorPromise;
+
+      const registry = RemoteMonitor._getRegistry();
+      expect(registry.outgoingCount).toBe(1);
+
+      // Simulate monitoring process termination
+      RemoteMonitor._handleMonitoringProcessTerminated('localServer');
+
+      expect(registry.outgoingCount).toBe(0);
+    });
+
+    it('sends demonitor requests to remote nodes when monitoring process terminates', async () => {
+      const monitoringRef = createMockRef('localServer', localNodeId as string);
+      const monitoredRef = createMockRef('remoteServer', remoteNodeId as string);
+
+      const monitorPromise = RemoteMonitor.monitor(monitoringRef, monitoredRef, {
+        timeout: 1000,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const sentMessages = ClusterTest._getSentMessages();
+      const request = sentMessages[0].message as { monitorId: string };
+
+      RemoteMonitor._handleMonitorAck({
+        type: 'monitor_ack',
+        monitorId: request.monitorId as ReturnType<typeof generateMonitorId>,
+        success: true,
+      });
+
+      await monitorPromise;
+      ClusterTest._clearSentMessages();
+
+      // Simulate monitoring process termination
+      RemoteMonitor._handleMonitoringProcessTerminated('localServer');
+
+      // Give async send time to complete
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const demonitorMessages = ClusterTest._getSentMessages();
+      expect(demonitorMessages.length).toBeGreaterThanOrEqual(1);
+      expect(demonitorMessages[0].message.type).toBe('demonitor_request');
+    });
+
+    it('cancels pending monitor requests when monitoring process terminates', async () => {
+      const monitoringRef = createMockRef('localServer', localNodeId as string);
+      const monitoredRef = createMockRef('remoteServer', remoteNodeId as string);
+
+      const monitorPromise = RemoteMonitor.monitor(monitoringRef, monitoredRef, {
+        timeout: 5000,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Simulate monitoring process termination while request is pending
+      RemoteMonitor._handleMonitoringProcessTerminated('localServer');
+
+      await expect(monitorPromise).rejects.toThrow('Monitoring process terminated');
+    });
+
+    it('handles multiple monitors from same server being cleaned up', async () => {
+      const monitorPromises: Promise<unknown>[] = [];
+
+      for (let i = 0; i < 3; i++) {
+        const monitoringRef = createMockRef('localServer', localNodeId as string);
+        const monitoredRef = createMockRef(`remoteServer${i}`, remoteNodeId as string);
+
+        monitorPromises.push(
+          RemoteMonitor.monitor(monitoringRef, monitoredRef, { timeout: 1000 }),
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const sentMessages = ClusterTest._getSentMessages();
+      for (const msg of sentMessages) {
+        if (msg.message.type === 'monitor_request') {
+          const request = msg.message as { monitorId: string };
+          RemoteMonitor._handleMonitorAck({
+            type: 'monitor_ack',
+            monitorId: request.monitorId as ReturnType<typeof generateMonitorId>,
+            success: true,
+          });
+        }
+      }
+
+      await Promise.all(monitorPromises);
+
+      const registry = RemoteMonitor._getRegistry();
+      expect(registry.outgoingCount).toBe(3);
+
+      // Simulate monitoring process termination
+      RemoteMonitor._handleMonitoringProcessTerminated('localServer');
+
+      expect(registry.outgoingCount).toBe(0);
+    });
+
+    it('only cleans up monitors from the terminated server, not others', async () => {
+      // Create monitors from two different servers
+      const monitorPromises: Array<{ promise: Promise<unknown>; serverId: string }> = [];
+
+      for (let i = 0; i < 2; i++) {
+        const monitoringRef = createMockRef(`localServer${i}`, localNodeId as string);
+        const monitoredRef = createMockRef(`remoteServer${i}`, remoteNodeId as string);
+
+        monitorPromises.push({
+          promise: RemoteMonitor.monitor(monitoringRef, monitoredRef, { timeout: 1000 }),
+          serverId: `localServer${i}`,
+        });
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const sentMessages = ClusterTest._getSentMessages();
+      for (const msg of sentMessages) {
+        if (msg.message.type === 'monitor_request') {
+          const request = msg.message as { monitorId: string };
+          RemoteMonitor._handleMonitorAck({
+            type: 'monitor_ack',
+            monitorId: request.monitorId as ReturnType<typeof generateMonitorId>,
+            success: true,
+          });
+        }
+      }
+
+      await Promise.all(monitorPromises.map((p) => p.promise));
+
+      const registry = RemoteMonitor._getRegistry();
+      expect(registry.outgoingCount).toBe(2);
+
+      // Terminate only one server
+      RemoteMonitor._handleMonitoringProcessTerminated('localServer0');
+
+      expect(registry.outgoingCount).toBe(1);
+    });
+
+    it('handles termination of server with no monitors gracefully', () => {
+      // Should not throw
+      expect(() => {
+        RemoteMonitor._handleMonitoringProcessTerminated('nonExistentServer');
+      }).not.toThrow();
+    });
+  });
+
+  // ==========================================================================
   // Cleanup Tests
   // ==========================================================================
 
