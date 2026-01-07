@@ -14,6 +14,7 @@ import {
   CLUSTER_DEFAULTS,
   MessageSerializationError,
   type CallId,
+  type SpawnId,
   type ClusterMessage,
   type MessageEnvelope,
   type NodeId,
@@ -547,5 +548,35 @@ export function generateCallId(): CallId {
 export function isValidCallId(value: string): value is CallId {
   // Format: timestamp(base36)-random(16 hex chars)
   const pattern = /^[0-9a-z]+-[0-9a-f]{16}$/;
+  return pattern.test(value);
+}
+
+// =============================================================================
+// SpawnId Generation
+// =============================================================================
+
+/**
+ * Generates a unique SpawnId for remote spawn correlation.
+ *
+ * Uses a combination of timestamp and random bytes to ensure
+ * uniqueness across nodes. Prefixed with 's' to distinguish from CallId.
+ *
+ * @returns Unique SpawnId
+ */
+export function generateSpawnId(): SpawnId {
+  const timestamp = Date.now().toString(36);
+  const random = crypto.randomBytes(8).toString('hex');
+  return `s${timestamp}-${random}` as SpawnId;
+}
+
+/**
+ * Validates that a string is a valid SpawnId format.
+ *
+ * @param value - String to validate
+ * @returns true if valid SpawnId format
+ */
+export function isValidSpawnId(value: string): value is SpawnId {
+  // Format: s + timestamp(base36) + - + random(16 hex chars)
+  const pattern = /^s[0-9a-z]+-[0-9a-f]{16}$/;
   return pattern.test(value);
 }

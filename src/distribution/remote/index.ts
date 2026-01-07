@@ -1,5 +1,5 @@
 /**
- * Remote call/cast module for distributed GenServer communication.
+ * Remote call/cast/spawn module for distributed GenServer communication.
  *
  * @module distribution/remote
  */
@@ -16,3 +16,14 @@ export {
   PendingCalls,
   type PendingCallsStats,
 } from './pending-calls.js';
+
+export {
+  BehaviorRegistry,
+  type BehaviorRegistryStats,
+} from './behavior-registry.js';
+
+export {
+  PendingSpawns,
+  type PendingSpawnsStats,
+  type SpawnResult,
+} from './pending-spawns.js';

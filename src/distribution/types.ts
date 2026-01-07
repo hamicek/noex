@@ -165,6 +165,11 @@ export interface SerializedRef {
 export type CallId = string & { readonly __brand: 'CallId' };
 
 /**
+ * Unique identifier for tracking pending remote spawn requests.
+ */
+export type SpawnId = string & { readonly __brand: 'SpawnId' };
+
+/**
  * Registry synchronization entry for distributed registry.
  */
 export interface RegistrySyncEntry {
@@ -190,6 +195,7 @@ export interface RegistrySyncEntry {
  * - Fire-and-forget messaging (cast)
  * - Registry synchronization (registry_sync)
  * - Membership changes (node_down)
+ * - Remote spawn (spawn_request, spawn_reply, spawn_error)
  *
  * @example
  * ```typescript
@@ -213,7 +219,10 @@ export type ClusterMessage =
   | CallErrorMessage
   | CastMessage
   | RegistrySyncMessage
-  | NodeDownMessage;
+  | NodeDownMessage
+  | SpawnRequestMessage
+  | SpawnReplyMessage
+  | SpawnErrorMessage;
 
 /**
  * Heartbeat message for health monitoring.
@@ -344,6 +353,89 @@ export type NodeDownReason =
   | 'connection_closed'
   | 'connection_refused'
   | 'graceful_shutdown';
+
+// =============================================================================
+// Remote Spawn Messages
+// =============================================================================
+
+/**
+ * Options passed in spawn request for remote GenServer creation.
+ */
+export interface SpawnRequestOptions {
+  /** Optional name for registry registration */
+  readonly name?: string;
+
+  /** Timeout for init() call in milliseconds */
+  readonly initTimeout?: number;
+
+  /** Registration strategy on the target node */
+  readonly registration?: 'local' | 'global' | 'none';
+}
+
+/**
+ * Remote spawn request message.
+ * Sent to a target node to request starting a GenServer.
+ */
+export interface SpawnRequestMessage {
+  readonly type: 'spawn_request';
+
+  /** Unique identifier for this spawn request (for reply correlation) */
+  readonly spawnId: SpawnId;
+
+  /** Name of the behavior registered in BehaviorRegistry */
+  readonly behaviorName: string;
+
+  /** Options for the GenServer creation */
+  readonly options: SpawnRequestOptions;
+
+  /** Timeout in milliseconds for the entire spawn operation */
+  readonly timeoutMs: number;
+
+  /** Unix timestamp when the request was initiated */
+  readonly sentAt: number;
+}
+
+/**
+ * Successful reply to a remote spawn request.
+ */
+export interface SpawnReplyMessage {
+  readonly type: 'spawn_reply';
+
+  /** Correlation identifier matching the original spawn request */
+  readonly spawnId: SpawnId;
+
+  /** ID of the successfully spawned GenServer */
+  readonly serverId: string;
+
+  /** Node where the GenServer is running */
+  readonly nodeId: NodeId;
+}
+
+/**
+ * Error reply to a remote spawn request.
+ */
+export interface SpawnErrorMessage {
+  readonly type: 'spawn_error';
+
+  /** Correlation identifier matching the original spawn request */
+  readonly spawnId: SpawnId;
+
+  /** Type of error that occurred */
+  readonly errorType: SpawnErrorType;
+
+  /** Human-readable error message */
+  readonly message: string;
+}
+
+/**
+ * Types of errors that can occur during remote spawn.
+ */
+export type SpawnErrorType =
+  | 'behavior_not_found'
+  | 'init_failed'
+  | 'init_timeout'
+  | 'registration_failed'
+  | 'unknown_error';
 
 // =============================================================================
 // Wire Protocol
@@ -509,5 +601,71 @@ export class InvalidClusterConfigError extends Error {
 
   constructor(readonly reason: string) {
     super(`Invalid cluster configuration: ${reason}`);
+  }
+}
+
+// =============================================================================
+// Remote Spawn Errors
+// =============================================================================
+
+/**
+ * Error thrown when a behavior is not found in the BehaviorRegistry.
+ */
+export class BehaviorNotFoundError extends Error {
+  override readonly name = 'BehaviorNotFoundError' as const;
+
+  constructor(readonly behaviorName: string) {
+    super(`Behavior '${behaviorName}' is not registered in BehaviorRegistry`);
+  }
+}
+
+/**
+ * Error thrown when a remote spawn request times out.
+ */
+export class RemoteSpawnTimeoutError extends Error {
+  override readonly name = 'RemoteSpawnTimeoutError' as const;
+
+  constructor(
+    readonly behaviorName: string,
+    readonly nodeId: NodeId,
+    readonly timeoutMs: number,
+  ) {
+    super(
+      `Remote spawn of '${behaviorName}' on node '${nodeId}' timed out after ${timeoutMs}ms`,
+    );
+  }
+}
+
+/**
+ * Error thrown when a remote spawn fails during initialization.
+ */
+export class RemoteSpawnInitError extends Error {
+  override readonly name = 'RemoteSpawnInitError' as const;
+
+  constructor(
+    readonly behaviorName: string,
+    readonly nodeId: NodeId,
+    readonly reason: string,
+  ) {
+    super(
+      `Remote spawn of '${behaviorName}' on node '${nodeId}' failed: ${reason}`,
+    );
+  }
+}
+
+/**
+ * Error thrown when remote spawn fails due to registration conflict.
+ */
+export class RemoteSpawnRegistrationError extends Error {
+  override readonly name = 'RemoteSpawnRegistrationError' as const;
+
+  constructor(
+    readonly behaviorName: string,
+    readonly nodeId: NodeId,
+    readonly registeredName: string,
+  ) {
+    super(
+      `Remote spawn of '${behaviorName}' on node '${nodeId}' failed: name '${registeredName}' already registered`,
+    );
   }
 }

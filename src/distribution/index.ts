@@ -32,6 +32,7 @@ export type {
 
   // Messages
   CallId,
+  SpawnId,
   ClusterMessage,
   HeartbeatMessage,
   CallMessage,
@@ -42,6 +43,13 @@ export type {
   NodeDownMessage,
   RemoteErrorType,
   NodeDownReason,
+
+  // Remote spawn messages
+  SpawnRequestMessage,
+  SpawnReplyMessage,
+  SpawnErrorMessage,
+  SpawnRequestOptions,
+  SpawnErrorType,
 
   // Wire protocol
   MessageEnvelope,
@@ -67,6 +75,11 @@ export {
   MessageSerializationError,
   ClusterNotStartedError,
   InvalidClusterConfigError,
+  // Remote spawn errors
+  BehaviorNotFoundError,
+  RemoteSpawnTimeoutError,
+  RemoteSpawnInitError,
+  RemoteSpawnRegistrationError,
 } from './types.js';
 
 // =============================================================================
@@ -90,6 +103,8 @@ export {
   Serializer,
   generateCallId,
   isValidCallId,
+  generateSpawnId,
+  isValidSpawnId,
   type SerializeOptions,
   type DeserializeOptions,
 } from './serialization.js';
@@ -132,9 +147,15 @@ export {
   CallHandler,
   PendingCalls,
   _resetRemoteCallState,
+  // Remote spawn
+  BehaviorRegistry,
+  PendingSpawns,
   type RemoteCallOptions,
   type RemoteCallStats,
   type PendingCallsStats,
+  type BehaviorRegistryStats,
+  type PendingSpawnsStats,
+  type SpawnResult,
 } from './remote/index.js';
 
 // =============================================================================
