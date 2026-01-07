@@ -21,6 +21,7 @@ import {
   type LifecycleHandler,
   type GenServerStats,
   type MonitorId,
+  type MonitorRef,
   type ProcessDownReason,
   type SerializedRef,
   CallTimeoutError,
@@ -28,6 +29,7 @@ import {
   InitializationError,
   DEFAULTS,
 } from './types.js';
+import { generateMonitorId } from '../distribution/serialization.js';
 import { estimateObjectSize } from '../observer/memory-utils.js';
 import { Registry } from './registry.js';
 import { PersistenceManager, type ManagerLoadResult } from '../persistence/manager.js';
@@ -556,6 +558,196 @@ const serverRegistry = new Map<string, ServerInstance<unknown, unknown, unknown,
  */
 const lifecycleHandlers = new Set<LifecycleHandler>();
 
+// =============================================================================
+// Local Monitor Support
+// =============================================================================
+
+/**
+ * Represents a local monitor (same-node monitoring).
+ */
+interface LocalMonitor {
+  readonly monitorId: MonitorId;
+  readonly monitoringServerId: string;
+  readonly monitoredServerId: string;
+  readonly createdAt: number;
+}
+
+/**
+ * Registry of local monitors (same-node process monitoring).
+ * Maps monitorId to LocalMonitor.
+ */
+const localMonitors = new Map<MonitorId, LocalMonitor>();
+
+/**
+ * Index: monitoredServerId -> Set of monitorIds monitoring it.
+ * Enables efficient lookup when a process terminates.
+ */
+const localMonitorsByMonitored = new Map<string, Set<MonitorId>>();
+
+/**
+ * Index: monitoringServerId -> Set of monitorIds it created.
+ * Enables cleanup when monitoring process terminates.
+ */
+const localMonitorsByMonitoring = new Map<string, Set<MonitorId>>();
+
+/**
+ * Adds a local monitor to the registry.
+ */
+function addLocalMonitor(monitor: LocalMonitor): void {
+  localMonitors.set(monitor.monitorId, monitor);
+
+  // Update monitoredServerId index
+  let monitoredSet = localMonitorsByMonitored.get(monitor.monitoredServerId);
+  if (!monitoredSet) {
+    monitoredSet = new Set();
+    localMonitorsByMonitored.set(monitor.monitoredServerId, monitoredSet);
+  }
+  monitoredSet.add(monitor.monitorId);
+
+  // Update monitoringServerId index
+  let monitoringSet = localMonitorsByMonitoring.get(monitor.monitoringServerId);
+  if (!monitoringSet) {
+    monitoringSet = new Set();
+    localMonitorsByMonitoring.set(monitor.monitoringServerId, monitoringSet);
+  }
+  monitoringSet.add(monitor.monitorId);
+}
+
+/**
+ * Removes a local monitor from the registry.
+ */
+function removeLocalMonitor(monitorId: MonitorId): LocalMonitor | undefined {
+  const monitor = localMonitors.get(monitorId);
+  if (!monitor) {
+    return undefined;
+  }
+
+  localMonitors.delete(monitorId);
+
+  // Update monitoredServerId index
+  const monitoredSet = localMonitorsByMonitored.get(monitor.monitoredServerId);
+  if (monitoredSet) {
+    monitoredSet.delete(monitorId);
+    if (monitoredSet.size === 0) {
+      localMonitorsByMonitored.delete(monitor.monitoredServerId);
+    }
+  }
+
+  // Update monitoringServerId index
+  const monitoringSet = localMonitorsByMonitoring.get(monitor.monitoringServerId);
+  if (monitoringSet) {
+    monitoringSet.delete(monitorId);
+    if (monitoringSet.size === 0) {
+      localMonitorsByMonitoring.delete(monitor.monitoringServerId);
+    }
+  }
+
+  return monitor;
+}
+
+/**
+ * Gets all monitors for a monitored server ID.
+ */
+function getLocalMonitorsByMonitored(monitoredServerId: string): LocalMonitor[] {
+  const monitorIds = localMonitorsByMonitored.get(monitoredServerId);
+  if (!monitorIds) {
+    return [];
+  }
+  const monitors: LocalMonitor[] = [];
+  for (const id of monitorIds) {
+    const monitor = localMonitors.get(id);
+    if (monitor) {
+      monitors.push(monitor);
+    }
+  }
+  return monitors;
+}
+
+/**
+ * Removes all monitors created by a monitoring server (cleanup on termination).
+ */
+function removeLocalMonitorsByMonitoring(monitoringServerId: string): LocalMonitor[] {
+  const monitorIds = localMonitorsByMonitoring.get(monitoringServerId);
+  if (!monitorIds) {
+    return [];
+  }
+  const removed: LocalMonitor[] = [];
+  for (const id of Array.from(monitorIds)) {
+    const monitor = removeLocalMonitor(id);
+    if (monitor) {
+      removed.push(monitor);
+    }
+  }
+  return removed;
+}
+
+/**
+ * Converts TerminateReason to ProcessDownReason.
+ */
+function mapTerminateReason(reason: TerminateReason): ProcessDownReason {
+  if (reason === 'normal') {
+    return { type: 'normal' };
+  }
+  if (reason === 'shutdown') {
+    return { type: 'shutdown' };
+  }
+  // reason is { error: Error }
+  return {
+    type: 'error',
+    message: reason.error.message,
+  };
+}
+
+/**
+ * Notifies all monitoring processes when a monitored process terminates.
+ * Emits process_down lifecycle events and cleans up the monitor registry.
+ */
+async function notifyLocalMonitorsOfTermination(
+  terminatedServerId: string,
+  reason: TerminateReason,
+): Promise<void> {
+  const monitors = getLocalMonitorsByMonitored(terminatedServerId);
+  if (monitors.length === 0) {
+    return;
+  }
+
+  const processDownReason = mapTerminateReason(reason);
+
+  // Get local node ID if cluster is running
+  let localNodeId: string;
+  try {
+    const { Cluster } = await import('../distribution/cluster/cluster.js');
+    if (Cluster.getStatus() === 'running') {
+      localNodeId = Cluster.getLocalNodeId() as string;
+    } else {
+      localNodeId = 'local';
+    }
+  } catch {
+    localNodeId = 'local';
+  }
+
+  const monitoredRef: SerializedRef = {
+    id: terminatedServerId,
+    nodeId: localNodeId as SerializedRef['nodeId'],
+  };
+
+  // Emit process_down for each monitor
+  for (const monitor of monitors) {
+    const monitoringRef = createRef(monitor.monitoringServerId);
+    GenServer._emitProcessDown(
+      monitoringRef,
+      monitoredRef,
+      processDownReason,
+      monitor.monitorId,
+    );
+  }
+
+  // Clean up all monitors for the terminated server
+  for (const monitor of monitors) {
+    removeLocalMonitor(monitor.monitorId);
+  }
+}
+
 /**
  * Counter for generating unique server IDs.
  */
@@ -1014,6 +1206,13 @@ export const GenServer = {
       await (instance as ServerInstance<State, CallMsg, CastMsg, CallReply>).enqueueStop(reason);
     } finally {
       serverRegistry.delete(ref.id);
+
+      // Notify all processes monitoring this server
+      notifyLocalMonitorsOfTermination(ref.id, reason);
+
+      // Cleanup monitors created by this server
+      removeLocalMonitorsByMonitoring(ref.id);
+
       emitLifecycleEvent('terminated', ref as GenServerRef, reason);
     }
   },
@@ -1042,6 +1241,152 @@ export const GenServer = {
     return () => {
       lifecycleHandlers.delete(handler);
     };
+  },
+
+  /**
+   * Establishes a monitor on another process.
+   *
+   * When the monitored process terminates, the monitoring process
+   * receives a `process_down` lifecycle event with the termination reason.
+   *
+   * Monitors are one-way: the monitoring process is notified but not affected
+   * by the monitored process's termination (unlike links).
+   *
+   * Automatically detects whether the monitored process is local or remote
+   * and uses the appropriate monitoring mechanism.
+   *
+   * @param monitoringRef - Reference to the process that will receive notifications
+   * @param monitoredRef - Reference to the process to monitor
+   * @returns A MonitorRef for later demonitoring
+   * @throws {ServerNotRunningError} If the monitoring process is not running
+   *
+   * @example
+   * ```typescript
+   * // Start monitoring a remote process
+   * const monitorRef = await GenServer.monitor(localServer, remoteServer);
+   *
+   * // Listen for process_down events
+   * GenServer.onLifecycleEvent((event) => {
+   *   if (event.type === 'process_down' && event.monitorId === monitorRef.monitorId) {
+   *     console.log(`Process ${event.monitoredRef.id} went down: ${event.reason.type}`);
+   *   }
+   * });
+   *
+   * // Later, to stop monitoring:
+   * await GenServer.demonitor(monitorRef);
+   * ```
+   */
+  async monitor<State, CallMsg, CastMsg, CallReply>(
+    monitoringRef: GenServerRef<State, CallMsg, CastMsg, CallReply>,
+    monitoredRef: GenServerRef,
+  ): Promise<MonitorRef> {
+    // Verify monitoring process exists locally
+    const monitoringInstance = serverRegistry.get(monitoringRef.id);
+    if (!monitoringInstance || monitoringInstance.getStatus() !== 'running') {
+      throw new ServerNotRunningError(monitoringRef.id);
+    }
+
+    // Determine if monitored process is local or remote
+    const monitoredNodeId = monitoredRef.nodeId;
+    const isRemote = monitoredNodeId !== undefined && await isRemoteRef(monitoredNodeId);
+
+    if (isRemote) {
+      // Remote monitoring - delegate to RemoteMonitor
+      const { RemoteMonitor } = await import('../distribution/monitor/index.js');
+      return RemoteMonitor.monitor(monitoringRef as GenServerRef, monitoredRef);
+    }
+
+    // Local monitoring - handle within GenServer
+    const monitorId = generateMonitorId();
+
+    // Check if monitored process exists
+    const monitoredInstance = serverRegistry.get(monitoredRef.id);
+    const processExists = monitoredInstance !== undefined && monitoredInstance.getStatus() === 'running';
+
+    // Get local node ID if cluster is running
+    let localNodeId: string;
+    try {
+      const { Cluster } = await import('../distribution/cluster/cluster.js');
+      if (Cluster.getStatus() === 'running') {
+        localNodeId = Cluster.getLocalNodeId() as string;
+      } else {
+        localNodeId = 'local';
+      }
+    } catch {
+      localNodeId = 'local';
+    }
+
+    const monitoredSerializedRef: SerializedRef = {
+      id: monitoredRef.id,
+      nodeId: localNodeId as SerializedRef['nodeId'],
+    };
+
+    const monitorRef: MonitorRef = {
+      monitorId,
+      monitoredRef: monitoredSerializedRef,
+    };
+
+    if (!processExists) {
+      // Process doesn't exist - immediately emit process_down with 'noproc'
+      // This follows Erlang semantics where monitor setup always succeeds
+      // but you get immediate notification if the process doesn't exist
+      queueMicrotask(() => {
+        GenServer._emitProcessDown(
+          monitoringRef as GenServerRef,
+          monitoredSerializedRef,
+          { type: 'noproc' },
+          monitorId,
+        );
+      });
+      return monitorRef;
+    }
+
+    // Register the local monitor
+    addLocalMonitor({
+      monitorId,
+      monitoringServerId: monitoringRef.id,
+      monitoredServerId: monitoredRef.id,
+      createdAt: Date.now(),
+    });
+
+    return monitorRef;
+  },
+
+  /**
+   * Removes a previously established monitor.
+   *
+   * After calling demonitor, no more process_down notifications will be
+   * received for this monitor, even if the monitored process terminates.
+   *
+   * @param monitorRef - Reference to the monitor to remove
+   * @param options - Demonitor options
+   * @param options.flush - If true, also removes any pending process_down
+   *                        messages from the message queue (not yet implemented)
+   *
+   * @example
+   * ```typescript
+   * const monitorRef = await GenServer.monitor(localServer, remoteServer);
+   * // ... later ...
+   * await GenServer.demonitor(monitorRef);
+   * ```
+   */
+  async demonitor(
+    monitorRef: MonitorRef,
+    options?: { readonly flush?: boolean },
+  ): Promise<void> {
+    // First, try to remove from local monitors
+    const localMonitor = removeLocalMonitor(monitorRef.monitorId);
+    if (localMonitor) {
+      return; // Was a local monitor, nothing more to do
+    }
+
+    // Not a local monitor - try remote demonitor
+    try {
+      const { RemoteMonitor } = await import('../distribution/monitor/index.js');
+      await RemoteMonitor.demonitor(monitorRef);
+    } catch {
+      // Ignore errors - monitor might already be gone
+    }
   },
 
   /**
@@ -1163,6 +1508,13 @@ export const GenServer = {
     if (instance) {
       (instance as ServerInstance<State, CallMsg, CastMsg, CallReply>).forceTerminate(reason);
       serverRegistry.delete(ref.id);
+
+      // Notify local monitors synchronously (fire and forget async operation)
+      void notifyLocalMonitorsOfTermination(ref.id, reason);
+
+      // Cleanup monitors created by this server
+      removeLocalMonitorsByMonitoring(ref.id);
+
       emitLifecycleEvent('terminated', ref as GenServerRef, reason);
     }
   },
@@ -1241,6 +1593,28 @@ export const GenServer = {
       return undefined;
     }
     return createRef(id);
+  },
+
+  /**
+   * Returns the number of active local monitors.
+   * Useful for testing.
+   *
+   * @internal
+   */
+  _getLocalMonitorCount(): number {
+    return localMonitors.size;
+  },
+
+  /**
+   * Clears all local monitors.
+   * Useful for testing cleanup.
+   *
+   * @internal
+   */
+  _clearLocalMonitors(): void {
+    localMonitors.clear();
+    localMonitorsByMonitored.clear();
+    localMonitorsByMonitoring.clear();
   },
 
   /**
