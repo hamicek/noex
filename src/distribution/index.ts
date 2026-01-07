@@ -184,3 +184,14 @@ export {
   type GlobalRegistryEvents,
   type GlobalRegistryStats,
 } from './registry/index.js';
+
+// =============================================================================
+// Process Monitoring
+// =============================================================================
+
+export {
+  MonitorRegistry,
+  type OutgoingMonitor,
+  type IncomingMonitor,
+  type MonitorRegistryStats,
+} from './monitor/index.js';
