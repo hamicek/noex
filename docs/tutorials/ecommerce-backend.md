@@ -973,7 +973,7 @@ import { startSupervisionTree, stopSupervisionTree } from './supervisor.js';
 import { router } from './api.js';
 
 async function main() {
-  const port = parseInt(process.env.PORT || '3000', 10);
+  const port = parseInt(process.env.PORT || '7201', 10);
 
   // Start supervision tree
   await startSupervisionTree();
@@ -1047,12 +1047,12 @@ npm start
 
 ```bash
 # Create a user
-curl -X POST http://localhost:3000/api/users \
+curl -X POST http://localhost:7201/api/users \
   -H "Content-Type: application/json" \
   -d '{"name": "Alice", "email": "alice@example.com"}'
 
 # Create an order (use the user ID from above)
-curl -X POST http://localhost:3000/api/orders \
+curl -X POST http://localhost:7201/api/orders \
   -H "Content-Type: application/json" \
   -d '{
     "userId": "user_xxx",
@@ -1063,15 +1063,15 @@ curl -X POST http://localhost:3000/api/orders \
   }'
 
 # Confirm the order
-curl -X PATCH http://localhost:3000/api/orders/order_xxx/status \
+curl -X PATCH http://localhost:7201/api/orders/order_xxx/status \
   -H "Content-Type: application/json" \
   -d '{"status": "confirmed"}'
 
 # Check notifications
-curl http://localhost:3000/api/users/user_xxx/notifications
+curl http://localhost:7201/api/users/user_xxx/notifications
 
 # View system stats
-curl http://localhost:3000/api/system/stats
+curl http://localhost:7201/api/system/stats
 ```
 
 ---

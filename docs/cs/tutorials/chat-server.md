@@ -354,7 +354,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 /**
  * Spuštění chat serveru
  */
-export async function startChatServer(port = 3000): Promise<SupervisorRef> {
+export async function startChatServer(port = 7201): Promise<SupervisorRef> {
   // 1. Vytvoření EventBus pro broadcasting zpráv
   const eventBus = await EventBus.start({ name: 'chat-events' });
   setEventBus(eventBus);
@@ -422,7 +422,7 @@ import { stopConnectionManager } from './connection-manager.js';
 import { Supervisor } from 'noex';
 
 async function main() {
-  const port = parseInt(process.env.PORT || '3000', 10);
+  const port = parseInt(process.env.PORT || '7201', 10);
 
   const supervisor = await startChatServer(port);
 
@@ -689,7 +689,7 @@ Spusťte server:
 npm start
 ```
 
-Otevřete `http://localhost:3000` ve více záložkách prohlížeče pro otestování chatu.
+Otevřete `http://localhost:7201` ve více záložkách prohlížeče pro otestování chatu.
 
 ---
 

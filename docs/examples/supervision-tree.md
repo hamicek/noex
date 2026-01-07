@@ -192,8 +192,8 @@ const httpBehavior: GenServerBehavior<
   unknown
 > = {
   init: () => {
-    console.log('HTTP Server started on port 3000');
-    return { requests: 0, port: 3000 };
+    console.log('HTTP Server started on port 7201');
+    return { requests: 0, port: 7201 };
   },
 
   handleCall: (msg, state) => {
@@ -227,7 +227,7 @@ const wsBehavior: GenServerBehavior<
   unknown
 > = {
   init: () => {
-    console.log('WebSocket Server started on port 3001');
+    console.log('WebSocket Server started on port 7202');
     return { connections: 0 };
   },
 
@@ -383,8 +383,8 @@ main().catch(console.error);
 ```
 Starting application...
 
-HTTP Server started on port 3000
-WebSocket Server started on port 3001
+HTTP Server started on port 7201
+WebSocket Server started on port 7202
 
 Application started successfully!
 Supervision tree:

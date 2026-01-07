@@ -326,7 +326,7 @@ let supervisor: SupervisorRef | null = null;
 /**
  * Spuštění API serveru
  */
-export async function startServer(port = 3000): Promise<void> {
+export async function startServer(port = 7201): Promise<void> {
   // Inicializace rate limiterů
   await initLimiters();
 
@@ -395,7 +395,7 @@ Vytvořte `src/index.ts`:
 ```typescript
 import { startServer } from './server.js';
 
-const port = parseInt(process.env.PORT || '3000', 10);
+const port = parseInt(process.env.PORT || '7201', 10);
 
 startServer(port).catch((err) => {
   console.error('Nepodařilo se spustit server:', err);
@@ -429,19 +429,19 @@ npm start
 
 ```bash
 # Vytvoření položky
-curl -X POST http://localhost:3000/api/items \
+curl -X POST http://localhost:7201/api/items \
   -H "Content-Type: application/json" \
   -d '{"name": "Widget", "price": 99.90}'
 
 # Seznam položek
-curl http://localhost:3000/api/items
+curl http://localhost:7201/api/items
 
 # Kontrola stavu rate limitu
-curl http://localhost:3000/api/rate-limit/status
+curl http://localhost:7201/api/rate-limit/status
 
 # Test rate limitingu (spusťte mnohokrát rychle za sebou)
 for i in {1..15}; do
-  curl -w "\n" http://localhost:3000/api/items
+  curl -w "\n" http://localhost:7201/api/items
 done
 ```
 

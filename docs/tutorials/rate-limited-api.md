@@ -326,7 +326,7 @@ let supervisor: SupervisorRef | null = null;
 /**
  * Start the API server
  */
-export async function startServer(port = 3000): Promise<void> {
+export async function startServer(port = 7201): Promise<void> {
   // Initialize rate limiters
   await initLimiters();
 
@@ -395,7 +395,7 @@ Create `src/index.ts`:
 ```typescript
 import { startServer } from './server.js';
 
-const port = parseInt(process.env.PORT || '3000', 10);
+const port = parseInt(process.env.PORT || '7201', 10);
 
 startServer(port).catch((err) => {
   console.error('Failed to start server:', err);
@@ -429,19 +429,19 @@ npm start
 
 ```bash
 # Create an item
-curl -X POST http://localhost:3000/api/items \
+curl -X POST http://localhost:7201/api/items \
   -H "Content-Type: application/json" \
   -d '{"name": "Widget", "price": 9.99}'
 
 # List items
-curl http://localhost:3000/api/items
+curl http://localhost:7201/api/items
 
 # Check rate limit status
-curl http://localhost:3000/api/rate-limit/status
+curl http://localhost:7201/api/rate-limit/status
 
 # Test rate limiting (run many times quickly)
 for i in {1..15}; do
-  curl -w "\n" http://localhost:3000/api/items
+  curl -w "\n" http://localhost:7201/api/items
 done
 ```
 

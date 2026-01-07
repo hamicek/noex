@@ -231,8 +231,8 @@ async function main() {
   server.get('/health', async () => ({ status: 'ok', connections: connections.size }));
 
   // Spusť server
-  await server.listen({ port: 3000 });
-  console.log('Server běží na http://localhost:3000');
+  await server.listen({ port: 7201 });
+  console.log('Server běží na http://localhost:7201');
 }
 
 main().catch(console.error);
