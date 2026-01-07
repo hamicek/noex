@@ -110,3 +110,15 @@ export {
   type TransportEvents,
   type TransportStats,
 } from './transport/index.js';
+
+// =============================================================================
+// Cluster Layer
+// =============================================================================
+
+export {
+  Cluster,
+  Membership,
+  type ClusterEvents,
+  type MembershipConfig,
+  type MembershipEvents,
+} from './cluster/index.js';

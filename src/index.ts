@@ -151,6 +151,9 @@ export {
   // Transport
   Connection,
   Transport,
+  // Cluster
+  Cluster,
+  Membership,
   // Error classes
   InvalidNodeIdError,
   RemoteServerNotRunningError,
@@ -203,4 +206,8 @@ export type {
   TransportConfig,
   TransportEvents,
   TransportStats,
+  // Cluster types
+  ClusterEvents,
+  MembershipConfig,
+  MembershipEvents,
 } from './distribution/index.js';
