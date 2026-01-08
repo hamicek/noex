@@ -70,7 +70,10 @@ export type NodeIPCMessage =
   | { type: 'get_connected_nodes' }
   | { type: 'crash'; mode: CrashMode }
   | { type: 'register_behavior'; behaviorName: string }
-  | { type: 'spawn_process'; behaviorName: string; globalName?: string };
+  | { type: 'spawn_process'; behaviorName: string; globalName?: string }
+  | { type: 'remote_call'; callId: string; targetNodeId: string; processId: string; msg: unknown; timeoutMs?: number }
+  | { type: 'remote_cast'; targetNodeId: string; processId: string; msg: unknown }
+  | { type: 'get_process_info'; processId: string };
 
 /**
  * Response types from child process.
@@ -86,7 +89,11 @@ export type NodeIPCResponse =
   | { type: 'node_up'; nodeId: string }
   | { type: 'node_down'; nodeId: string; reason: string }
   | { type: 'behavior_registered'; behaviorName: string }
-  | { type: 'process_spawned'; processId: string };
+  | { type: 'process_spawned'; processId: string }
+  | { type: 'remote_call_result'; callId: string; result: unknown; durationMs: number }
+  | { type: 'remote_call_error'; callId: string; errorType: string; message: string; durationMs: number }
+  | { type: 'remote_cast_sent' }
+  | { type: 'process_info'; info: { id: string; status: string; state?: unknown } | null };
 
 /**
  * Node start configuration for child process.
@@ -388,6 +395,124 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
   }
 
   /**
+   * Registers a behavior on a specific node for spawning processes.
+   *
+   * @param nodeId - Target node ID
+   * @param behaviorName - Name of the behavior to register
+   */
+  async registerBehavior(nodeId: string, behaviorName: string): Promise<void> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    await this.sendMessage(node, { type: 'register_behavior', behaviorName }, 10000);
+  }
+
+  /**
+   * Spawns a process on a specific node.
+   *
+   * @param nodeId - Target node ID
+   * @param behaviorName - Name of the registered behavior
+   * @param globalName - Optional global name for the process
+   * @returns Process ID of the spawned process
+   */
+  async spawnProcess(
+    nodeId: string,
+    behaviorName: string,
+    globalName?: string,
+  ): Promise<string> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    return await this.sendMessage(
+      node,
+      { type: 'spawn_process', behaviorName, globalName },
+      10000,
+    );
+  }
+
+  /** Counter for generating unique call IDs. */
+  private remoteCallIdCounter = 0;
+
+  /**
+   * Makes a remote call from one node to a process on another node.
+   *
+   * @param fromNodeId - Node to make the call from
+   * @param targetNodeId - Node where the target process is running
+   * @param processId - ID of the target process
+   * @param msg - Message to send
+   * @param timeoutMs - Call timeout in milliseconds
+   * @returns Call result with duration metrics
+   */
+  async remoteCall<T>(
+    fromNodeId: string,
+    targetNodeId: string,
+    processId: string,
+    msg: unknown,
+    timeoutMs: number = 5000,
+  ): Promise<{ result: T; durationMs: number } | { error: true; errorType: string; message: string; durationMs: number }> {
+    const node = this.nodes.get(fromNodeId);
+    if (!node) {
+      throw new Error(`Node ${fromNodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${fromNodeId} is not running`);
+    }
+
+    // Generate unique call ID for correlating response
+    const callId = `rc_${this.remoteCallIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'remote_call', callId, targetNodeId, processId, msg, timeoutMs },
+      callId,
+      timeoutMs + 5000, // Add buffer for IPC communication
+    );
+  }
+
+  /**
+   * Sends a remote cast from one node to a process on another node.
+   *
+   * @param fromNodeId - Node to send the cast from
+   * @param targetNodeId - Node where the target process is running
+   * @param processId - ID of the target process
+   * @param msg - Message to send
+   */
+  async remoteCast(
+    fromNodeId: string,
+    targetNodeId: string,
+    processId: string,
+    msg: unknown,
+  ): Promise<void> {
+    const node = this.nodes.get(fromNodeId);
+    if (!node) {
+      throw new Error(`Node ${fromNodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${fromNodeId} is not running`);
+    }
+
+    await this.sendMessage(
+      node,
+      { type: 'remote_cast', targetNodeId, processId, msg },
+      5000,
+    );
+  }
+
+  /**
    * Starts the cluster by spawning all node processes.
    * Called internally by TestClusterFactory.
    */
@@ -548,8 +673,17 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
         break;
 
       case 'error':
-        this.rejectPending(node, new Error(msg.message));
-        this.emit('error', new Error(msg.message), node.nodeId);
+        // Don't reject pending for expected errors during crash scenarios
+        const isExpectedError = msg.message.includes('ECONNRESET') ||
+                                msg.message.includes('EPIPE') ||
+                                msg.message.includes('socket hang up');
+        if (!isExpectedError) {
+          this.rejectPending(node, new Error(msg.message));
+        }
+        // Emit error but mark expected errors so tests can handle them appropriately
+        const error = new Error(msg.message) as Error & { expected?: boolean };
+        error.expected = isExpectedError;
+        this.emit('error', error, node.nodeId);
         break;
 
       case 'behavior_registered':
@@ -558,6 +692,27 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
 
       case 'process_spawned':
         this.resolvePending(node, 'spawn_process', msg.processId);
+        break;
+
+      case 'remote_call_result':
+        this.resolvePending(node, msg.callId, { result: msg.result, durationMs: msg.durationMs });
+        break;
+
+      case 'remote_call_error':
+        this.resolvePending(node, msg.callId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+          durationMs: msg.durationMs,
+        });
+        break;
+
+      case 'remote_cast_sent':
+        this.resolvePending(node, 'remote_cast');
+        break;
+
+      case 'process_info':
+        this.resolvePending(node, 'get_process_info', msg.info);
         break;
     }
   }
@@ -588,6 +743,37 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
 
       // Store message type for resolution
       node.pendingPromises.set(msg.type, node.pendingPromises.get(messageId)!);
+
+      node.process.send(msg);
+    });
+  }
+
+  /**
+   * Sends a message with a specific correlation ID for response tracking.
+   * Used for messages that may be sent concurrently (like remote_call).
+   */
+  private sendMessageWithId(
+    node: ManagedNode,
+    msg: NodeIPCMessage,
+    correlationId: string,
+    timeoutMs: number = 5000
+  ): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        node.pendingPromises.delete(correlationId);
+        reject(new Error(`Timeout waiting for ${msg.type} response`));
+      }, timeoutMs);
+
+      node.pendingPromises.set(correlationId, {
+        resolve: (value) => {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+      });
 
       node.process.send(msg);
     });

@@ -16,10 +16,13 @@ import type {
 
 // Dynamic import to handle ESM
 async function main(): Promise<void> {
-  const { Cluster, GenServer, BehaviorRegistry } = await import('../../../src/index.js');
+  const { Cluster, GenServer, BehaviorRegistry, RemoteCall } = await import('../../../src/index.js');
 
   // Registered behaviors for spawning
   const registeredBehaviors = new Map<string, () => any>();
+
+  // Spawned process references for remote calls
+  const spawnedProcesses = new Map<string, any>();
 
   /**
    * Sends a response to the parent process.
@@ -62,6 +65,18 @@ async function main(): Promise<void> {
 
         case 'spawn_process':
           await handleSpawnProcess(msg.behaviorName, msg.globalName);
+          break;
+
+        case 'remote_call':
+          await handleRemoteCall(msg.callId, msg.targetNodeId, msg.processId, msg.msg, msg.timeoutMs);
+          break;
+
+        case 'remote_cast':
+          handleRemoteCast(msg.targetNodeId, msg.processId, msg.msg);
+          break;
+
+        case 'get_process_info':
+          handleGetProcessInfo(msg.processId);
           break;
       }
     } catch (error) {
@@ -188,24 +203,56 @@ async function main(): Promise<void> {
 
   /**
    * Registers a behavior for remote spawning.
+   *
+   * Supports both:
+   * - Factory functions (e.g., createSlowBehavior) that return a behavior
+   * - Direct behavior objects (e.g., counterBehavior, echoBehavior)
    */
   function handleRegisterBehavior(behaviorName: string): void {
     // Import the behaviors module dynamically
     import('./behaviors.js').then((behaviors) => {
-      const behaviorFactory = (behaviors as Record<string, unknown>)[behaviorName];
+      const behaviorOrFactory = (behaviors as Record<string, unknown>)[behaviorName];
 
-      if (typeof behaviorFactory !== 'function') {
+      if (behaviorOrFactory === undefined) {
         sendResponse({
           type: 'error',
-          message: `Behavior '${behaviorName}' not found`,
+          message: `Behavior '${behaviorName}' not found in behaviors module`,
         });
         return;
       }
 
+      let behavior: any;
+      let behaviorFactory: () => any;
+
+      // Determine if it's a factory function or a behavior object
+      if (typeof behaviorOrFactory === 'function') {
+        // It's a factory function - call it to get the behavior
+        behavior = (behaviorOrFactory as () => any)();
+        behaviorFactory = behaviorOrFactory as () => any;
+      } else if (
+        typeof behaviorOrFactory === 'object' &&
+        behaviorOrFactory !== null &&
+        'init' in behaviorOrFactory
+      ) {
+        // It's a behavior object - use it directly
+        behavior = behaviorOrFactory;
+        behaviorFactory = () => behaviorOrFactory;
+      } else {
+        sendResponse({
+          type: 'error',
+          message: `'${behaviorName}' is neither a factory function nor a valid behavior object`,
+        });
+        return;
+      }
+
+      // Store the factory for spawning
       registeredBehaviors.set(behaviorName, behaviorFactory);
 
-      // Also register with BehaviorRegistry for remote spawning
-      BehaviorRegistry.register(behaviorName, behaviorFactory);
+      // Register with BehaviorRegistry (expects behavior object, not factory)
+      // Only register if not already registered to avoid errors
+      if (!BehaviorRegistry.has(behaviorName)) {
+        BehaviorRegistry.register(behaviorName, behavior);
+      }
 
       sendResponse({ type: 'behavior_registered', behaviorName });
     }).catch((error) => {
@@ -236,7 +283,85 @@ async function main(): Promise<void> {
     const behavior = behaviorFactory();
     const ref = await GenServer.start(behavior, globalName ? { name: globalName } : undefined);
 
+    // Store reference for remote calls
+    spawnedProcesses.set(ref.id, ref);
+
     sendResponse({ type: 'process_spawned', processId: ref.id });
+  }
+
+  /**
+   * Makes a remote call to a process on another node.
+   */
+  async function handleRemoteCall(
+    callId: string,
+    targetNodeId: string,
+    processId: string,
+    msg: unknown,
+    timeoutMs?: number,
+  ): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      // Create a serialized ref for the remote process
+      const serializedRef = {
+        id: processId,
+        nodeId: targetNodeId,
+      };
+
+      const result = await RemoteCall.call(
+        serializedRef,
+        msg,
+        { timeout: timeoutMs ?? 5000 },
+      );
+
+      const durationMs = Date.now() - startTime;
+      sendResponse({ type: 'remote_call_result', callId, result, durationMs });
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({ type: 'remote_call_error', callId, errorType, message, durationMs });
+    }
+  }
+
+  /**
+   * Sends a remote cast to a process on another node.
+   */
+  function handleRemoteCast(
+    targetNodeId: string,
+    processId: string,
+    msg: unknown,
+  ): void {
+    // Create a serialized ref for the remote process
+    const serializedRef = {
+      id: processId,
+      nodeId: targetNodeId,
+    };
+
+    RemoteCall.cast(serializedRef, msg);
+    sendResponse({ type: 'remote_cast_sent' });
+  }
+
+  /**
+   * Returns information about a local spawned process.
+   */
+  function handleGetProcessInfo(processId: string): void {
+    const ref = spawnedProcesses.get(processId);
+
+    if (!ref) {
+      sendResponse({ type: 'process_info', info: null });
+      return;
+    }
+
+    const status = GenServer.getStatus(ref);
+
+    sendResponse({
+      type: 'process_info',
+      info: {
+        id: ref.id,
+        status,
+      },
+    });
   }
 
   // Signal ready state
@@ -247,15 +372,30 @@ async function main(): Promise<void> {
 
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {
+    // Don't exit for expected network errors during node crashes
+    const isExpectedError = error.message.includes('ECONNRESET') ||
+                            error.message.includes('EPIPE') ||
+                            error.message.includes('socket hang up') ||
+                            error.message.includes('connection refused');
     sendResponse({ type: 'error', message: `Uncaught: ${error.message}` });
-    process.exit(1);
+    if (!isExpectedError) {
+      process.exit(1);
+    }
   });
 
   process.on('unhandledRejection', (reason) => {
-    sendResponse({
-      type: 'error',
-      message: `Unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`,
-    });
+    const message = reason instanceof Error ? reason.message : String(reason);
+    // Don't report expected network errors
+    const isExpectedError = message.includes('ECONNRESET') ||
+                            message.includes('EPIPE') ||
+                            message.includes('socket hang up') ||
+                            message.includes('connection refused');
+    if (!isExpectedError) {
+      sendResponse({
+        type: 'error',
+        message: `Unhandled rejection: ${message}`,
+      });
+    }
   });
 }
 
