@@ -1444,17 +1444,17 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
         break;
 
       case 'error':
-        // Don't reject pending for expected errors during crash scenarios
+        // Don't reject pending or emit for expected errors during crash scenarios
         const isExpectedError = msg.message.includes('ECONNRESET') ||
                                 msg.message.includes('EPIPE') ||
-                                msg.message.includes('socket hang up');
-        if (!isExpectedError) {
-          this.rejectPending(node, new Error(msg.message));
+                                msg.message.includes('socket hang up') ||
+                                msg.message.includes('This socket has been ended by the other party');
+        if (isExpectedError) {
+          // Silently ignore expected network errors during crash/chaos tests
+          break;
         }
-        // Emit error but mark expected errors so tests can handle them appropriately
-        const error = new Error(msg.message) as Error & { expected?: boolean };
-        error.expected = isExpectedError;
-        this.emit('error', error, node.nodeId);
+        this.rejectPending(node, new Error(msg.message));
+        this.emit('error', new Error(msg.message), node.nodeId);
         break;
 
       case 'behavior_registered':
