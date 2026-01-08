@@ -16,13 +16,16 @@ import type {
 
 // Dynamic import to handle ESM
 async function main(): Promise<void> {
-  const { Cluster, GenServer, BehaviorRegistry, RemoteCall, RemoteSpawn } = await import('../../../src/index.js');
+  const { Cluster, GenServer, BehaviorRegistry, RemoteCall, RemoteSpawn, RemoteMonitor } = await import('../../../src/index.js');
 
   // Registered behaviors for spawning
   const registeredBehaviors = new Map<string, () => any>();
 
   // Spawned process references for remote calls
   const spawnedProcesses = new Map<string, any>();
+
+  // Active monitor references (monitorRefId -> MonitorRef)
+  const activeMonitors = new Map<string, any>();
 
   /**
    * Sends a response to the parent process.
@@ -82,6 +85,18 @@ async function main(): Promise<void> {
         case 'remote_spawn':
           await handleRemoteSpawn(msg.spawnId, msg.behaviorName, msg.targetNodeId, msg.options, msg.timeoutMs);
           break;
+
+        case 'remote_monitor':
+          await handleRemoteMonitor(msg.monitorId, msg.monitoringProcessId, msg.targetNodeId, msg.targetProcessId, msg.timeoutMs);
+          break;
+
+        case 'remote_demonitor':
+          await handleRemoteDemonitor(msg.monitorId, msg.monitorRefId);
+          break;
+
+        case 'get_monitor_stats':
+          handleGetMonitorStats();
+          break;
       }
     } catch (error) {
       sendResponse({
@@ -102,6 +117,31 @@ async function main(): Promise<void> {
 
     Cluster.onNodeDown((nodeId, reason) => {
       sendResponse({ type: 'node_down', nodeId, reason });
+    });
+
+    // Listen for process_down lifecycle events and forward to parent
+    GenServer.onLifecycleEvent((event) => {
+      if (event.type === 'process_down') {
+        // Find the monitorId from activeMonitors
+        let monitorRefId = '';
+        for (const [id, ref] of activeMonitors.entries()) {
+          if (ref.monitoredRef?.id === event.monitoredRef.id) {
+            monitorRefId = id;
+            activeMonitors.delete(id);
+            break;
+          }
+        }
+
+        sendResponse({
+          type: 'process_down',
+          monitorRefId: monitorRefId || event.monitorId || '',
+          monitoredProcessId: event.monitoredRef.id,
+          reason: {
+            type: event.reason.type,
+            message: 'message' in event.reason ? (event.reason as { message: string }).message : undefined,
+          },
+        });
+      }
     });
 
     await Cluster.start({
@@ -399,6 +439,117 @@ async function main(): Promise<void> {
       info: {
         id: ref.id,
         status,
+      },
+    });
+  }
+
+  /**
+   * Sets up a remote monitor on a process running on another node.
+   */
+  async function handleRemoteMonitor(
+    monitorId: string,
+    monitoringProcessId: string,
+    targetNodeId: string,
+    targetProcessId: string,
+    timeoutMs?: number,
+  ): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      // Get the local process ref that will receive notifications
+      const monitoringRef = spawnedProcesses.get(monitoringProcessId);
+      if (!monitoringRef) {
+        const durationMs = Date.now() - startTime;
+        sendResponse({
+          type: 'remote_monitor_error',
+          monitorId,
+          errorType: 'ProcessNotFound',
+          message: `Monitoring process '${monitoringProcessId}' not found`,
+          durationMs,
+        });
+        return;
+      }
+
+      // Create a ref for the remote process
+      const monitoredRef = {
+        id: targetProcessId,
+        nodeId: targetNodeId,
+      };
+
+      // Set up the monitor
+      const monitorRef = await RemoteMonitor.monitor(
+        monitoringRef,
+        monitoredRef,
+        { timeout: timeoutMs ?? 10000 },
+      );
+
+      // Store the monitor ref for potential demonitor
+      activeMonitors.set(monitorRef.monitorId, monitorRef);
+
+      const durationMs = Date.now() - startTime;
+      sendResponse({
+        type: 'remote_monitor_result',
+        monitorId,
+        monitorRefId: monitorRef.monitorId,
+        durationMs,
+      });
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'remote_monitor_error',
+        monitorId,
+        errorType,
+        message,
+        durationMs,
+      });
+    }
+  }
+
+  /**
+   * Removes a remote monitor.
+   */
+  async function handleRemoteDemonitor(
+    monitorId: string,
+    monitorRefId: string,
+  ): Promise<void> {
+    try {
+      const monitorRef = activeMonitors.get(monitorRefId);
+      if (monitorRef) {
+        await RemoteMonitor.demonitor(monitorRef);
+        activeMonitors.delete(monitorRefId);
+      }
+
+      sendResponse({
+        type: 'remote_demonitor_result',
+        monitorId,
+      });
+    } catch (error) {
+      // Still report success - demonitor should be idempotent
+      sendResponse({
+        type: 'remote_demonitor_result',
+        monitorId,
+      });
+    }
+  }
+
+  /**
+   * Returns remote monitor statistics.
+   */
+  function handleGetMonitorStats(): void {
+    const stats = RemoteMonitor.getStats();
+    sendResponse({
+      type: 'monitor_stats',
+      stats: {
+        initialized: stats.initialized,
+        pendingCount: stats.pendingCount,
+        activeOutgoingCount: stats.activeOutgoingCount,
+        totalInitiated: stats.totalInitiated,
+        totalEstablished: stats.totalEstablished,
+        totalTimedOut: stats.totalTimedOut,
+        totalDemonitored: stats.totalDemonitored,
+        totalProcessDownReceived: stats.totalProcessDownReceived,
       },
     });
   }

@@ -74,7 +74,10 @@ export type NodeIPCMessage =
   | { type: 'remote_call'; callId: string; targetNodeId: string; processId: string; msg: unknown; timeoutMs?: number }
   | { type: 'remote_cast'; targetNodeId: string; processId: string; msg: unknown }
   | { type: 'get_process_info'; processId: string }
-  | { type: 'remote_spawn'; spawnId: string; behaviorName: string; targetNodeId: string; options?: RemoteSpawnIPCOptions; timeoutMs?: number };
+  | { type: 'remote_spawn'; spawnId: string; behaviorName: string; targetNodeId: string; options?: RemoteSpawnIPCOptions; timeoutMs?: number }
+  | { type: 'remote_monitor'; monitorId: string; monitoringProcessId: string; targetNodeId: string; targetProcessId: string; timeoutMs?: number }
+  | { type: 'remote_demonitor'; monitorId: string; monitorRefId: string }
+  | { type: 'get_monitor_stats' };
 
 /**
  * Response types from child process.
@@ -96,7 +99,12 @@ export type NodeIPCResponse =
   | { type: 'remote_cast_sent' }
   | { type: 'process_info'; info: { id: string; status: string; state?: unknown } | null }
   | { type: 'remote_spawn_result'; spawnId: string; serverId: string; nodeId: string; durationMs: number }
-  | { type: 'remote_spawn_error'; spawnId: string; errorType: string; message: string; durationMs: number };
+  | { type: 'remote_spawn_error'; spawnId: string; errorType: string; message: string; durationMs: number }
+  | { type: 'remote_monitor_result'; monitorId: string; monitorRefId: string; durationMs: number }
+  | { type: 'remote_monitor_error'; monitorId: string; errorType: string; message: string; durationMs: number }
+  | { type: 'remote_demonitor_result'; monitorId: string }
+  | { type: 'process_down'; monitorRefId: string; monitoredProcessId: string; reason: { type: string; message?: string } }
+  | { type: 'monitor_stats'; stats: { initialized: boolean; pendingCount: number; activeOutgoingCount: number; totalInitiated: number; totalEstablished: number; totalTimedOut: number; totalDemonitored: number; totalProcessDownReceived: number } };
 
 /**
  * Node start configuration for child process.
@@ -141,6 +149,8 @@ export interface TestClusterEvents {
   fullMesh: [];
   /** Emitted on cluster error. */
   error: [error: Error, nodeId?: string];
+  /** Emitted when a monitored process goes down. */
+  processDown: [monitorRefId: string, monitoredProcessId: string, reason: { type: string; message?: string }, fromNodeId: string];
 }
 
 /**
@@ -564,6 +574,103 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
     );
   }
 
+  /** Counter for generating unique monitor IDs. */
+  private remoteMonitorIdCounter = 0;
+
+  /**
+   * Sets up a remote monitor from one node to a process on another node.
+   *
+   * @param fromNodeId - Node to set up the monitor from
+   * @param monitoringProcessId - Local process ID that will receive notifications
+   * @param targetNodeId - Node where the target process is running
+   * @param targetProcessId - ID of the process to monitor
+   * @param timeoutMs - Monitor setup timeout in milliseconds
+   * @returns Monitor result with monitorRefId, or error
+   */
+  async remoteMonitor(
+    fromNodeId: string,
+    monitoringProcessId: string,
+    targetNodeId: string,
+    targetProcessId: string,
+    timeoutMs: number = 10000,
+  ): Promise<{ monitorRefId: string; durationMs: number } | { error: true; errorType: string; message: string; durationMs: number }> {
+    const node = this.nodes.get(fromNodeId);
+    if (!node) {
+      throw new Error(`Node ${fromNodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${fromNodeId} is not running`);
+    }
+
+    const monitorId = `rm_${this.remoteMonitorIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'remote_monitor', monitorId, monitoringProcessId, targetNodeId, targetProcessId, timeoutMs },
+      monitorId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Removes a remote monitor.
+   *
+   * @param fromNodeId - Node that has the monitor set up
+   * @param monitorRefId - ID of the monitor reference to remove
+   */
+  async remoteDemonitor(
+    fromNodeId: string,
+    monitorRefId: string,
+  ): Promise<void> {
+    const node = this.nodes.get(fromNodeId);
+    if (!node) {
+      throw new Error(`Node ${fromNodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${fromNodeId} is not running`);
+    }
+
+    const monitorId = `dm_${this.remoteMonitorIdCounter++}_${Date.now()}`;
+
+    await this.sendMessageWithId(
+      node,
+      { type: 'remote_demonitor', monitorId, monitorRefId },
+      monitorId,
+      5000,
+    );
+  }
+
+  /**
+   * Gets remote monitor statistics from a node.
+   *
+   * @param nodeId - Node to get stats from
+   */
+  async getMonitorStats(
+    nodeId: string,
+  ): Promise<{
+    initialized: boolean;
+    pendingCount: number;
+    activeOutgoingCount: number;
+    totalInitiated: number;
+    totalEstablished: number;
+    totalTimedOut: number;
+    totalDemonitored: number;
+    totalProcessDownReceived: number;
+  }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    return await this.sendMessage(node, { type: 'get_monitor_stats' }, 5000);
+  }
+
   /**
    * Starts the cluster by spawning all node processes.
    * Called internally by TestClusterFactory.
@@ -778,6 +885,34 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
           message: msg.message,
           durationMs: msg.durationMs,
         });
+        break;
+
+      case 'remote_monitor_result':
+        this.resolvePending(node, msg.monitorId, {
+          monitorRefId: msg.monitorRefId,
+          durationMs: msg.durationMs,
+        });
+        break;
+
+      case 'remote_monitor_error':
+        this.resolvePending(node, msg.monitorId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+          durationMs: msg.durationMs,
+        });
+        break;
+
+      case 'remote_demonitor_result':
+        this.resolvePending(node, msg.monitorId);
+        break;
+
+      case 'process_down':
+        this.emit('processDown' as keyof TestClusterEvents, msg.monitorRefId, msg.monitoredProcessId, msg.reason, node.nodeId);
+        break;
+
+      case 'monitor_stats':
+        this.resolvePending(node, 'get_monitor_stats', msg.stats);
         break;
     }
   }

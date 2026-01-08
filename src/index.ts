@@ -174,6 +174,10 @@ export {
   RemoteSpawn,
   SpawnHandler,
   _resetRemoteSpawnState,
+  // Remote Monitor
+  RemoteMonitor,
+  _resetRemoteMonitorState,
+  RemoteMonitorTimeoutError,
   // Error classes
   InvalidNodeIdError,
   RemoteServerNotRunningError,
@@ -251,4 +255,7 @@ export type {
   SpawnResult,
   RemoteSpawnOptions,
   RemoteSpawnStats,
+  // Remote monitor types
+  RemoteMonitorOptions,
+  RemoteMonitorStats,
 } from './distribution/index.js';
