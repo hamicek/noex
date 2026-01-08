@@ -1,0 +1,18 @@
+{
+  "name": "noex-distributed-worker-pool-example",
+  "version": "1.0.0",
+  "description": "Distributed worker pool example demonstrating DistributedSupervisor with automatic failover",
+  "type": "module",
+  "scripts": {
+    "supervisor": "tsx supervisor-node.ts --name supervisor --port 4369",
+    "worker1": "tsx worker-node.ts --name worker1 --port 4370 --seed supervisor@127.0.0.1:4369",
+    "worker2": "tsx worker-node.ts --name worker2 --port 4371 --seed supervisor@127.0.0.1:4369"
+  },
+  "dependencies": {
+    "noex": "file:../.."
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "@types/node": "^22.0.0"
+  }
+}
