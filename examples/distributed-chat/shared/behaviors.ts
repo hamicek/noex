@@ -7,7 +7,8 @@
  */
 
 import type { GenServerBehavior, CallResult } from 'noex';
-import { RemoteCall } from 'noex/distribution';
+import { GenServer } from 'noex';
+import { Cluster, RemoteCall, type SerializedRef } from 'noex/distribution';
 import type {
   ChatRoomState,
   ChatRoomCallMsg,
@@ -21,6 +22,26 @@ import type {
   ChatMessage,
 } from './types.js';
 import { MAX_MESSAGE_HISTORY } from './types.js';
+
+// =============================================================================
+// Smart Cast Helper
+// =============================================================================
+
+/**
+ * Casts to a process - uses local GenServer.cast for local refs,
+ * RemoteCall.cast for remote refs.
+ */
+function smartCast(ref: SerializedRef, msg: unknown): void {
+  const localNodeId = Cluster.getLocalNodeId();
+  if (ref.nodeId === localNodeId) {
+    const localRef = GenServer._getRefById(ref.id);
+    if (localRef) {
+      GenServer.cast(localRef, msg);
+    }
+  } else {
+    RemoteCall.cast(ref, msg);
+  }
+}
 
 // =============================================================================
 // Chat Room Behavior
@@ -108,7 +129,7 @@ export function createChatRoomBehavior(
           for (const user of state.users.values()) {
             // Don't send back to sender
             if (user.username !== msg.from) {
-              RemoteCall.cast(user.ref, {
+              smartCast(user.ref, {
                 type: 'message',
                 room: state.name,
                 from: msg.from,
@@ -131,7 +152,7 @@ export function createChatRoomBehavior(
 
           // Notify remaining users
           for (const user of newUsers.values()) {
-            RemoteCall.cast(user.ref, {
+            smartCast(user.ref, {
               type: 'message',
               room: state.name,
               from: 'System',
