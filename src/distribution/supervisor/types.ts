@@ -10,7 +10,7 @@
 
 import type { NodeId } from '../node-id.js';
 import type { NodeInfo } from '../types.js';
-import type { GenServerRef, ChildRestartStrategy, RestartIntensity, SupervisorStrategy } from '../../core/types.js';
+import type { GenServerRef, ChildRestartStrategy, RestartIntensity, SupervisorStrategy, MonitorRef } from '../../core/types.js';
 
 // =============================================================================
 // Node Selection
@@ -391,8 +391,8 @@ export interface DistributedRunningChild {
   /** Exit reason from the last termination */
   lastExitReason?: 'normal' | 'shutdown' | { readonly error: Error };
 
-  /** Monitor reference for remote children */
-  monitorRef?: { readonly monitorId: string };
+  /** Monitor reference for remote children (for process_down notifications) */
+  monitorRef?: MonitorRef;
 
   /** Unsubscribe function for lifecycle listener */
   lifecycleUnsubscribe?: () => void;

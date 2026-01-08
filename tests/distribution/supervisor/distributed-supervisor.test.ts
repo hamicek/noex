@@ -27,6 +27,8 @@ let mockGenServerStart = vi.fn();
 let mockGenServerStop = vi.fn();
 let mockGenServerOnLifecycleEvent = vi.fn().mockReturnValue(() => {});
 let mockGenServerForceTerminate = vi.fn();
+let mockRemoteMonitorMonitor = vi.fn();
+let mockRemoteMonitorDemonitor = vi.fn();
 let mockBehaviorRegistryHas = vi.fn().mockReturnValue(true);
 let mockBehaviorRegistryGet = vi.fn();
 let mockRemoteSpawnSpawn = vi.fn();
@@ -78,6 +80,24 @@ vi.mock('../../../src/distribution/remote/remote-spawn.js', () => ({
   },
 }));
 
+let monitorIdCounter = 0;
+vi.mock('../../../src/distribution/monitor/remote-monitor.js', () => ({
+  RemoteMonitor: {
+    monitor: (monitoringRef: unknown, monitoredRef: { id: string; nodeId: NodeId }, options?: unknown) => {
+      mockRemoteMonitorMonitor(monitoringRef, monitoredRef, options);
+      const monitorId = `monitor_${++monitorIdCounter}`;
+      return Promise.resolve({
+        monitorId,
+        monitoredRef: { id: monitoredRef.id, nodeId: monitoredRef.nodeId },
+      });
+    },
+    demonitor: (monitorRef: unknown) => {
+      mockRemoteMonitorDemonitor(monitorRef);
+      return Promise.resolve();
+    },
+  },
+}));
+
 // Track registered names for GlobalRegistry mock
 const registeredNames = new Map<string, unknown>();
 
@@ -111,6 +131,7 @@ describe('DistributedSupervisor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     serverIdCounter = 0;
+    monitorIdCounter = 0;
     registeredNames.clear();
     DistributedSupervisor._resetIdCounter();
     DistributedSupervisor._clearLifecycleHandlers();
@@ -124,6 +145,8 @@ describe('DistributedSupervisor', () => {
     mockGenServerStop = vi.fn();
     mockGenServerOnLifecycleEvent = vi.fn().mockReturnValue(() => {});
     mockGenServerForceTerminate = vi.fn();
+    mockRemoteMonitorMonitor = vi.fn();
+    mockRemoteMonitorDemonitor = vi.fn();
     mockBehaviorRegistryHas = vi.fn().mockReturnValue(true);
     mockBehaviorRegistryGet = vi.fn().mockReturnValue({
       init: () => 0,
@@ -262,12 +285,24 @@ describe('DistributedSupervisor', () => {
         ],
       });
 
+      // Get child refs to check order later
+      const children = DistributedSupervisor.getChildren(ref);
+      const worker1Ref = children.find(c => c.id === 'worker-1')?.ref.id;
+      const worker2Ref = children.find(c => c.id === 'worker-2')?.ref.id;
+      const worker3Ref = children.find(c => c.id === 'worker-3')?.ref.id;
+
       await DistributedSupervisor.stop(ref);
 
       // Children should be stopped in reverse order (last started first)
-      expect(stopOrder[0]).toContain('3');
-      expect(stopOrder[1]).toContain('2');
-      expect(stopOrder[2]).toContain('1');
+      // Note: sentinel GenServer is also stopped, but after children
+      const childStopOrder = stopOrder.filter(id =>
+        id === worker1Ref || id === worker2Ref || id === worker3Ref
+      );
+
+      expect(childStopOrder).toHaveLength(3);
+      expect(childStopOrder[0]).toBe(worker3Ref);
+      expect(childStopOrder[1]).toBe(worker2Ref);
+      expect(childStopOrder[2]).toBe(worker1Ref);
     });
 
     it('emits supervisor_stopped event', async () => {
@@ -1340,6 +1375,309 @@ describe('DistributedSupervisor', () => {
       expect(DistributedSupervisor.isRunning(ref)).toBe(false);
 
       unsubscribe();
+    });
+  });
+
+  describe('remote process monitoring', () => {
+    let capturedNodeDownHandler: ((nodeId: NodeId, reason: string) => void) | null = null;
+    let capturedLifecycleHandlers: ((event: unknown) => void)[] = [];
+
+    beforeEach(() => {
+      capturedNodeDownHandler = null;
+      capturedLifecycleHandlers = [];
+
+      mockOnNodeDown.mockImplementation((handler: (nodeId: NodeId, reason: string) => void) => {
+        capturedNodeDownHandler = handler;
+        return () => {
+          capturedNodeDownHandler = null;
+        };
+      });
+
+      // Capture lifecycle event handlers
+      mockGenServerOnLifecycleEvent.mockImplementation((handler: (event: unknown) => void) => {
+        capturedLifecycleHandlers.push(handler);
+        return () => {
+          const index = capturedLifecycleHandlers.indexOf(handler);
+          if (index !== -1) {
+            capturedLifecycleHandlers.splice(index, 1);
+          }
+        };
+      });
+
+      // Setup remote node as connected
+      mockGetConnectedNodes.mockReturnValue([
+        {
+          id: mockRemoteNodeId,
+          host: 'localhost',
+          port: 4370,
+          status: 'connected',
+          processCount: 0,
+          lastHeartbeatAt: Date.now(),
+          uptimeMs: 1000,
+        },
+      ]);
+
+      // Setup remote spawn mock
+      mockRemoteSpawnSpawn.mockImplementation((_behavior: string, nodeId: NodeId) => {
+        const id = `remote_genserver_${++serverIdCounter}_test`;
+        return Promise.resolve({
+          serverId: id,
+          nodeId,
+        });
+      });
+    });
+
+    it('sets up RemoteMonitor for remote children', async () => {
+      // Use custom selector that returns remote node
+      const customSelector = () => mockRemoteNodeId;
+
+      await DistributedSupervisor.start({
+        nodeSelector: customSelector,
+        children: [{ id: 'remote-worker', behavior: 'worker' }],
+      });
+
+      // Wait for async monitor setup
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // RemoteMonitor.monitor should have been called for the remote child
+      expect(mockRemoteMonitorMonitor).toHaveBeenCalled();
+    });
+
+    it('does not set up RemoteMonitor for local children', async () => {
+      // Use local_first selector (default)
+      await DistributedSupervisor.start({
+        nodeSelector: 'local_first',
+        children: [{ id: 'local-worker', behavior: 'worker' }],
+      });
+
+      // Wait for any async operations
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // RemoteMonitor.monitor should NOT have been called for local children
+      expect(mockRemoteMonitorMonitor).not.toHaveBeenCalled();
+    });
+
+    it('restarts remote child when process_down event is received', async () => {
+      const events: DistributedSupervisorEvent[] = [];
+      const unsubscribe = DistributedSupervisor.onLifecycleEvent((event) => {
+        events.push(event);
+      });
+
+      // Use custom selector that returns remote first, then local on restart
+      let callCount = 0;
+      const customSelector = () => {
+        callCount++;
+        if (callCount === 1) return mockRemoteNodeId;
+        return mockLocalNodeId;
+      };
+
+      const ref = await DistributedSupervisor.start({
+        nodeSelector: customSelector,
+        children: [{ id: 'remote-worker', behavior: 'worker' }],
+      });
+
+      // Wait for monitor setup
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const childBefore = DistributedSupervisor.getChild(ref, 'remote-worker');
+      expect(childBefore?.nodeId).toBe(mockRemoteNodeId);
+      expect(childBefore?.restartCount).toBe(0);
+
+      // Simulate process_down event by calling the captured lifecycle handlers
+      // Find the handler that was registered for the distributed supervisor
+      const processDownEvent = {
+        type: 'process_down',
+        ref: { id: 'sentinel' }, // Matches the sentinel ref pattern
+        monitoredRef: { id: childBefore?.ref.id, nodeId: mockRemoteNodeId },
+        reason: { type: 'error', message: 'Remote process crashed' },
+        monitorId: 'monitor_1', // First monitor created
+      };
+
+      // Emit the process_down event to all captured handlers
+      for (const handler of capturedLifecycleHandlers) {
+        handler(processDownEvent);
+      }
+
+      // Wait for restart handling
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const childAfter = DistributedSupervisor.getChild(ref, 'remote-worker');
+      expect(childAfter?.restartCount).toBe(1);
+
+      // Check for child_restarted event
+      const restartEvent = events.find((e) => e.type === 'child_restarted');
+      expect(restartEvent).toBeDefined();
+
+      unsubscribe();
+    });
+
+    it('cleans up RemoteMonitor on supervisor shutdown', async () => {
+      // Use custom selector that returns remote node
+      const customSelector = () => mockRemoteNodeId;
+
+      const ref = await DistributedSupervisor.start({
+        nodeSelector: customSelector,
+        children: [{ id: 'remote-worker', behavior: 'worker' }],
+      });
+
+      // Wait for monitor setup
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(mockRemoteMonitorMonitor).toHaveBeenCalled();
+
+      // Stop supervisor
+      await DistributedSupervisor.stop(ref);
+
+      // RemoteMonitor.demonitor should have been called during cleanup
+      expect(mockRemoteMonitorDemonitor).toHaveBeenCalled();
+    });
+
+    it('cleans up RemoteMonitor when child is terminated', async () => {
+      // Use custom selector that returns remote node
+      const customSelector = () => mockRemoteNodeId;
+
+      const ref = await DistributedSupervisor.start({
+        nodeSelector: customSelector,
+        children: [{ id: 'remote-worker', behavior: 'worker' }],
+      });
+
+      // Wait for monitor setup
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(mockRemoteMonitorMonitor).toHaveBeenCalled();
+
+      // Terminate child
+      await DistributedSupervisor.terminateChild(ref, 'remote-worker');
+
+      // RemoteMonitor.demonitor should have been called
+      expect(mockRemoteMonitorDemonitor).toHaveBeenCalled();
+    });
+
+    it('handles monitor setup failure gracefully', async () => {
+      // Make RemoteMonitor.monitor fail
+      mockRemoteMonitorMonitor.mockImplementation(() => {
+        throw new Error('Monitor setup failed');
+      });
+
+      // Use custom selector that returns remote node
+      const customSelector = () => mockRemoteNodeId;
+
+      // Should not throw even if monitor setup fails
+      const ref = await DistributedSupervisor.start({
+        nodeSelector: customSelector,
+        children: [{ id: 'remote-worker', behavior: 'worker' }],
+      });
+
+      expect(DistributedSupervisor.isRunning(ref)).toBe(true);
+      expect(DistributedSupervisor.countChildren(ref)).toBe(1);
+
+      // Child should still exist (monitored via node_down handler instead)
+      const child = DistributedSupervisor.getChild(ref, 'remote-worker');
+      expect(child).toBeDefined();
+    });
+
+    it('does not restart child for normal exit reason', async () => {
+      const events: DistributedSupervisorEvent[] = [];
+      const unsubscribe = DistributedSupervisor.onLifecycleEvent((event) => {
+        events.push(event);
+      });
+
+      // Use custom selector that returns remote node
+      const customSelector = () => mockRemoteNodeId;
+
+      const ref = await DistributedSupervisor.start({
+        nodeSelector: customSelector,
+        children: [{
+          id: 'remote-worker',
+          behavior: 'worker',
+          restart: 'transient', // Only restart on abnormal exit
+        }],
+      });
+
+      // Wait for monitor setup
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Simulate normal exit process_down event
+      const processDownEvent = {
+        type: 'process_down',
+        ref: { id: 'sentinel' },
+        monitoredRef: { id: 'some-id', nodeId: mockRemoteNodeId },
+        reason: { type: 'normal' },
+        monitorId: 'monitor_1',
+      };
+
+      for (const handler of capturedLifecycleHandlers) {
+        handler(processDownEvent);
+      }
+
+      // Wait for handling
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Child should be removed (transient strategy + normal exit = no restart)
+      expect(DistributedSupervisor.countChildren(ref)).toBe(0);
+
+      // Should have child_stopped event, not child_restarted
+      const stoppedEvent = events.find((e) => e.type === 'child_stopped');
+      expect(stoppedEvent).toBeDefined();
+
+      const restartEvent = events.find((e) => e.type === 'child_restarted');
+      expect(restartEvent).toBeUndefined();
+
+      unsubscribe();
+    });
+
+    it('sets up new monitor after child restart', async () => {
+      // Use custom selector that returns remote first
+      let callCount = 0;
+      const customSelector = () => {
+        callCount++;
+        return mockRemoteNodeId;
+      };
+
+      const ref = await DistributedSupervisor.start({
+        nodeSelector: customSelector,
+        children: [{ id: 'remote-worker', behavior: 'worker' }],
+      });
+
+      // Wait for initial monitor setup
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const initialMonitorCalls = mockRemoteMonitorMonitor.mock.calls.length;
+      expect(initialMonitorCalls).toBeGreaterThanOrEqual(1);
+
+      // Manually restart the child
+      await DistributedSupervisor.restartChild(ref, 'remote-worker');
+
+      // Wait for new monitor setup
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Should have another monitor call after restart
+      expect(mockRemoteMonitorMonitor.mock.calls.length).toBeGreaterThan(initialMonitorCalls);
+    });
+
+    it('creates monitor sentinel GenServer on supervisor start', async () => {
+      // Start a supervisor - it should create a sentinel GenServer
+      const callsBefore = mockGenServerStart.mock.calls.length;
+
+      await DistributedSupervisor.start({
+        children: [],
+      });
+
+      // GenServer.start should have been called for the sentinel
+      expect(mockGenServerStart.mock.calls.length).toBe(callsBefore + 1);
+    });
+
+    it('stops monitor sentinel GenServer on supervisor shutdown', async () => {
+      const ref = await DistributedSupervisor.start({
+        children: [],
+      });
+
+      const callsBefore = mockGenServerStop.mock.calls.length;
+
+      await DistributedSupervisor.stop(ref);
+
+      // GenServer.stop should have been called for the sentinel
+      expect(mockGenServerStop.mock.calls.length).toBe(callsBefore + 1);
     });
   });
 });

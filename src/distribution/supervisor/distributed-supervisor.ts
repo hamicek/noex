@@ -14,11 +14,12 @@
  */
 
 import type { NodeId } from '../node-id.js';
-import type { GenServerRef, ChildRestartStrategy, SupervisorStrategy } from '../../core/types.js';
+import type { GenServerRef, ChildRestartStrategy, SupervisorStrategy, MonitorRef, LifecycleEvent } from '../../core/types.js';
 import { GenServer } from '../../core/gen-server.js';
 import { Cluster } from '../cluster/cluster.js';
 import { RemoteSpawn } from '../remote/remote-spawn.js';
 import { BehaviorRegistry } from '../remote/behavior-registry.js';
+import { RemoteMonitor } from '../monitor/remote-monitor.js';
 
 import type {
   NodeSelector,
@@ -56,6 +57,17 @@ import { DistributedChildRegistry } from './child-registry.js';
  * Internal exit reason type for child processes.
  */
 type ChildExitReason = 'normal' | 'shutdown' | { readonly error: Error };
+
+/**
+ * Simple behavior for the internal monitoring sentinel GenServer.
+ * This GenServer exists solely to receive process_down notifications
+ * from RemoteMonitor for remote children.
+ */
+const monitorSentinelBehavior = {
+  init: () => null,
+  handleCall: (_msg: unknown, state: null) => [null, state] as const,
+  handleCast: (_msg: unknown, state: null) => state,
+};
 
 // =============================================================================
 // Internal State
@@ -153,6 +165,9 @@ class DistributedSupervisorInstance {
   private childIdCounter = 0;
 
   private nodeDownCleanup: (() => void) | null = null;
+  private monitorSentinelRef: GenServerRef | null = null;
+  private lifecycleEventCleanup: (() => void) | null = null;
+  private readonly activeMonitors: Map<string, { childId: string; monitorId: string }> = new Map();
 
   constructor(
     readonly id: string,
@@ -165,6 +180,67 @@ class DistributedSupervisorInstance {
     private readonly childTemplate?: DistributedChildTemplate,
   ) {
     this.setupNodeDownHandler();
+  }
+
+  /**
+   * Initializes the monitor sentinel for remote child monitoring.
+   * Must be called after construction and before starting children.
+   */
+  async initializeMonitorSentinel(): Promise<void> {
+    // Create the sentinel GenServer for receiving process_down notifications
+    this.monitorSentinelRef = await GenServer.start(monitorSentinelBehavior);
+
+    // Attach nodeId for consistency
+    (this.monitorSentinelRef as unknown as { nodeId: NodeId }).nodeId = this.nodeId;
+
+    // Subscribe to lifecycle events to handle process_down notifications
+    this.lifecycleEventCleanup = GenServer.onLifecycleEvent((event) => {
+      this.handleLifecycleEvent(event);
+    });
+  }
+
+  /**
+   * Handles GenServer lifecycle events, specifically process_down for remote children.
+   */
+  private handleLifecycleEvent(event: LifecycleEvent): void {
+    if (event.type !== 'process_down') return;
+    if (!this.running || this.shuttingDown) return;
+
+    // Check if this process_down event is for one of our monitored children
+    const monitorInfo = this.activeMonitors.get(event.monitorId);
+    if (!monitorInfo) return;
+
+    const child = this.children.get(monitorInfo.childId);
+    if (!child) return;
+
+    // Map the ProcessDownReason to ChildExitReason
+    child.lastExitReason = this.mapProcessDownReason(event.reason);
+
+    // Remove from active monitors
+    this.activeMonitors.delete(event.monitorId);
+
+    // Handle the remote child crash
+    void this.handleChildCrash(child);
+  }
+
+  /**
+   * Maps ProcessDownReason to ChildExitReason.
+   */
+  private mapProcessDownReason(reason: { type: string; message?: string }): ChildExitReason {
+    switch (reason.type) {
+      case 'normal':
+        return 'normal';
+      case 'shutdown':
+        return 'shutdown';
+      case 'error':
+        return { error: new Error(reason.message ?? 'Remote process error') };
+      case 'noproc':
+        return { error: new Error('Process does not exist') };
+      case 'noconnection':
+        return { error: new Error('Node connection lost') };
+      default:
+        return { error: new Error(`Unknown error: ${reason.type}`) };
+    }
   }
 
   // ===========================================================================
@@ -423,6 +499,12 @@ class DistributedSupervisorInstance {
       this.nodeDownCleanup = null;
     }
 
+    // Cleanup lifecycle event handler for remote monitoring
+    if (this.lifecycleEventCleanup) {
+      this.lifecycleEventCleanup();
+      this.lifecycleEventCleanup = null;
+    }
+
     // Stop children in reverse order (last started = first stopped)
     const reversedOrder = [...this.childOrder].reverse();
 
@@ -430,6 +512,13 @@ class DistributedSupervisorInstance {
       const child = this.children.get(childId);
       if (child) {
         try {
+          // Cleanup remote monitor if exists
+          if (child.monitorRef) {
+            this.activeMonitors.delete(child.monitorRef.monitorId);
+            await RemoteMonitor.demonitor(child.monitorRef).catch(() => {
+              // Ignore demonitor errors during shutdown
+            });
+          }
           await this.stopChild(child, 'shutdown');
         } catch {
           // Continue shutdown even if individual child stops fail
@@ -444,6 +533,19 @@ class DistributedSupervisorInstance {
 
     // Unregister all children from distributed registry
     await DistributedChildRegistry.unregisterAllChildren(this.id);
+
+    // Stop the monitor sentinel GenServer
+    if (this.monitorSentinelRef) {
+      try {
+        await GenServer.stop(this.monitorSentinelRef, 'shutdown');
+      } catch {
+        // Ignore errors stopping sentinel
+      }
+      this.monitorSentinelRef = null;
+    }
+
+    // Clear active monitors
+    this.activeMonitors.clear();
 
     this.children.clear();
     this.childOrder.length = 0;
@@ -561,6 +663,12 @@ class DistributedSupervisorInstance {
 
     // Cleanup lifecycle listener
     child.lifecycleUnsubscribe?.();
+
+    // Cleanup remote monitor if exists (node is down, so just clear local state)
+    if (child.monitorRef) {
+      this.activeMonitors.delete(child.monitorRef.monitorId);
+      child.monitorRef = undefined;
+    }
 
     // Try to claim the child for restart (prevents duplicate restarts)
     const claimed = await DistributedChildRegistry.tryClaimChild(this.id, child.id);
@@ -682,9 +790,50 @@ class DistributedSupervisorInstance {
         }
       }, DISTRIBUTED_SUPERVISOR_DEFAULTS.CHILD_CHECK_INTERVAL);
     } else {
-      // Remote child - will be handled by node down events
-      // Remote monitoring will be implemented in Phase 5
+      // Remote child - use RemoteMonitor for process_down notifications
+      // Node down events are handled separately by setupNodeDownHandler
+      this.setupRemoteChildMonitor(child);
     }
+  }
+
+  /**
+   * Sets up remote monitoring for a child on another node.
+   */
+  private setupRemoteChildMonitor(child: DistributedRunningChild): void {
+    if (!this.monitorSentinelRef) {
+      // Sentinel not initialized - remote monitoring not available
+      return;
+    }
+
+    // Remove any existing monitor for this child
+    if (child.monitorRef) {
+      this.activeMonitors.delete(child.monitorRef.monitorId);
+      // Fire and forget demonitor - best effort cleanup
+      void RemoteMonitor.demonitor(child.monitorRef).catch(() => {
+        // Ignore demonitor errors
+      });
+    }
+
+    // Set up the new monitor asynchronously
+    void (async () => {
+      try {
+        const monitorRef = await RemoteMonitor.monitor(
+          this.monitorSentinelRef!,
+          child.ref,
+          { timeout: DISTRIBUTED_SUPERVISOR_DEFAULTS.SPAWN_TIMEOUT },
+        );
+
+        // Store the monitor reference and register in active monitors
+        child.monitorRef = monitorRef;
+        this.activeMonitors.set(monitorRef.monitorId, {
+          childId: child.id,
+          monitorId: monitorRef.monitorId,
+        });
+      } catch {
+        // Monitor setup failed - child will still be monitored via node_down events
+        // This can happen if the remote node is unreachable or the process already exited
+      }
+    })();
   }
 
   /**
@@ -960,6 +1109,15 @@ class DistributedSupervisorInstance {
     const child = this.children.get(childId);
     if (child) {
       child.lifecycleUnsubscribe?.();
+
+      // Cleanup remote monitor if exists
+      if (child.monitorRef) {
+        this.activeMonitors.delete(child.monitorRef.monitorId);
+        await RemoteMonitor.demonitor(child.monitorRef).catch(() => {
+          // Ignore demonitor errors
+        });
+      }
+
       await DistributedChildRegistry.unregisterChild(this.id, childId);
     }
     this.children.delete(childId);
@@ -1087,6 +1245,9 @@ export const DistributedSupervisor = {
 
     const ref = createSupervisorRef(id, nodeId);
     supervisorRefs.set(id, ref);
+
+    // Initialize the monitor sentinel for remote child monitoring
+    await instance.initializeMonitorSentinel();
 
     // Register in GlobalRegistry if name is provided
     if (options.name) {
