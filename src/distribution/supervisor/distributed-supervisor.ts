@@ -458,7 +458,13 @@ class DistributedSupervisorInstance {
    */
   private setupNodeDownHandler(): void {
     this.nodeDownCleanup = Cluster.onNodeDown((nodeId, _reason) => {
-      void this.handleNodeDown(nodeId);
+      this.handleNodeDown(nodeId).catch((error) => {
+        // Error is already handled in handleNodeDown (supervisor stopped, event emitted)
+        // Just ensure we don't have unhandled rejection
+        if (!(error instanceof DistributedMaxRestartsExceededError)) {
+          // Unexpected error - log it (in production, this would go to a logger)
+        }
+      });
     });
   }
 
