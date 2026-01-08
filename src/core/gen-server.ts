@@ -298,6 +298,8 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
     }
 
     try {
+      // Set current process ID for _getCurrentProcessId()
+      currentlyProcessingServerId = this.id;
       const result: CallResult<CallReply, State> = await Promise.resolve(
         this.behavior.handleCall(message.msg, this.state),
       );
@@ -307,6 +309,8 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
       message.resolve(reply);
     } catch (error) {
       message.reject(error instanceof Error ? error : new Error(String(error)));
+    } finally {
+      currentlyProcessingServerId = null;
     }
   }
 
@@ -323,6 +327,8 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
     }
 
     try {
+      // Set current process ID for _getCurrentProcessId()
+      currentlyProcessingServerId = this.id;
       const newState = await Promise.resolve(
         this.behavior.handleCast(message.msg, this.state),
       );
@@ -331,6 +337,8 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
     } catch {
       // Cast errors are silently ignored as there's no caller to notify.
       // In production, errors should be captured via lifecycle events.
+    } finally {
+      currentlyProcessingServerId = null;
     }
   }
 
@@ -771,6 +779,12 @@ async function notifyLocalMonitorsOfTermination(
  * Counter for generating unique server IDs.
  */
 let serverIdCounter = 0;
+
+/**
+ * Tracks the currently processing server ID.
+ * Used by _getCurrentProcessId() to allow handlers to get their own ID.
+ */
+let currentlyProcessingServerId: string | null = null;
 
 /**
  * Generates a unique server ID.
@@ -1677,5 +1691,23 @@ export const GenServer = {
         // Lifecycle handlers should not throw, but if they do, ignore it
       }
     }
+  },
+
+  /**
+   * Returns the ID of the currently processing GenServer.
+   *
+   * This method only returns a valid ID when called synchronously from within
+   * a handleCall or handleCast handler. Outside of message processing context,
+   * it returns null.
+   *
+   * Note: This will NOT work in asynchronous callbacks like setTimeout.
+   * For async cases, store the ID in your state during init or configure.
+   *
+   * @returns The server ID if called during message processing, null otherwise
+   *
+   * @internal
+   */
+  _getCurrentProcessId(): string | null {
+    return currentlyProcessingServerId;
   },
 } as const;

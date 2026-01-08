@@ -68,6 +68,7 @@ export function createWorkerBehavior(
     init(): WorkerState {
       return {
         id: workerId,
+        selfId: null,
         taskQueueRef: null,
         resultCollectorRef: null,
         currentTask: null,
@@ -98,18 +99,22 @@ export function createWorkerBehavior(
     handleCast(msg, state): WorkerState {
       switch (msg.type) {
         case 'configure': {
+          // Get our own GenServer ID while we're in the message handler context
+          const selfId = GenServer._getCurrentProcessId();
+          const localNodeId = Cluster.getLocalNodeId();
+
           const newState: WorkerState = {
             ...state,
+            selfId,
             taskQueueRef: msg.taskQueueRef,
             resultCollectorRef: msg.resultCollectorRef,
             active: true,
           };
 
           // Request initial work
-          if (msg.taskQueueRef) {
-            const localNodeId = Cluster.getLocalNodeId();
+          if (msg.taskQueueRef && selfId) {
             const selfRef: SerializedRef = {
-              id: GenServer._getCurrentProcessId()!,
+              id: selfId,
               nodeId: localNodeId,
             };
             smartCast(msg.taskQueueRef, { type: 'worker_available', workerRef: selfRef });
@@ -138,32 +143,34 @@ export function createWorkerBehavior(
           const processingTime = Math.floor(DEFAULTS.TASK_PROCESSING_TIME / state.speedMultiplier);
           const startTime = Date.now();
 
+          // Capture state values for use in setTimeout (async context)
+          const { selfId, resultCollectorRef, taskQueueRef, id: workerId } = state;
+
           setTimeout(() => {
             // Simulate task processing
             const success = Math.random() > 0.1; // 90% success rate
             const result: TaskResult = {
               taskId: task.id,
               success,
-              data: success ? { processed: task.payload, workerId: state.id } : undefined,
+              data: success ? { processed: task.payload, workerId } : undefined,
               error: success ? undefined : 'Simulated task failure',
-              workerId: state.id,
+              workerId,
               nodeId: Cluster.getLocalNodeId(),
               completedAt: Date.now(),
               durationMs: Date.now() - startTime,
             };
 
             // Report result
-            if (state.resultCollectorRef) {
-              smartCast(state.resultCollectorRef, { type: 'record_result', result });
+            if (resultCollectorRef) {
+              smartCast(resultCollectorRef, { type: 'record_result', result });
             }
 
             // Notify queue that task is done
-            if (state.taskQueueRef) {
-              smartCast(state.taskQueueRef, { type: 'task_completed', taskId: task.id });
+            if (taskQueueRef) {
+              smartCast(taskQueueRef, { type: 'task_completed', taskId: task.id });
             }
 
-            // Get the current GenServer ref and cast to self
-            const selfId = GenServer._getCurrentProcessId();
+            // Cast to self to request more work (use stored selfId, not _getCurrentProcessId)
             if (selfId) {
               const selfRef = GenServer._getRefById(selfId);
               if (selfRef) {
@@ -179,13 +186,13 @@ export function createWorkerBehavior(
         }
 
         case 'request_work': {
-          if (!state.active || !state.taskQueueRef) {
+          if (!state.active || !state.taskQueueRef || !state.selfId) {
             return state;
           }
 
           const localNodeId = Cluster.getLocalNodeId();
           const selfRef: SerializedRef = {
-            id: GenServer._getCurrentProcessId()!,
+            id: state.selfId,
             nodeId: localNodeId,
           };
           smartCast(state.taskQueueRef, { type: 'worker_available', workerRef: selfRef });

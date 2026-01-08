@@ -87,6 +87,9 @@ export interface WorkerState {
   /** Worker identifier */
   readonly id: string;
 
+  /** GenServer ID of this worker (for self-referencing in async callbacks) */
+  readonly selfId: string | null;
+
   /** Reference to the task queue */
   readonly taskQueueRef: SerializedRef | null;
 
