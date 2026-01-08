@@ -77,7 +77,13 @@ export type NodeIPCMessage =
   | { type: 'remote_spawn'; spawnId: string; behaviorName: string; targetNodeId: string; options?: RemoteSpawnIPCOptions; timeoutMs?: number }
   | { type: 'remote_monitor'; monitorId: string; monitoringProcessId: string; targetNodeId: string; targetProcessId: string; timeoutMs?: number }
   | { type: 'remote_demonitor'; monitorId: string; monitorRefId: string }
-  | { type: 'get_monitor_stats' };
+  | { type: 'get_monitor_stats' }
+  | { type: 'global_register'; registrationId: string; name: string; processId: string }
+  | { type: 'global_unregister'; registrationId: string; name: string }
+  | { type: 'global_lookup'; lookupId: string; name: string }
+  | { type: 'global_whereis'; lookupId: string; name: string }
+  | { type: 'get_global_registry_stats' }
+  | { type: 'get_global_registry_names' };
 
 /**
  * Response types from child process.
@@ -104,7 +110,30 @@ export type NodeIPCResponse =
   | { type: 'remote_monitor_error'; monitorId: string; errorType: string; message: string; durationMs: number }
   | { type: 'remote_demonitor_result'; monitorId: string }
   | { type: 'process_down'; monitorRefId: string; monitoredProcessId: string; reason: { type: string; message?: string } }
-  | { type: 'monitor_stats'; stats: { initialized: boolean; pendingCount: number; activeOutgoingCount: number; totalInitiated: number; totalEstablished: number; totalTimedOut: number; totalDemonitored: number; totalProcessDownReceived: number } };
+  | { type: 'monitor_stats'; stats: { initialized: boolean; pendingCount: number; activeOutgoingCount: number; totalInitiated: number; totalEstablished: number; totalTimedOut: number; totalDemonitored: number; totalProcessDownReceived: number } }
+  | { type: 'global_register_result'; registrationId: string; durationMs: number }
+  | { type: 'global_register_error'; registrationId: string; errorType: string; message: string; durationMs: number }
+  | { type: 'global_unregister_result'; registrationId: string; durationMs: number }
+  | { type: 'global_lookup_result'; lookupId: string; ref: { id: string; nodeId: string } | null; durationMs: number }
+  | { type: 'global_lookup_error'; lookupId: string; errorType: string; message: string; durationMs: number }
+  | { type: 'global_whereis_result'; lookupId: string; ref: { id: string; nodeId: string } | null; durationMs: number }
+  | { type: 'global_registry_stats'; stats: GlobalRegistryStatsResult }
+  | { type: 'global_registry_names'; names: string[] }
+  | { type: 'global_registry_registered'; name: string; ref: { id: string; nodeId: string } }
+  | { type: 'global_registry_unregistered'; name: string; ref: { id: string; nodeId: string } }
+  | { type: 'global_registry_conflict_resolved'; name: string; winner: { id: string; nodeId: string }; loser: { id: string; nodeId: string } }
+  | { type: 'global_registry_synced'; fromNodeId: string; entriesCount: number };
+
+/**
+ * GlobalRegistry statistics result from IPC.
+ */
+export interface GlobalRegistryStatsResult {
+  readonly totalRegistrations: number;
+  readonly localRegistrations: number;
+  readonly remoteRegistrations: number;
+  readonly syncOperations: number;
+  readonly conflictsResolved: number;
+}
 
 /**
  * Node start configuration for child process.
@@ -151,6 +180,14 @@ export interface TestClusterEvents {
   error: [error: Error, nodeId?: string];
   /** Emitted when a monitored process goes down. */
   processDown: [monitorRefId: string, monitoredProcessId: string, reason: { type: string; message?: string }, fromNodeId: string];
+  /** Emitted when a global name is registered. */
+  globalRegistered: [name: string, ref: { id: string; nodeId: string }, fromNodeId: string];
+  /** Emitted when a global name is unregistered. */
+  globalUnregistered: [name: string, ref: { id: string; nodeId: string }, fromNodeId: string];
+  /** Emitted when a registry conflict is resolved. */
+  globalConflictResolved: [name: string, winner: { id: string; nodeId: string }, loser: { id: string; nodeId: string }, fromNodeId: string];
+  /** Emitted when registry sync completes. */
+  globalSynced: [fromNodeId: string, entriesCount: number, reportingNodeId: string];
 }
 
 /**
@@ -671,6 +708,181 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
     return await this.sendMessage(node, { type: 'get_monitor_stats' }, 5000);
   }
 
+  // ===========================================================================
+  // GlobalRegistry Methods
+  // ===========================================================================
+
+  /** Counter for generating unique registration IDs. */
+  private globalRegistrationIdCounter = 0;
+
+  /** Counter for generating unique lookup IDs. */
+  private globalLookupIdCounter = 0;
+
+  /**
+   * Registers a process globally in the cluster registry.
+   *
+   * @param nodeId - Node to register from
+   * @param name - Global name for the registration
+   * @param processId - ID of the process to register
+   * @param timeoutMs - Registration timeout in milliseconds
+   * @returns Registration result with duration, or error
+   */
+  async globalRegister(
+    nodeId: string,
+    name: string,
+    processId: string,
+    timeoutMs: number = 10000,
+  ): Promise<{ durationMs: number } | { error: true; errorType: string; message: string; durationMs: number }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const registrationId = `gr_${this.globalRegistrationIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'global_register', registrationId, name, processId },
+      registrationId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Unregisters a globally registered name.
+   *
+   * @param nodeId - Node to unregister from
+   * @param name - Global name to unregister
+   * @param timeoutMs - Unregistration timeout in milliseconds
+   */
+  async globalUnregister(
+    nodeId: string,
+    name: string,
+    timeoutMs: number = 5000,
+  ): Promise<{ durationMs: number }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const registrationId = `gu_${this.globalRegistrationIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'global_unregister', registrationId, name },
+      registrationId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Looks up a globally registered name (throws if not found).
+   *
+   * @param nodeId - Node to look up from
+   * @param name - Global name to look up
+   * @param timeoutMs - Lookup timeout in milliseconds
+   * @returns Reference to the registered process, or error
+   */
+  async globalLookup(
+    nodeId: string,
+    name: string,
+    timeoutMs: number = 5000,
+  ): Promise<{ ref: { id: string; nodeId: string }; durationMs: number } | { error: true; errorType: string; message: string; durationMs: number }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const lookupId = `gl_${this.globalLookupIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'global_lookup', lookupId, name },
+      lookupId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Looks up a globally registered name (returns null if not found).
+   *
+   * @param nodeId - Node to look up from
+   * @param name - Global name to look up
+   * @param timeoutMs - Lookup timeout in milliseconds
+   * @returns Reference to the registered process, or null if not found
+   */
+  async globalWhereis(
+    nodeId: string,
+    name: string,
+    timeoutMs: number = 5000,
+  ): Promise<{ ref: { id: string; nodeId: string } | null; durationMs: number }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const lookupId = `gw_${this.globalLookupIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'global_whereis', lookupId, name },
+      lookupId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Gets GlobalRegistry statistics from a node.
+   *
+   * @param nodeId - Node to get stats from
+   */
+  async getGlobalRegistryStats(nodeId: string): Promise<GlobalRegistryStatsResult> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    return await this.sendMessage(node, { type: 'get_global_registry_stats' }, 5000);
+  }
+
+  /**
+   * Gets all registered global names from a node.
+   *
+   * @param nodeId - Node to get names from
+   */
+  async getGlobalRegistryNames(nodeId: string): Promise<string[]> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    return await this.sendMessage(node, { type: 'get_global_registry_names' }, 5000);
+  }
+
   /**
    * Starts the cluster by spawning all node processes.
    * Called internally by TestClusterFactory.
@@ -913,6 +1125,70 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
 
       case 'monitor_stats':
         this.resolvePending(node, 'get_monitor_stats', msg.stats);
+        break;
+
+      case 'global_register_result':
+        this.resolvePending(node, msg.registrationId, { durationMs: msg.durationMs });
+        break;
+
+      case 'global_register_error':
+        this.resolvePending(node, msg.registrationId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+          durationMs: msg.durationMs,
+        });
+        break;
+
+      case 'global_unregister_result':
+        this.resolvePending(node, msg.registrationId, { durationMs: msg.durationMs });
+        break;
+
+      case 'global_lookup_result':
+        this.resolvePending(node, msg.lookupId, {
+          ref: msg.ref,
+          durationMs: msg.durationMs,
+        });
+        break;
+
+      case 'global_lookup_error':
+        this.resolvePending(node, msg.lookupId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+          durationMs: msg.durationMs,
+        });
+        break;
+
+      case 'global_whereis_result':
+        this.resolvePending(node, msg.lookupId, {
+          ref: msg.ref,
+          durationMs: msg.durationMs,
+        });
+        break;
+
+      case 'global_registry_stats':
+        this.resolvePending(node, 'get_global_registry_stats', msg.stats);
+        break;
+
+      case 'global_registry_names':
+        this.resolvePending(node, 'get_global_registry_names', msg.names);
+        break;
+
+      case 'global_registry_registered':
+        this.emit('globalRegistered', msg.name, msg.ref, node.nodeId);
+        break;
+
+      case 'global_registry_unregistered':
+        this.emit('globalUnregistered', msg.name, msg.ref, node.nodeId);
+        break;
+
+      case 'global_registry_conflict_resolved':
+        this.emit('globalConflictResolved', msg.name, msg.winner, msg.loser, node.nodeId);
+        break;
+
+      case 'global_registry_synced':
+        this.emit('globalSynced', msg.fromNodeId, msg.entriesCount, node.nodeId);
         break;
     }
   }

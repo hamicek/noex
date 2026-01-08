@@ -16,7 +16,7 @@ import type {
 
 // Dynamic import to handle ESM
 async function main(): Promise<void> {
-  const { Cluster, GenServer, BehaviorRegistry, RemoteCall, RemoteSpawn, RemoteMonitor } = await import('../../../src/index.js');
+  const { Cluster, GenServer, BehaviorRegistry, RemoteCall, RemoteSpawn, RemoteMonitor, GlobalRegistry } = await import('../../../src/index.js');
 
   // Registered behaviors for spawning
   const registeredBehaviors = new Map<string, () => any>();
@@ -97,6 +97,30 @@ async function main(): Promise<void> {
         case 'get_monitor_stats':
           handleGetMonitorStats();
           break;
+
+        case 'global_register':
+          await handleGlobalRegister(msg.registrationId, msg.name, msg.processId);
+          break;
+
+        case 'global_unregister':
+          await handleGlobalUnregister(msg.registrationId, msg.name);
+          break;
+
+        case 'global_lookup':
+          handleGlobalLookup(msg.lookupId, msg.name);
+          break;
+
+        case 'global_whereis':
+          handleGlobalWhereis(msg.lookupId, msg.name);
+          break;
+
+        case 'get_global_registry_stats':
+          handleGetGlobalRegistryStats();
+          break;
+
+        case 'get_global_registry_names':
+          handleGetGlobalRegistryNames();
+          break;
       }
     } catch (error) {
       sendResponse({
@@ -142,6 +166,40 @@ async function main(): Promise<void> {
           },
         });
       }
+    });
+
+    // Listen for GlobalRegistry events and forward to parent
+    GlobalRegistry.on('registered', (name, ref) => {
+      sendResponse({
+        type: 'global_registry_registered',
+        name,
+        ref: { id: ref.id, nodeId: ref.nodeId },
+      });
+    });
+
+    GlobalRegistry.on('unregistered', (name, ref) => {
+      sendResponse({
+        type: 'global_registry_unregistered',
+        name,
+        ref: { id: ref.id, nodeId: ref.nodeId },
+      });
+    });
+
+    GlobalRegistry.on('conflictResolved', (name, winner, loser) => {
+      sendResponse({
+        type: 'global_registry_conflict_resolved',
+        name,
+        winner: { id: winner.id, nodeId: winner.nodeId },
+        loser: { id: loser.id, nodeId: loser.nodeId },
+      });
+    });
+
+    GlobalRegistry.on('synced', (fromNodeId, entriesCount) => {
+      sendResponse({
+        type: 'global_registry_synced',
+        fromNodeId,
+        entriesCount,
+      });
     });
 
     await Cluster.start({
@@ -551,6 +609,167 @@ async function main(): Promise<void> {
         totalDemonitored: stats.totalDemonitored,
         totalProcessDownReceived: stats.totalProcessDownReceived,
       },
+    });
+  }
+
+  // ===========================================================================
+  // GlobalRegistry Handlers
+  // ===========================================================================
+
+  /**
+   * Registers a process globally in the cluster registry.
+   */
+  async function handleGlobalRegister(
+    registrationId: string,
+    name: string,
+    processId: string,
+  ): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      // Get the process ref from spawned processes
+      const ref = spawnedProcesses.get(processId);
+      if (!ref) {
+        const durationMs = Date.now() - startTime;
+        sendResponse({
+          type: 'global_register_error',
+          registrationId,
+          errorType: 'ProcessNotFound',
+          message: `Process '${processId}' not found`,
+          durationMs,
+        });
+        return;
+      }
+
+      // Create serialized ref for registration
+      const serializedRef = {
+        id: ref.id,
+        nodeId: Cluster.getLocalNodeId(),
+      };
+
+      await GlobalRegistry.register(name, serializedRef);
+
+      const durationMs = Date.now() - startTime;
+      sendResponse({
+        type: 'global_register_result',
+        registrationId,
+        durationMs,
+      });
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'global_register_error',
+        registrationId,
+        errorType,
+        message,
+        durationMs,
+      });
+    }
+  }
+
+  /**
+   * Unregisters a globally registered name.
+   */
+  async function handleGlobalUnregister(
+    registrationId: string,
+    name: string,
+  ): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      await GlobalRegistry.unregister(name);
+
+      const durationMs = Date.now() - startTime;
+      sendResponse({
+        type: 'global_unregister_result',
+        registrationId,
+        durationMs,
+      });
+    } catch (error) {
+      // Unregister should be idempotent, so still return success
+      const durationMs = Date.now() - startTime;
+      sendResponse({
+        type: 'global_unregister_result',
+        registrationId,
+        durationMs,
+      });
+    }
+  }
+
+  /**
+   * Looks up a globally registered name (throws if not found).
+   */
+  function handleGlobalLookup(lookupId: string, name: string): void {
+    const startTime = Date.now();
+
+    try {
+      const ref = GlobalRegistry.lookup(name);
+      const durationMs = Date.now() - startTime;
+
+      sendResponse({
+        type: 'global_lookup_result',
+        lookupId,
+        ref: { id: ref.id, nodeId: ref.nodeId },
+        durationMs,
+      });
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'global_lookup_error',
+        lookupId,
+        errorType,
+        message,
+        durationMs,
+      });
+    }
+  }
+
+  /**
+   * Looks up a globally registered name (returns null if not found).
+   */
+  function handleGlobalWhereis(lookupId: string, name: string): void {
+    const startTime = Date.now();
+
+    const ref = GlobalRegistry.whereis(name);
+    const durationMs = Date.now() - startTime;
+
+    sendResponse({
+      type: 'global_whereis_result',
+      lookupId,
+      ref: ref ? { id: ref.id, nodeId: ref.nodeId } : null,
+      durationMs,
+    });
+  }
+
+  /**
+   * Returns GlobalRegistry statistics.
+   */
+  function handleGetGlobalRegistryStats(): void {
+    const stats = GlobalRegistry.getStats();
+    sendResponse({
+      type: 'global_registry_stats',
+      stats: {
+        totalRegistrations: stats.totalRegistrations,
+        localRegistrations: stats.localRegistrations,
+        remoteRegistrations: stats.remoteRegistrations,
+        syncOperations: stats.syncOperations,
+        conflictsResolved: stats.conflictsResolved,
+      },
+    });
+  }
+
+  /**
+   * Returns all registered global names.
+   */
+  function handleGetGlobalRegistryNames(): void {
+    const names = GlobalRegistry.getNames();
+    sendResponse({
+      type: 'global_registry_names',
+      names: [...names],
     });
   }
 

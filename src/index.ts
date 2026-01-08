@@ -178,6 +178,8 @@ export {
   RemoteMonitor,
   _resetRemoteMonitorState,
   RemoteMonitorTimeoutError,
+  // Global Registry
+  GlobalRegistry,
   // Error classes
   InvalidNodeIdError,
   RemoteServerNotRunningError,
@@ -258,4 +260,7 @@ export type {
   // Remote monitor types
   RemoteMonitorOptions,
   RemoteMonitorStats,
+  // Global registry types
+  GlobalRegistryEvents,
+  GlobalRegistryStats,
 } from './distribution/index.js';
