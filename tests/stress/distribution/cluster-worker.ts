@@ -16,7 +16,7 @@ import type {
 
 // Dynamic import to handle ESM
 async function main(): Promise<void> {
-  const { Cluster, GenServer, BehaviorRegistry, RemoteCall } = await import('../../../src/index.js');
+  const { Cluster, GenServer, BehaviorRegistry, RemoteCall, RemoteSpawn } = await import('../../../src/index.js');
 
   // Registered behaviors for spawning
   const registeredBehaviors = new Map<string, () => any>();
@@ -77,6 +77,10 @@ async function main(): Promise<void> {
 
         case 'get_process_info':
           handleGetProcessInfo(msg.processId);
+          break;
+
+        case 'remote_spawn':
+          await handleRemoteSpawn(msg.spawnId, msg.behaviorName, msg.targetNodeId, msg.options, msg.timeoutMs);
           break;
       }
     } catch (error) {
@@ -340,6 +344,41 @@ async function main(): Promise<void> {
 
     RemoteCall.cast(serializedRef, msg);
     sendResponse({ type: 'remote_cast_sent' });
+  }
+
+  /**
+   * Spawns a process on a remote node using RemoteSpawn.
+   */
+  async function handleRemoteSpawn(
+    spawnId: string,
+    behaviorName: string,
+    targetNodeId: string,
+    options?: { name?: string; registration?: 'local' | 'global' | 'none'; initTimeout?: number },
+    timeoutMs?: number,
+  ): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      const result = await RemoteSpawn.spawn(
+        behaviorName,
+        targetNodeId,
+        { ...options, timeout: timeoutMs ?? 10000 },
+      );
+
+      const durationMs = Date.now() - startTime;
+      sendResponse({
+        type: 'remote_spawn_result',
+        spawnId,
+        serverId: result.serverId,
+        nodeId: result.nodeId,
+        durationMs,
+      });
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({ type: 'remote_spawn_error', spawnId, errorType, message, durationMs });
+    }
   }
 
   /**

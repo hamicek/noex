@@ -73,7 +73,8 @@ export type NodeIPCMessage =
   | { type: 'spawn_process'; behaviorName: string; globalName?: string }
   | { type: 'remote_call'; callId: string; targetNodeId: string; processId: string; msg: unknown; timeoutMs?: number }
   | { type: 'remote_cast'; targetNodeId: string; processId: string; msg: unknown }
-  | { type: 'get_process_info'; processId: string };
+  | { type: 'get_process_info'; processId: string }
+  | { type: 'remote_spawn'; spawnId: string; behaviorName: string; targetNodeId: string; options?: RemoteSpawnIPCOptions; timeoutMs?: number };
 
 /**
  * Response types from child process.
@@ -93,7 +94,9 @@ export type NodeIPCResponse =
   | { type: 'remote_call_result'; callId: string; result: unknown; durationMs: number }
   | { type: 'remote_call_error'; callId: string; errorType: string; message: string; durationMs: number }
   | { type: 'remote_cast_sent' }
-  | { type: 'process_info'; info: { id: string; status: string; state?: unknown } | null };
+  | { type: 'process_info'; info: { id: string; status: string; state?: unknown } | null }
+  | { type: 'remote_spawn_result'; spawnId: string; serverId: string; nodeId: string; durationMs: number }
+  | { type: 'remote_spawn_error'; spawnId: string; errorType: string; message: string; durationMs: number };
 
 /**
  * Node start configuration for child process.
@@ -105,6 +108,15 @@ export interface NodeStartConfig {
   readonly heartbeatIntervalMs: number;
   readonly heartbeatMissThreshold: number;
   readonly clusterSecret?: string;
+}
+
+/**
+ * Options for remote spawn IPC message.
+ */
+export interface RemoteSpawnIPCOptions {
+  readonly name?: string;
+  readonly registration?: 'local' | 'global' | 'none';
+  readonly initTimeout?: number;
 }
 
 /**
@@ -512,6 +524,46 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
     );
   }
 
+  /** Counter for generating unique spawn IDs. */
+  private remoteSpawnIdCounter = 0;
+
+  /**
+   * Spawns a process on a remote node using RemoteSpawn.
+   *
+   * @param fromNodeId - Node to initiate the spawn from
+   * @param targetNodeId - Node to spawn the process on
+   * @param behaviorName - Name of the registered behavior
+   * @param options - Spawn options
+   * @param timeoutMs - Spawn timeout in milliseconds
+   * @returns Spawn result with serverId and nodeId, or error
+   */
+  async remoteSpawn(
+    fromNodeId: string,
+    targetNodeId: string,
+    behaviorName: string,
+    options?: RemoteSpawnIPCOptions,
+    timeoutMs: number = 10000,
+  ): Promise<{ serverId: string; nodeId: string; durationMs: number } | { error: true; errorType: string; message: string; durationMs: number }> {
+    const node = this.nodes.get(fromNodeId);
+    if (!node) {
+      throw new Error(`Node ${fromNodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${fromNodeId} is not running`);
+    }
+
+    // Generate unique spawn ID for correlating response
+    const spawnId = `rs_${this.remoteSpawnIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'remote_spawn', spawnId, behaviorName, targetNodeId, options, timeoutMs },
+      spawnId,
+      timeoutMs + 5000, // Add buffer for IPC communication
+    );
+  }
+
   /**
    * Starts the cluster by spawning all node processes.
    * Called internally by TestClusterFactory.
@@ -713,6 +765,19 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
 
       case 'process_info':
         this.resolvePending(node, 'get_process_info', msg.info);
+        break;
+
+      case 'remote_spawn_result':
+        this.resolvePending(node, msg.spawnId, { serverId: msg.serverId, nodeId: msg.nodeId, durationMs: msg.durationMs });
+        break;
+
+      case 'remote_spawn_error':
+        this.resolvePending(node, msg.spawnId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+          durationMs: msg.durationMs,
+        });
         break;
     }
   }

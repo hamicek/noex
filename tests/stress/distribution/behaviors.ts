@@ -825,6 +825,63 @@ export function createStatefulBehavior(
 export const statefulBehavior = createStatefulBehavior(100);
 
 // =============================================================================
+// Crash On Init Behavior
+// =============================================================================
+
+/**
+ * State for the crash-on-init behavior (never reached).
+ */
+export interface CrashOnInitState {
+  readonly initialized: boolean;
+}
+
+/**
+ * Call messages for crash-on-init behavior.
+ */
+export type CrashOnInitCallMsg = { readonly type: 'ping' };
+
+/**
+ * Cast messages for crash-on-init behavior.
+ */
+export type CrashOnInitCastMsg = { readonly type: 'ping' };
+
+/**
+ * Reply types for crash-on-init calls.
+ */
+export type CrashOnInitCallReply = { readonly pong: true };
+
+/**
+ * Creates a behavior that throws during initialization.
+ *
+ * Used for testing error handling when spawning processes that fail
+ * during their init phase.
+ *
+ * @param errorMessage - Custom error message (default: 'Intentional init crash')
+ */
+export function createCrashOnInitBehavior(
+  errorMessage: string = 'Intentional init crash',
+): GenServerBehavior<CrashOnInitState, CrashOnInitCallMsg, CrashOnInitCastMsg, CrashOnInitCallReply> {
+  return {
+    init(): CrashOnInitState {
+      throw new Error(errorMessage);
+    },
+
+    handleCall(_msg, state): CallResult<CrashOnInitCallReply, CrashOnInitState> {
+      return [{ pong: true }, state];
+    },
+
+    handleCast(_msg, state): CrashOnInitState {
+      return state;
+    },
+  };
+}
+
+/**
+ * Default crash-on-init behavior.
+ */
+export const crashOnInitBehavior = createCrashOnInitBehavior();
+
+// =============================================================================
 // Utilities
 // =============================================================================
 
@@ -851,6 +908,7 @@ export const stressTestBehaviors = {
   crashAfterN: crashAfterNBehavior,
   memoryHog: memoryHogBehavior,
   stateful: statefulBehavior,
+  crashOnInit: crashOnInitBehavior,
 } as const;
 
 /**
