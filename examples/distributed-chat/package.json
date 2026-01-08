@@ -1,0 +1,18 @@
+{
+  "name": "noex-distributed-chat-example",
+  "version": "1.0.0",
+  "description": "Distributed chat example demonstrating noex cluster features",
+  "type": "module",
+  "scripts": {
+    "node1": "tsx node.ts --name node1 --port 4369",
+    "node2": "tsx node.ts --name node2 --port 4370 --seed node1@127.0.0.1:4369",
+    "node3": "tsx node.ts --name node3 --port 4371 --seed node1@127.0.0.1:4369"
+  },
+  "dependencies": {
+    "noex": "file:../.."
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

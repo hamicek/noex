@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./distribution": {
+      "types": "./dist/distribution/index.d.ts",
+      "import": "./dist/distribution/index.js"
+    },
     "./dashboard": {
       "types": "./dist/dashboard/index.d.ts",
       "import": "./dist/dashboard/index.js"

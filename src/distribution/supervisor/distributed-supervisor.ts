@@ -667,7 +667,7 @@ class DistributedSupervisorInstance {
     // Cleanup remote monitor if exists (node is down, so just clear local state)
     if (child.monitorRef) {
       this.activeMonitors.delete(child.monitorRef.monitorId);
-      child.monitorRef = undefined;
+      delete child.monitorRef;
     }
 
     // Try to claim the child for restart (prevents duplicate restarts)
