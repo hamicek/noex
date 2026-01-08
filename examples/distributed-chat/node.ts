@@ -106,6 +106,47 @@ const state: ChatState = {
 };
 
 // =============================================================================
+// Smart Call/Cast Helpers
+// =============================================================================
+
+/**
+ * Checks if a serialized ref points to a local process.
+ */
+function isLocalRef(ref: SerializedRef): boolean {
+  return ref.nodeId === Cluster.getLocalNodeId();
+}
+
+/**
+ * Calls a process - uses local GenServer.call for local refs,
+ * RemoteCall.call for remote refs.
+ */
+async function smartCall<T>(ref: SerializedRef, msg: unknown, timeout = 5000): Promise<T> {
+  if (isLocalRef(ref)) {
+    const localRef = GenServer._getRefById(ref.id);
+    if (!localRef) {
+      throw new Error(`Process ${ref.id} not found`);
+    }
+    return GenServer.call(localRef, msg, { timeout }) as Promise<T>;
+  }
+  return RemoteCall.call<T>(ref, msg, { timeout });
+}
+
+/**
+ * Casts to a process - uses local GenServer.cast for local refs,
+ * RemoteCall.cast for remote refs.
+ */
+function smartCast(ref: SerializedRef, msg: unknown): void {
+  if (isLocalRef(ref)) {
+    const localRef = GenServer._getRefById(ref.id);
+    if (localRef) {
+      GenServer.cast(localRef, msg);
+    }
+  } else {
+    RemoteCall.cast(ref, msg);
+  }
+}
+
+// =============================================================================
 // Message Display
 // =============================================================================
 
@@ -327,11 +368,11 @@ async function joinRoom(roomName: string | undefined): Promise<void> {
     nodeId: localNodeId,
   };
 
-  const result = await RemoteCall.call<ChatRoomCallReply>(roomRef, {
+  const result = await smartCall<ChatRoomCallReply>(roomRef, {
     type: 'join',
     username: state.username,
     userRef: userSerializedRef,
-  }, { timeout: 5000 });
+  });
 
   if ('ok' in result && result.ok === false) {
     log(`Failed to join: ${result.error}`);
@@ -359,7 +400,7 @@ async function leaveRoom(): Promise<void> {
 
   try {
     // Notify room
-    RemoteCall.cast(state.currentRoomRef, {
+    smartCast(state.currentRoomRef, {
       type: 'user_left',
       username: state.username,
     });
@@ -390,7 +431,7 @@ async function sendMessage(content: string): Promise<void> {
   }
 
   // Send to room via cast (fire-and-forget)
-  RemoteCall.cast(state.currentRoomRef, {
+  smartCast(state.currentRoomRef, {
     type: 'broadcast',
     from: state.username,
     content: content,
@@ -407,9 +448,9 @@ async function listUsers(): Promise<void> {
     return;
   }
 
-  const result = await RemoteCall.call<ChatRoomCallReply>(state.currentRoomRef, {
+  const result = await smartCall<ChatRoomCallReply>(state.currentRoomRef, {
     type: 'get_users',
-  }, { timeout: 5000 });
+  });
 
   if ('users' in result) {
     log(`Users in "${state.currentRoom}":`);
