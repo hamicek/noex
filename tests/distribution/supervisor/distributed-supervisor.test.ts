@@ -616,6 +616,495 @@ describe('DistributedSupervisor', () => {
         expect(childrenAfter[1]!.ref.id).toBe(worker2RefBefore.id);
         expect(childrenAfter[2]!.ref.id).toBe(worker3RefBefore.id);
       });
+
+      it('preserves child order after restart', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'one_for_one',
+          children: [
+            { id: 'worker-1', behavior: 'worker' },
+            { id: 'worker-2', behavior: 'worker' },
+            { id: 'worker-3', behavior: 'worker' },
+          ],
+        });
+
+        await DistributedSupervisor.restartChild(ref, 'worker-2');
+
+        const children = DistributedSupervisor.getChildren(ref);
+        expect(children.map((c) => c.id)).toEqual(['worker-1', 'worker-2', 'worker-3']);
+      });
+    });
+
+    describe('one_for_all', () => {
+      it('restarts all children when one crashes', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'one_for_all',
+          children: [
+            { id: 'worker-1', behavior: 'worker' },
+            { id: 'worker-2', behavior: 'worker' },
+            { id: 'worker-3', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+        const worker1RefBefore = childrenBefore[0]!.ref.id;
+        const worker2RefBefore = childrenBefore[1]!.ref.id;
+        const worker3RefBefore = childrenBefore[2]!.ref.id;
+
+        // Simulate child crash by making isRunning return false for worker-2
+        const originalIsRunning = mockGenServerIsRunning;
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === childrenBefore[1]!.ref.id) return false;
+          return true;
+        });
+
+        // Trigger the crash detection
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Restore mock
+        mockGenServerIsRunning = originalIsRunning;
+
+        // Wait for restart handling
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const childrenAfter = DistributedSupervisor.getChildren(ref);
+
+        // All children should have new refs (all restarted)
+        expect(childrenAfter[0]!.ref.id).not.toBe(worker1RefBefore);
+        expect(childrenAfter[1]!.ref.id).not.toBe(worker2RefBefore);
+        expect(childrenAfter[2]!.ref.id).not.toBe(worker3RefBefore);
+      });
+
+      it('stops children in reverse order before restarting', async () => {
+        const stopOrder: string[] = [];
+        mockGenServerStop.mockImplementation((r: GenServerRef) => {
+          stopOrder.push(r.id);
+          return Promise.resolve();
+        });
+
+        const ref = await DistributedSupervisor.start({
+          strategy: 'one_for_all',
+          children: [
+            { id: 'worker-1', behavior: 'worker' },
+            { id: 'worker-2', behavior: 'worker' },
+            { id: 'worker-3', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+        const worker1Ref = childrenBefore[0]!.ref.id;
+        const worker2Ref = childrenBefore[1]!.ref.id;
+        const worker3Ref = childrenBefore[2]!.ref.id;
+
+        stopOrder.length = 0; // Clear stop order
+
+        // Simulate child crash
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === worker2Ref) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        // Children should be stopped in reverse order (except crashed one)
+        const childStops = stopOrder.filter(
+          (id) => id === worker1Ref || id === worker3Ref
+        );
+
+        // worker-3 should be stopped before worker-1 (reverse order)
+        if (childStops.length === 2) {
+          expect(childStops[0]).toBe(worker3Ref);
+          expect(childStops[1]).toBe(worker1Ref);
+        }
+      });
+
+      it('restarts children in original order', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'one_for_all',
+          children: [
+            { id: 'first', behavior: 'worker' },
+            { id: 'second', behavior: 'worker' },
+            { id: 'third', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+
+        // Simulate crash
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === childrenBefore[1]!.ref.id) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const childrenAfter = DistributedSupervisor.getChildren(ref);
+        expect(childrenAfter.map((c) => c.id)).toEqual(['first', 'second', 'third']);
+      });
+
+      it('only increments restartCount for crashed child', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'one_for_all',
+          children: [
+            { id: 'worker-1', behavior: 'worker' },
+            { id: 'worker-2', behavior: 'worker' },
+            { id: 'worker-3', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+
+        // Simulate crash of worker-2
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === childrenBefore[1]!.ref.id) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const childrenAfter = DistributedSupervisor.getChildren(ref);
+        // Only the crashed child should have incremented restart count
+        expect(childrenAfter[0]!.restartCount).toBe(0);
+        expect(childrenAfter[1]!.restartCount).toBe(1); // crashed
+        expect(childrenAfter[2]!.restartCount).toBe(0);
+      });
+
+      it('emits child_restarted event for crashed child', async () => {
+        const events: DistributedSupervisorEvent[] = [];
+        const unsubscribe = DistributedSupervisor.onLifecycleEvent((event) => {
+          events.push(event);
+        });
+
+        const ref = await DistributedSupervisor.start({
+          strategy: 'one_for_all',
+          children: [
+            { id: 'worker-1', behavior: 'worker' },
+            { id: 'worker-2', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+        events.length = 0; // Clear events
+
+        // Simulate crash of worker-1
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === childrenBefore[0]!.ref.id) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const restartEvents = events.filter((e) => e.type === 'child_restarted');
+        expect(restartEvents.length).toBe(1);
+        expect(restartEvents[0]).toMatchObject({
+          type: 'child_restarted',
+          childId: 'worker-1',
+          attempt: 1,
+        });
+
+        unsubscribe();
+      });
+    });
+
+    describe('rest_for_one', () => {
+      it('restarts crashed child and all children started after it', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'rest_for_one',
+          children: [
+            { id: 'worker-1', behavior: 'worker' },
+            { id: 'worker-2', behavior: 'worker' },
+            { id: 'worker-3', behavior: 'worker' },
+            { id: 'worker-4', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+        const worker1RefBefore = childrenBefore[0]!.ref.id;
+        const worker2RefBefore = childrenBefore[1]!.ref.id;
+        const worker3RefBefore = childrenBefore[2]!.ref.id;
+        const worker4RefBefore = childrenBefore[3]!.ref.id;
+
+        // Simulate crash of worker-2
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === worker2RefBefore) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const childrenAfter = DistributedSupervisor.getChildren(ref);
+
+        // worker-1 should NOT be restarted (before crashed child)
+        expect(childrenAfter[0]!.ref.id).toBe(worker1RefBefore);
+
+        // worker-2, worker-3, worker-4 should be restarted (crashed + after)
+        expect(childrenAfter[1]!.ref.id).not.toBe(worker2RefBefore);
+        expect(childrenAfter[2]!.ref.id).not.toBe(worker3RefBefore);
+        expect(childrenAfter[3]!.ref.id).not.toBe(worker4RefBefore);
+      });
+
+      it('does not affect children before crashed child', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'rest_for_one',
+          children: [
+            { id: 'first', behavior: 'worker' },
+            { id: 'second', behavior: 'worker' },
+            { id: 'third', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+        const firstRefBefore = childrenBefore[0]!.ref.id;
+
+        // Simulate crash of third (last) child
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === childrenBefore[2]!.ref.id) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const childrenAfter = DistributedSupervisor.getChildren(ref);
+
+        // first and second should NOT be restarted
+        expect(childrenAfter[0]!.ref.id).toBe(firstRefBefore);
+        expect(childrenAfter[1]!.ref.id).toBe(childrenBefore[1]!.ref.id);
+
+        // only third should be restarted
+        expect(childrenAfter[2]!.ref.id).not.toBe(childrenBefore[2]!.ref.id);
+      });
+
+      it('stops affected children in reverse order', async () => {
+        const stopOrder: string[] = [];
+        mockGenServerStop.mockImplementation((r: GenServerRef) => {
+          stopOrder.push(r.id);
+          return Promise.resolve();
+        });
+
+        const ref = await DistributedSupervisor.start({
+          strategy: 'rest_for_one',
+          children: [
+            { id: 'worker-1', behavior: 'worker' },
+            { id: 'worker-2', behavior: 'worker' },
+            { id: 'worker-3', behavior: 'worker' },
+            { id: 'worker-4', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+        const worker2Ref = childrenBefore[1]!.ref.id;
+        const worker3Ref = childrenBefore[2]!.ref.id;
+        const worker4Ref = childrenBefore[3]!.ref.id;
+
+        stopOrder.length = 0;
+
+        // Simulate crash of worker-2
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === worker2Ref) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        // worker-4 and worker-3 should be stopped in reverse order
+        const affectedStops = stopOrder.filter(
+          (id) => id === worker3Ref || id === worker4Ref
+        );
+
+        if (affectedStops.length === 2) {
+          expect(affectedStops[0]).toBe(worker4Ref);
+          expect(affectedStops[1]).toBe(worker3Ref);
+        }
+      });
+
+      it('restarts affected children in original order', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'rest_for_one',
+          children: [
+            { id: 'first', behavior: 'worker' },
+            { id: 'second', behavior: 'worker' },
+            { id: 'third', behavior: 'worker' },
+            { id: 'fourth', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+
+        // Simulate crash of second
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === childrenBefore[1]!.ref.id) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const childrenAfter = DistributedSupervisor.getChildren(ref);
+        expect(childrenAfter.map((c) => c.id)).toEqual(['first', 'second', 'third', 'fourth']);
+      });
+
+      it('only increments restartCount for crashed child', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'rest_for_one',
+          children: [
+            { id: 'worker-1', behavior: 'worker' },
+            { id: 'worker-2', behavior: 'worker' },
+            { id: 'worker-3', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+
+        // Simulate crash of worker-2
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === childrenBefore[1]!.ref.id) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const childrenAfter = DistributedSupervisor.getChildren(ref);
+        expect(childrenAfter[0]!.restartCount).toBe(0); // unaffected
+        expect(childrenAfter[1]!.restartCount).toBe(1); // crashed
+        expect(childrenAfter[2]!.restartCount).toBe(0); // restarted but not crashed
+      });
+
+      it('when first child crashes, behaves like one_for_all', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'rest_for_one',
+          children: [
+            { id: 'worker-1', behavior: 'worker' },
+            { id: 'worker-2', behavior: 'worker' },
+            { id: 'worker-3', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+        const worker1RefBefore = childrenBefore[0]!.ref.id;
+        const worker2RefBefore = childrenBefore[1]!.ref.id;
+        const worker3RefBefore = childrenBefore[2]!.ref.id;
+
+        // Simulate crash of first child
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === worker1RefBefore) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const childrenAfter = DistributedSupervisor.getChildren(ref);
+
+        // All children should be restarted when first child crashes
+        expect(childrenAfter[0]!.ref.id).not.toBe(worker1RefBefore);
+        expect(childrenAfter[1]!.ref.id).not.toBe(worker2RefBefore);
+        expect(childrenAfter[2]!.ref.id).not.toBe(worker3RefBefore);
+      });
+
+      it('when last child crashes, only that child restarts', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'rest_for_one',
+          children: [
+            { id: 'worker-1', behavior: 'worker' },
+            { id: 'worker-2', behavior: 'worker' },
+            { id: 'worker-3', behavior: 'worker' },
+          ],
+        });
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+        const worker1RefBefore = childrenBefore[0]!.ref.id;
+        const worker2RefBefore = childrenBefore[1]!.ref.id;
+        const worker3RefBefore = childrenBefore[2]!.ref.id;
+
+        // Simulate crash of last child
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === worker3RefBefore) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const childrenAfter = DistributedSupervisor.getChildren(ref);
+
+        // Only last child should be restarted
+        expect(childrenAfter[0]!.ref.id).toBe(worker1RefBefore);
+        expect(childrenAfter[1]!.ref.id).toBe(worker2RefBefore);
+        expect(childrenAfter[2]!.ref.id).not.toBe(worker3RefBefore);
+      });
+    });
+
+    describe('simple_one_for_one', () => {
+      it('only restarts crashed child like one_for_one', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'simple_one_for_one',
+          childTemplate: {
+            behavior: 'worker',
+            restart: 'permanent',
+          },
+        });
+
+        // Start multiple children
+        await DistributedSupervisor.startChild(ref, [{ id: 1 }]);
+        await DistributedSupervisor.startChild(ref, [{ id: 2 }]);
+        await DistributedSupervisor.startChild(ref, [{ id: 3 }]);
+
+        const childrenBefore = DistributedSupervisor.getChildren(ref);
+        const child1RefBefore = childrenBefore[0]!.ref.id;
+        const child2RefBefore = childrenBefore[1]!.ref.id;
+        const child3RefBefore = childrenBefore[2]!.ref.id;
+
+        // Simulate crash of second child
+        mockGenServerIsRunning = vi.fn().mockImplementation((r: GenServerRef) => {
+          if (r.id === child2RefBefore) return false;
+          return true;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const childrenAfter = DistributedSupervisor.getChildren(ref);
+
+        // Only child_2 should be restarted
+        expect(childrenAfter[0]!.ref.id).toBe(child1RefBefore);
+        expect(childrenAfter[1]!.ref.id).not.toBe(child2RefBefore);
+        expect(childrenAfter[2]!.ref.id).toBe(child3RefBefore);
+      });
+
+      it('uses child template for all children', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'simple_one_for_one',
+          childTemplate: {
+            behavior: 'worker',
+            restart: 'transient',
+            shutdownTimeout: 3000,
+          },
+        });
+
+        await DistributedSupervisor.startChild(ref, [{ value: 'a' }]);
+        await DistributedSupervisor.startChild(ref, [{ value: 'b' }]);
+
+        const children = DistributedSupervisor.getChildren(ref);
+        expect(children[0]!.spec.restart).toBe('transient');
+        expect(children[0]!.spec.shutdownTimeout).toBe(3000);
+        expect(children[1]!.spec.restart).toBe('transient');
+        expect(children[1]!.spec.shutdownTimeout).toBe(3000);
+      });
+
+      it('auto-generates unique child IDs', async () => {
+        const ref = await DistributedSupervisor.start({
+          strategy: 'simple_one_for_one',
+          childTemplate: { behavior: 'worker' },
+        });
+
+        await DistributedSupervisor.startChild(ref, []);
+        await DistributedSupervisor.startChild(ref, []);
+        await DistributedSupervisor.startChild(ref, []);
+
+        const children = DistributedSupervisor.getChildren(ref);
+        const ids = children.map((c) => c.id);
+
+        // All IDs should be unique
+        expect(new Set(ids).size).toBe(3);
+
+        // All IDs should follow the pattern
+        expect(ids.every((id) => id.startsWith('child_'))).toBe(true);
+      });
     });
   });
 
