@@ -191,9 +191,14 @@ export {
 
 export {
   MonitorRegistry,
+  RemoteMonitor,
+  RemoteMonitorTimeoutError,
+  _resetRemoteMonitorState,
   type OutgoingMonitor,
   type IncomingMonitor,
   type MonitorRegistryStats,
+  type RemoteMonitorOptions,
+  type RemoteMonitorStats,
 } from './monitor/index.js';
 
 // =============================================================================
