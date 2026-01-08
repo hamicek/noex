@@ -12,11 +12,13 @@ import type {
   NodeIPCResponse,
   NodeStartConfig,
   CrashMode,
+  DistributedSupervisorIPCOptions,
+  DistributedChildSpecIPC,
 } from './cluster-factory.js';
 
 // Dynamic import to handle ESM
 async function main(): Promise<void> {
-  const { Cluster, GenServer, BehaviorRegistry, RemoteCall, RemoteSpawn, RemoteMonitor, GlobalRegistry } = await import('../../../src/index.js');
+  const { Cluster, GenServer, BehaviorRegistry, RemoteCall, RemoteSpawn, RemoteMonitor, GlobalRegistry, DistributedSupervisor } = await import('../../../src/index.js');
 
   // Registered behaviors for spawning
   const registeredBehaviors = new Map<string, () => any>();
@@ -26,6 +28,12 @@ async function main(): Promise<void> {
 
   // Active monitor references (monitorRefId -> MonitorRef)
   const activeMonitors = new Map<string, any>();
+
+  // Active DistributedSupervisor references (supervisorId -> SupervisorRef)
+  const activeSupervisors = new Map<string, any>();
+
+  // Unsubscribe function for DistributedSupervisor lifecycle events
+  let dsupLifecycleUnsubscribe: (() => void) | null = null;
 
   /**
    * Sends a response to the parent process.
@@ -120,6 +128,43 @@ async function main(): Promise<void> {
 
         case 'get_global_registry_names':
           handleGetGlobalRegistryNames();
+          break;
+
+        // DistributedSupervisor messages
+        case 'dsup_start':
+          await handleDsupStart(msg.requestId, msg.options);
+          break;
+
+        case 'dsup_stop':
+          await handleDsupStop(msg.requestId, msg.supervisorId, msg.reason);
+          break;
+
+        case 'dsup_start_child':
+          await handleDsupStartChild(msg.requestId, msg.supervisorId, msg.spec);
+          break;
+
+        case 'dsup_terminate_child':
+          await handleDsupTerminateChild(msg.requestId, msg.supervisorId, msg.childId);
+          break;
+
+        case 'dsup_restart_child':
+          await handleDsupRestartChild(msg.requestId, msg.supervisorId, msg.childId);
+          break;
+
+        case 'dsup_get_children':
+          handleDsupGetChildren(msg.requestId, msg.supervisorId);
+          break;
+
+        case 'dsup_get_stats':
+          handleDsupGetStats(msg.requestId, msg.supervisorId);
+          break;
+
+        case 'dsup_count_children':
+          handleDsupCountChildren(msg.requestId, msg.supervisorId);
+          break;
+
+        case 'dsup_is_running':
+          handleDsupIsRunning(msg.requestId, msg.supervisorId);
           break;
       }
     } catch (error) {
@@ -770,6 +815,492 @@ async function main(): Promise<void> {
     sendResponse({
       type: 'global_registry_names',
       names: [...names],
+    });
+  }
+
+  // ===========================================================================
+  // DistributedSupervisor Handlers
+  // ===========================================================================
+
+  /**
+   * Sets up the DistributedSupervisor lifecycle event listener.
+   */
+  function setupDsupLifecycleListener(): void {
+    if (dsupLifecycleUnsubscribe !== null) {
+      return; // Already set up
+    }
+
+    dsupLifecycleUnsubscribe = DistributedSupervisor.onLifecycleEvent((event) => {
+      // Convert the event to IPC format
+      let ipcEvent: any;
+
+      switch (event.type) {
+        case 'supervisor_started':
+          ipcEvent = {
+            type: 'supervisor_started',
+            supervisorId: event.ref.id,
+            nodeId: event.ref.nodeId,
+          };
+          break;
+
+        case 'supervisor_stopped':
+          ipcEvent = {
+            type: 'supervisor_stopped',
+            supervisorId: event.ref.id,
+            reason: event.reason,
+          };
+          break;
+
+        case 'child_started':
+          ipcEvent = {
+            type: 'child_started',
+            supervisorId: event.supervisorId,
+            childId: event.childId,
+            nodeId: event.nodeId,
+            processId: event.ref.id,
+          };
+          break;
+
+        case 'child_stopped':
+          ipcEvent = {
+            type: 'child_stopped',
+            supervisorId: event.supervisorId,
+            childId: event.childId,
+            reason: event.reason,
+          };
+          break;
+
+        case 'child_restarted':
+          ipcEvent = {
+            type: 'child_restarted',
+            supervisorId: event.supervisorId,
+            childId: event.childId,
+            attempt: event.attempt,
+            nodeId: event.newRef.nodeId,
+          };
+          break;
+
+        case 'child_migrated':
+          ipcEvent = {
+            type: 'child_migrated',
+            supervisorId: event.supervisorId,
+            childId: event.childId,
+            fromNode: event.fromNode,
+            toNode: event.toNode,
+          };
+          break;
+
+        case 'node_failure_detected':
+          ipcEvent = {
+            type: 'node_failure_detected',
+            supervisorId: event.supervisorId,
+            nodeId: event.nodeId,
+            affectedChildren: event.affectedChildren,
+          };
+          break;
+
+        case 'max_restarts_exceeded':
+          ipcEvent = {
+            type: 'max_restarts_exceeded',
+            supervisorId: event.supervisorId,
+            childId: event.childId,
+          };
+          break;
+
+        default:
+          return; // Unknown event type
+      }
+
+      sendResponse({
+        type: 'dsup_lifecycle_event',
+        event: ipcEvent,
+      });
+    });
+  }
+
+  /**
+   * Starts a DistributedSupervisor.
+   */
+  async function handleDsupStart(
+    requestId: string,
+    options: DistributedSupervisorIPCOptions,
+  ): Promise<void> {
+    try {
+      // Ensure lifecycle listener is set up
+      setupDsupLifecycleListener();
+
+      // Convert IPC options to actual options
+      const supervisorOptions: any = {
+        strategy: options.strategy,
+        restartIntensity: options.restartIntensity,
+        autoShutdown: options.autoShutdown,
+        nodeSelector: options.nodeSelector,
+      };
+
+      // Convert children specs
+      if (options.children) {
+        supervisorOptions.children = options.children.map((spec) => ({
+          id: spec.id,
+          behavior: spec.behavior,
+          restart: spec.restart,
+          shutdownTimeout: spec.shutdownTimeout,
+          significant: spec.significant,
+          nodeSelector: spec.targetNodeId
+            ? () => spec.targetNodeId
+            : undefined,
+        }));
+      }
+
+      // Convert child template
+      if (options.childTemplate) {
+        supervisorOptions.childTemplate = {
+          behavior: options.childTemplate.behavior,
+          restart: options.childTemplate.restart,
+          shutdownTimeout: options.childTemplate.shutdownTimeout,
+          significant: options.childTemplate.significant,
+        };
+      }
+
+      const ref = await DistributedSupervisor.start(supervisorOptions);
+
+      // Store reference
+      activeSupervisors.set(ref.id, ref);
+
+      sendResponse({
+        type: 'dsup_started',
+        requestId,
+        supervisorId: ref.id,
+        nodeId: ref.nodeId,
+      });
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'dsup_start_error',
+        requestId,
+        errorType,
+        message,
+      });
+    }
+  }
+
+  /**
+   * Stops a DistributedSupervisor.
+   */
+  async function handleDsupStop(
+    requestId: string,
+    supervisorId: string,
+    reason?: 'normal' | 'shutdown',
+  ): Promise<void> {
+    try {
+      const ref = activeSupervisors.get(supervisorId);
+      if (!ref) {
+        sendResponse({
+          type: 'dsup_stop_error',
+          requestId,
+          errorType: 'SupervisorNotFound',
+          message: `Supervisor '${supervisorId}' not found`,
+        });
+        return;
+      }
+
+      await DistributedSupervisor.stop(ref, reason);
+      activeSupervisors.delete(supervisorId);
+
+      sendResponse({
+        type: 'dsup_stopped',
+        requestId,
+      });
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'dsup_stop_error',
+        requestId,
+        errorType,
+        message,
+      });
+    }
+  }
+
+  /**
+   * Starts a child in a DistributedSupervisor.
+   */
+  async function handleDsupStartChild(
+    requestId: string,
+    supervisorId: string,
+    spec: DistributedChildSpecIPC,
+  ): Promise<void> {
+    try {
+      const ref = activeSupervisors.get(supervisorId);
+      if (!ref) {
+        sendResponse({
+          type: 'dsup_child_start_error',
+          requestId,
+          errorType: 'SupervisorNotFound',
+          message: `Supervisor '${supervisorId}' not found`,
+        });
+        return;
+      }
+
+      // Convert IPC spec to actual spec
+      const childSpec: any = {
+        id: spec.id,
+        behavior: spec.behavior,
+        restart: spec.restart,
+        shutdownTimeout: spec.shutdownTimeout,
+        significant: spec.significant,
+        nodeSelector: spec.targetNodeId
+          ? () => spec.targetNodeId
+          : undefined,
+      };
+
+      const childRef = await DistributedSupervisor.startChild(ref, childSpec);
+
+      sendResponse({
+        type: 'dsup_child_started',
+        requestId,
+        childRef: { id: childRef.id, nodeId: childRef.nodeId },
+      });
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'dsup_child_start_error',
+        requestId,
+        errorType,
+        message,
+      });
+    }
+  }
+
+  /**
+   * Terminates a child in a DistributedSupervisor.
+   */
+  async function handleDsupTerminateChild(
+    requestId: string,
+    supervisorId: string,
+    childId: string,
+  ): Promise<void> {
+    try {
+      const ref = activeSupervisors.get(supervisorId);
+      if (!ref) {
+        sendResponse({
+          type: 'dsup_child_terminate_error',
+          requestId,
+          errorType: 'SupervisorNotFound',
+          message: `Supervisor '${supervisorId}' not found`,
+        });
+        return;
+      }
+
+      await DistributedSupervisor.terminateChild(ref, childId);
+
+      sendResponse({
+        type: 'dsup_child_terminated',
+        requestId,
+      });
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'dsup_child_terminate_error',
+        requestId,
+        errorType,
+        message,
+      });
+    }
+  }
+
+  /**
+   * Restarts a child in a DistributedSupervisor.
+   */
+  async function handleDsupRestartChild(
+    requestId: string,
+    supervisorId: string,
+    childId: string,
+  ): Promise<void> {
+    try {
+      const ref = activeSupervisors.get(supervisorId);
+      if (!ref) {
+        sendResponse({
+          type: 'dsup_child_restart_error',
+          requestId,
+          errorType: 'SupervisorNotFound',
+          message: `Supervisor '${supervisorId}' not found`,
+        });
+        return;
+      }
+
+      const newRef = await DistributedSupervisor.restartChild(ref, childId);
+
+      sendResponse({
+        type: 'dsup_child_restarted',
+        requestId,
+        childRef: { id: newRef.id, nodeId: newRef.nodeId },
+      });
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'dsup_child_restart_error',
+        requestId,
+        errorType,
+        message,
+      });
+    }
+  }
+
+  /**
+   * Gets all children of a DistributedSupervisor.
+   */
+  function handleDsupGetChildren(
+    requestId: string,
+    supervisorId: string,
+  ): void {
+    try {
+      const ref = activeSupervisors.get(supervisorId);
+      if (!ref) {
+        sendResponse({
+          type: 'dsup_children_error',
+          requestId,
+          errorType: 'SupervisorNotFound',
+          message: `Supervisor '${supervisorId}' not found`,
+        });
+        return;
+      }
+
+      const children = DistributedSupervisor.getChildren(ref);
+
+      sendResponse({
+        type: 'dsup_children',
+        requestId,
+        children: children.map((child) => ({
+          id: child.id,
+          ref: { id: child.ref.id, nodeId: child.ref.nodeId },
+          nodeId: child.nodeId,
+          spec: {
+            id: child.spec.id,
+            behavior: child.spec.behavior,
+            restart: child.spec.restart,
+            shutdownTimeout: child.spec.shutdownTimeout,
+            significant: child.spec.significant,
+          },
+          restartCount: child.restartCount,
+          startedAt: child.startedAt,
+        })),
+      });
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'dsup_children_error',
+        requestId,
+        errorType,
+        message,
+      });
+    }
+  }
+
+  /**
+   * Gets statistics from a DistributedSupervisor.
+   */
+  function handleDsupGetStats(
+    requestId: string,
+    supervisorId: string,
+  ): void {
+    try {
+      const ref = activeSupervisors.get(supervisorId);
+      if (!ref) {
+        sendResponse({
+          type: 'dsup_stats_error',
+          requestId,
+          errorType: 'SupervisorNotFound',
+          message: `Supervisor '${supervisorId}' not found`,
+        });
+        return;
+      }
+
+      const stats = DistributedSupervisor.getStats(ref);
+
+      sendResponse({
+        type: 'dsup_stats',
+        requestId,
+        stats: {
+          id: stats.id,
+          strategy: stats.strategy,
+          childCount: stats.childCount,
+          totalRestarts: stats.totalRestarts,
+          nodeFailureRestarts: stats.nodeFailureRestarts,
+          uptimeMs: stats.uptimeMs,
+          localChildren: stats.localChildren,
+          remoteChildren: stats.remoteChildren,
+        },
+      });
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'dsup_stats_error',
+        requestId,
+        errorType,
+        message,
+      });
+    }
+  }
+
+  /**
+   * Counts children of a DistributedSupervisor.
+   */
+  function handleDsupCountChildren(
+    requestId: string,
+    supervisorId: string,
+  ): void {
+    try {
+      const ref = activeSupervisors.get(supervisorId);
+      if (!ref) {
+        sendResponse({
+          type: 'dsup_count_error',
+          requestId,
+          errorType: 'SupervisorNotFound',
+          message: `Supervisor '${supervisorId}' not found`,
+        });
+        return;
+      }
+
+      const count = DistributedSupervisor.countChildren(ref);
+
+      sendResponse({
+        type: 'dsup_count',
+        requestId,
+        count,
+      });
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'dsup_count_error',
+        requestId,
+        errorType,
+        message,
+      });
+    }
+  }
+
+  /**
+   * Checks if a DistributedSupervisor is running.
+   */
+  function handleDsupIsRunning(
+    requestId: string,
+    supervisorId: string,
+  ): void {
+    const ref = activeSupervisors.get(supervisorId);
+    const isRunning = ref ? DistributedSupervisor.isRunning(ref) : false;
+
+    sendResponse({
+      type: 'dsup_is_running_result',
+      requestId,
+      isRunning,
     });
   }
 

@@ -83,7 +83,17 @@ export type NodeIPCMessage =
   | { type: 'global_lookup'; lookupId: string; name: string }
   | { type: 'global_whereis'; lookupId: string; name: string }
   | { type: 'get_global_registry_stats' }
-  | { type: 'get_global_registry_names' };
+  | { type: 'get_global_registry_names' }
+  // DistributedSupervisor messages
+  | { type: 'dsup_start'; requestId: string; options: DistributedSupervisorIPCOptions }
+  | { type: 'dsup_stop'; requestId: string; supervisorId: string; reason?: 'normal' | 'shutdown' }
+  | { type: 'dsup_start_child'; requestId: string; supervisorId: string; spec: DistributedChildSpecIPC }
+  | { type: 'dsup_terminate_child'; requestId: string; supervisorId: string; childId: string }
+  | { type: 'dsup_restart_child'; requestId: string; supervisorId: string; childId: string }
+  | { type: 'dsup_get_children'; requestId: string; supervisorId: string }
+  | { type: 'dsup_get_stats'; requestId: string; supervisorId: string }
+  | { type: 'dsup_count_children'; requestId: string; supervisorId: string }
+  | { type: 'dsup_is_running'; requestId: string; supervisorId: string };
 
 /**
  * Response types from child process.
@@ -122,7 +132,27 @@ export type NodeIPCResponse =
   | { type: 'global_registry_registered'; name: string; ref: { id: string; nodeId: string } }
   | { type: 'global_registry_unregistered'; name: string; ref: { id: string; nodeId: string } }
   | { type: 'global_registry_conflict_resolved'; name: string; winner: { id: string; nodeId: string }; loser: { id: string; nodeId: string } }
-  | { type: 'global_registry_synced'; fromNodeId: string; entriesCount: number };
+  | { type: 'global_registry_synced'; fromNodeId: string; entriesCount: number }
+  // DistributedSupervisor responses
+  | { type: 'dsup_started'; requestId: string; supervisorId: string; nodeId: string }
+  | { type: 'dsup_start_error'; requestId: string; errorType: string; message: string }
+  | { type: 'dsup_stopped'; requestId: string }
+  | { type: 'dsup_stop_error'; requestId: string; errorType: string; message: string }
+  | { type: 'dsup_child_started'; requestId: string; childRef: { id: string; nodeId: string } }
+  | { type: 'dsup_child_start_error'; requestId: string; errorType: string; message: string }
+  | { type: 'dsup_child_terminated'; requestId: string }
+  | { type: 'dsup_child_terminate_error'; requestId: string; errorType: string; message: string }
+  | { type: 'dsup_child_restarted'; requestId: string; childRef: { id: string; nodeId: string } }
+  | { type: 'dsup_child_restart_error'; requestId: string; errorType: string; message: string }
+  | { type: 'dsup_children'; requestId: string; children: DistributedChildInfoIPC[] }
+  | { type: 'dsup_children_error'; requestId: string; errorType: string; message: string }
+  | { type: 'dsup_stats'; requestId: string; stats: DistributedSupervisorStatsIPC }
+  | { type: 'dsup_stats_error'; requestId: string; errorType: string; message: string }
+  | { type: 'dsup_count'; requestId: string; count: number }
+  | { type: 'dsup_count_error'; requestId: string; errorType: string; message: string }
+  | { type: 'dsup_is_running_result'; requestId: string; isRunning: boolean }
+  // DistributedSupervisor lifecycle events
+  | { type: 'dsup_lifecycle_event'; event: DistributedSupervisorEventIPC };
 
 /**
  * GlobalRegistry statistics result from IPC.
@@ -156,6 +186,73 @@ export interface RemoteSpawnIPCOptions {
   readonly initTimeout?: number;
 }
 
+// =============================================================================
+// DistributedSupervisor IPC Types
+// =============================================================================
+
+/**
+ * Child specification for DistributedSupervisor IPC.
+ */
+export interface DistributedChildSpecIPC {
+  readonly id: string;
+  readonly behavior: string;
+  readonly restart?: 'permanent' | 'transient' | 'temporary';
+  readonly shutdownTimeout?: number;
+  readonly significant?: boolean;
+  readonly targetNodeId?: string;
+}
+
+/**
+ * Options for starting DistributedSupervisor via IPC.
+ */
+export interface DistributedSupervisorIPCOptions {
+  readonly strategy?: 'one_for_one' | 'one_for_all' | 'rest_for_one' | 'simple_one_for_one';
+  readonly children?: readonly DistributedChildSpecIPC[];
+  readonly childTemplate?: Omit<DistributedChildSpecIPC, 'id'>;
+  readonly restartIntensity?: { maxRestarts: number; withinMs: number };
+  readonly autoShutdown?: 'never' | 'any_significant' | 'all_significant';
+  readonly nodeSelector?: 'local_first' | 'round_robin' | 'least_loaded';
+}
+
+/**
+ * Child info returned from DistributedSupervisor via IPC.
+ */
+export interface DistributedChildInfoIPC {
+  readonly id: string;
+  readonly ref: { id: string; nodeId: string };
+  readonly nodeId: string;
+  readonly spec: DistributedChildSpecIPC;
+  readonly restartCount: number;
+  readonly startedAt: number;
+}
+
+/**
+ * Statistics from DistributedSupervisor via IPC.
+ */
+export interface DistributedSupervisorStatsIPC {
+  readonly id: string;
+  readonly strategy: 'one_for_one' | 'one_for_all' | 'rest_for_one' | 'simple_one_for_one';
+  readonly childCount: number;
+  readonly totalRestarts: number;
+  readonly nodeFailureRestarts: number;
+  readonly uptimeMs: number;
+  readonly localChildren: number;
+  readonly remoteChildren: number;
+}
+
+/**
+ * DistributedSupervisor lifecycle event for IPC.
+ */
+export type DistributedSupervisorEventIPC =
+  | { type: 'supervisor_started'; supervisorId: string; nodeId: string }
+  | { type: 'supervisor_stopped'; supervisorId: string; reason: string }
+  | { type: 'child_started'; supervisorId: string; childId: string; nodeId: string; processId: string }
+  | { type: 'child_stopped'; supervisorId: string; childId: string; reason: string }
+  | { type: 'child_restarted'; supervisorId: string; childId: string; attempt: number; nodeId: string }
+  | { type: 'child_migrated'; supervisorId: string; childId: string; fromNode: string; toNode: string }
+  | { type: 'node_failure_detected'; supervisorId: string; nodeId: string; affectedChildren: readonly string[] }
+  | { type: 'max_restarts_exceeded'; supervisorId: string; childId: string };
+
 /**
  * Crash modes for node simulation.
  */
@@ -188,6 +285,8 @@ export interface TestClusterEvents {
   globalConflictResolved: [name: string, winner: { id: string; nodeId: string }, loser: { id: string; nodeId: string }, fromNodeId: string];
   /** Emitted when registry sync completes. */
   globalSynced: [fromNodeId: string, entriesCount: number, reportingNodeId: string];
+  /** Emitted when a distributed supervisor lifecycle event occurs. */
+  dsupLifecycleEvent: [event: DistributedSupervisorEventIPC, fromNodeId: string];
 }
 
 /**
@@ -883,6 +982,307 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
     return await this.sendMessage(node, { type: 'get_global_registry_names' }, 5000);
   }
 
+  // ===========================================================================
+  // DistributedSupervisor Methods
+  // ===========================================================================
+
+  /** Counter for generating unique DistributedSupervisor request IDs. */
+  private dsupRequestIdCounter = 0;
+
+  /**
+   * Starts a DistributedSupervisor on a node.
+   *
+   * @param nodeId - Node to start supervisor on
+   * @param options - Supervisor options
+   * @param timeoutMs - Start timeout in milliseconds
+   * @returns Supervisor reference, or error
+   */
+  async dsupStart(
+    nodeId: string,
+    options: DistributedSupervisorIPCOptions = {},
+    timeoutMs: number = 30000,
+  ): Promise<{ supervisorId: string; nodeId: string } | { error: true; errorType: string; message: string }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `dsup_start_${this.dsupRequestIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'dsup_start', requestId, options },
+      requestId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Stops a DistributedSupervisor on a node.
+   *
+   * @param nodeId - Node where supervisor is running
+   * @param supervisorId - Supervisor ID to stop
+   * @param reason - Stop reason
+   * @param timeoutMs - Stop timeout in milliseconds
+   */
+  async dsupStop(
+    nodeId: string,
+    supervisorId: string,
+    reason: 'normal' | 'shutdown' = 'normal',
+    timeoutMs: number = 30000,
+  ): Promise<void | { error: true; errorType: string; message: string }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `dsup_stop_${this.dsupRequestIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'dsup_stop', requestId, supervisorId, reason },
+      requestId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Starts a child in a DistributedSupervisor.
+   *
+   * @param nodeId - Node where supervisor is running
+   * @param supervisorId - Supervisor ID
+   * @param spec - Child specification
+   * @param timeoutMs - Start timeout in milliseconds
+   * @returns Child reference, or error
+   */
+  async dsupStartChild(
+    nodeId: string,
+    supervisorId: string,
+    spec: DistributedChildSpecIPC,
+    timeoutMs: number = 30000,
+  ): Promise<{ childRef: { id: string; nodeId: string } } | { error: true; errorType: string; message: string }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `dsup_child_${this.dsupRequestIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'dsup_start_child', requestId, supervisorId, spec },
+      requestId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Terminates a child in a DistributedSupervisor.
+   *
+   * @param nodeId - Node where supervisor is running
+   * @param supervisorId - Supervisor ID
+   * @param childId - Child ID to terminate
+   * @param timeoutMs - Terminate timeout in milliseconds
+   */
+  async dsupTerminateChild(
+    nodeId: string,
+    supervisorId: string,
+    childId: string,
+    timeoutMs: number = 10000,
+  ): Promise<void | { error: true; errorType: string; message: string }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `dsup_term_${this.dsupRequestIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'dsup_terminate_child', requestId, supervisorId, childId },
+      requestId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Restarts a child in a DistributedSupervisor.
+   *
+   * @param nodeId - Node where supervisor is running
+   * @param supervisorId - Supervisor ID
+   * @param childId - Child ID to restart
+   * @param timeoutMs - Restart timeout in milliseconds
+   * @returns New child reference, or error
+   */
+  async dsupRestartChild(
+    nodeId: string,
+    supervisorId: string,
+    childId: string,
+    timeoutMs: number = 30000,
+  ): Promise<{ childRef: { id: string; nodeId: string } } | { error: true; errorType: string; message: string }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `dsup_restart_${this.dsupRequestIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'dsup_restart_child', requestId, supervisorId, childId },
+      requestId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Gets all children of a DistributedSupervisor.
+   *
+   * @param nodeId - Node where supervisor is running
+   * @param supervisorId - Supervisor ID
+   * @param timeoutMs - Timeout in milliseconds
+   * @returns Array of child info
+   */
+  async dsupGetChildren(
+    nodeId: string,
+    supervisorId: string,
+    timeoutMs: number = 5000,
+  ): Promise<DistributedChildInfoIPC[] | { error: true; errorType: string; message: string }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `dsup_children_${this.dsupRequestIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'dsup_get_children', requestId, supervisorId },
+      requestId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Gets statistics from a DistributedSupervisor.
+   *
+   * @param nodeId - Node where supervisor is running
+   * @param supervisorId - Supervisor ID
+   * @param timeoutMs - Timeout in milliseconds
+   * @returns Supervisor stats
+   */
+  async dsupGetStats(
+    nodeId: string,
+    supervisorId: string,
+    timeoutMs: number = 5000,
+  ): Promise<DistributedSupervisorStatsIPC | { error: true; errorType: string; message: string }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `dsup_stats_${this.dsupRequestIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'dsup_get_stats', requestId, supervisorId },
+      requestId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Counts children of a DistributedSupervisor.
+   *
+   * @param nodeId - Node where supervisor is running
+   * @param supervisorId - Supervisor ID
+   * @param timeoutMs - Timeout in milliseconds
+   * @returns Child count
+   */
+  async dsupCountChildren(
+    nodeId: string,
+    supervisorId: string,
+    timeoutMs: number = 5000,
+  ): Promise<number | { error: true; errorType: string; message: string }> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `dsup_count_${this.dsupRequestIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'dsup_count_children', requestId, supervisorId },
+      requestId,
+      timeoutMs + 5000,
+    );
+  }
+
+  /**
+   * Checks if a DistributedSupervisor is running.
+   *
+   * @param nodeId - Node where supervisor is running
+   * @param supervisorId - Supervisor ID
+   * @param timeoutMs - Timeout in milliseconds
+   * @returns Whether supervisor is running
+   */
+  async dsupIsRunning(
+    nodeId: string,
+    supervisorId: string,
+    timeoutMs: number = 5000,
+  ): Promise<boolean> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `dsup_running_${this.dsupRequestIdCounter++}_${Date.now()}`;
+
+    return await this.sendMessageWithId(
+      node,
+      { type: 'dsup_is_running', requestId, supervisorId },
+      requestId,
+      timeoutMs + 5000,
+    );
+  }
+
   /**
    * Starts the cluster by spawning all node processes.
    * Called internally by TestClusterFactory.
@@ -1189,6 +1589,111 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
 
       case 'global_registry_synced':
         this.emit('globalSynced', msg.fromNodeId, msg.entriesCount, node.nodeId);
+        break;
+
+      // DistributedSupervisor responses
+      case 'dsup_started':
+        this.resolvePending(node, msg.requestId, { supervisorId: msg.supervisorId, nodeId: msg.nodeId });
+        break;
+
+      case 'dsup_start_error':
+        this.resolvePending(node, msg.requestId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+        });
+        break;
+
+      case 'dsup_stopped':
+        this.resolvePending(node, msg.requestId);
+        break;
+
+      case 'dsup_stop_error':
+        this.resolvePending(node, msg.requestId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+        });
+        break;
+
+      case 'dsup_child_started':
+        this.resolvePending(node, msg.requestId, { childRef: msg.childRef });
+        break;
+
+      case 'dsup_child_start_error':
+        this.resolvePending(node, msg.requestId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+        });
+        break;
+
+      case 'dsup_child_terminated':
+        this.resolvePending(node, msg.requestId);
+        break;
+
+      case 'dsup_child_terminate_error':
+        this.resolvePending(node, msg.requestId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+        });
+        break;
+
+      case 'dsup_child_restarted':
+        this.resolvePending(node, msg.requestId, { childRef: msg.childRef });
+        break;
+
+      case 'dsup_child_restart_error':
+        this.resolvePending(node, msg.requestId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+        });
+        break;
+
+      case 'dsup_children':
+        this.resolvePending(node, msg.requestId, msg.children);
+        break;
+
+      case 'dsup_children_error':
+        this.resolvePending(node, msg.requestId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+        });
+        break;
+
+      case 'dsup_stats':
+        this.resolvePending(node, msg.requestId, msg.stats);
+        break;
+
+      case 'dsup_stats_error':
+        this.resolvePending(node, msg.requestId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+        });
+        break;
+
+      case 'dsup_count':
+        this.resolvePending(node, msg.requestId, msg.count);
+        break;
+
+      case 'dsup_count_error':
+        this.resolvePending(node, msg.requestId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+        });
+        break;
+
+      case 'dsup_is_running_result':
+        this.resolvePending(node, msg.requestId, msg.isRunning);
+        break;
+
+      case 'dsup_lifecycle_event':
+        this.emit('dsupLifecycleEvent', msg.event, node.nodeId);
         break;
     }
   }

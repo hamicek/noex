@@ -180,6 +180,8 @@ export {
   RemoteMonitorTimeoutError,
   // Global Registry
   GlobalRegistry,
+  // Distributed Supervisor
+  DistributedSupervisor,
   // Error classes
   InvalidNodeIdError,
   RemoteServerNotRunningError,
@@ -263,4 +265,12 @@ export type {
   // Global registry types
   GlobalRegistryEvents,
   GlobalRegistryStats,
+  // Distributed Supervisor types
+  DistributedSupervisorRef,
+  DistributedSupervisorOptions,
+  DistributedSupervisorStats,
+  DistributedSupervisorEvent,
+  DistributedSupervisorEventHandler,
+  DistributedChildSpec,
+  DistributedChildInfo,
 } from './distribution/index.js';
