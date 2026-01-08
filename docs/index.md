@@ -18,6 +18,7 @@ Elixir-style GenServer and Supervisor patterns for TypeScript.
 |---------|-------------|
 | [Getting Started](./getting-started/index.md) | Installation, quick start, first application |
 | [Core Concepts](./concepts/index.md) | GenServer, Supervisor, Registry, lifecycle |
+| [Distribution](./distribution/index.md) | Clustering, remote processes, fault tolerance |
 | [Guides](./guides/index.md) | Building services, supervision trees, testing |
 | [Tutorials](./tutorials/index.md) | Step-by-step projects (chat server, e-commerce) |
 | [API Reference](./api/index.md) | Complete API documentation |
@@ -97,11 +98,21 @@ await Supervisor.stop(supervisor);
 | **Dashboard** | TUI-based monitoring interface |
 | **DashboardServer** | Remote monitoring via TCP |
 
+### Distribution
+
+| Feature | Description |
+|---------|-------------|
+| **Cluster** | P2P node discovery and membership |
+| **RemoteCall/Cast** | Transparent cross-node messaging |
+| **GlobalRegistry** | Cluster-wide process naming |
+| **DistributedSupervisor** | Multi-node supervision with failover |
+
 ## Learn More
 
 - **New to noex?** Start with [Getting Started](./getting-started/index.md)
 - **Coming from Elixir?** Check out [Elixir Comparison](./concepts/elixir-comparison.md)
 - **Want to dive deep?** Read the [Core Concepts](./concepts/index.md)
+- **Building distributed systems?** Explore [Distribution](./distribution/index.md)
 - **Looking for examples?** Browse [Tutorials](./tutorials/index.md) and [Examples](./examples/index.md)
 
 ## Version

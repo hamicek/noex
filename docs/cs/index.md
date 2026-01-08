@@ -18,6 +18,7 @@ Elixir-style GenServer a Supervisor vzory pro TypeScript.
 |-------|-------|
 | [Začínáme](./getting-started/index.md) | Instalace, rychlý start, první aplikace |
 | [Základní koncepty](./concepts/index.md) | GenServer, Supervisor, Registry, životní cyklus |
+| [Distribuce](./distribution/index.md) | Clustering, vzdálené procesy, odolnost proti chybám |
 | [Průvodci](./guides/index.md) | Vytváření služeb, supervision stromy, testování |
 | [Tutoriály](./tutorials/index.md) | Projekty krok za krokem (chat server, e-commerce) |
 | [API Reference](./api/index.md) | Kompletní API dokumentace |
@@ -97,11 +98,21 @@ await Supervisor.stop(supervisor);
 | **Dashboard** | TUI-based monitorovací rozhraní |
 | **DashboardServer** | Vzdálený monitoring přes TCP |
 
+### Distribuce
+
+| Funkce | Popis |
+|--------|-------|
+| **Cluster** | P2P discovery uzlů a membership |
+| **RemoteCall/Cast** | Transparentní messaging mezi uzly |
+| **GlobalRegistry** | Cluster-wide pojmenování procesů |
+| **DistributedSupervisor** | Multi-node supervize s failover |
+
 ## Další informace
 
 - **Nový v noex?** Začněte s [Začínáme](./getting-started/index.md)
 - **Přicházíte z Elixiru?** Podívejte se na [Porovnání s Elixirem](./concepts/elixir-comparison.md)
 - **Chcete jít do hloubky?** Přečtěte si [Základní koncepty](./concepts/index.md)
+- **Stavíte distribuované systémy?** Prozkoumejte [Distribuce](./distribution/index.md)
 - **Hledáte příklady?** Prozkoumejte [Tutoriály](./tutorials/index.md) a [Příklady](./examples/index.md)
 
 ## Verze

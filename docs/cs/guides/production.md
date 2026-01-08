@@ -610,3 +610,4 @@ function loadConfig(): AppConfig {
 - [Observer API](../api/observer.md) - Reference monitoring API
 - [AlertManager API](../api/alert-manager.md) - Konfigurace alertingu
 - [Příručka Supervision Trees](./supervision-trees.md) - Design fault-tolerant stromů
+- [Distribuované nasazení](../distribution/guides/production-deployment.md) - Docker, Kubernetes, multi-node deployment

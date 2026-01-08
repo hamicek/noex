@@ -48,6 +48,40 @@ For developers familiar with Elixir/OTP:
 - Key differences and limitations
 - Migration patterns
 
+## Distribution
+
+Build distributed systems with noex clustering capabilities.
+
+### [Distribution Overview](../distribution/concepts/overview.md)
+Introduction to distributed noex:
+- P2P architecture without central coordination
+- Node discovery and cluster formation
+- When to use distribution
+
+### [Cluster](../distribution/concepts/cluster.md)
+Node discovery and membership:
+- Cluster formation and seeds
+- Heartbeats and failure detection
+- Network partitions
+
+### [Remote Messaging](../distribution/concepts/remote-messaging.md)
+Cross-node communication:
+- RemoteCall and RemoteCast
+- Serialization and network transport
+- Error handling patterns
+
+### [GlobalRegistry](../distribution/concepts/global-registry.md)
+Cluster-wide process naming:
+- Registering processes across nodes
+- Conflict resolution
+- Lookup patterns
+
+### [DistributedSupervisor](../distribution/concepts/distributed-supervisor.md)
+Multi-node supervision:
+- Failover strategies
+- Process placement
+- Node failure handling
+
 ## Quick Reference
 
 | Concept | Purpose | Key Types |

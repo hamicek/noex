@@ -41,6 +41,20 @@ Ukládání stavu pro GenServer procesy.
 |-------|-------|
 | [Persistence](./persistence.md) | Ukládání stavu se zásuvnými adaptéry |
 
+## Distribuce
+
+API pro stavbu distribuovaných systémů.
+
+| Modul | Popis |
+|-------|-------|
+| [Cluster](../distribution/api/cluster.md) | Discovery uzlů a membership |
+| [RemoteCall](../distribution/api/remote-call.md) | Cross-node call/cast messaging |
+| [RemoteSpawn](../distribution/api/remote-spawn.md) | Vzdálené spouštění procesů |
+| [GlobalRegistry](../distribution/api/global-registry.md) | Cluster-wide pojmenování procesů |
+| [RemoteMonitor](../distribution/api/remote-monitor.md) | Cross-node monitoring procesů |
+| [DistributedSupervisor](../distribution/api/distributed-supervisor.md) | Multi-node supervize |
+| [Typy distribuce](../distribution/api/types.md) | Definice typů a chyby |
+
 ## Typy a chyby
 
 | Modul | Popis |

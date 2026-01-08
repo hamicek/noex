@@ -610,3 +610,4 @@ function loadConfig(): AppConfig {
 - [Observer API](../api/observer.md) - Monitoring API reference
 - [AlertManager API](../api/alert-manager.md) - Alerting configuration
 - [Supervision Trees Guide](./supervision-trees.md) - Designing fault-tolerant trees
+- [Distributed Deployment](../distribution/guides/production-deployment.md) - Docker, Kubernetes, multi-node deployment

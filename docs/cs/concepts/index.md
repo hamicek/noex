@@ -48,6 +48,40 @@ Pro vývojáře obeznámené s Elixir/OTP:
 - Klíčové rozdíly a omezení
 - Migrační vzory
 
+## Distribuce
+
+Stavba distribuovaných systémů s clustering schopnostmi noex.
+
+### [Přehled distribuce](../distribution/concepts/overview.md)
+Úvod do distribuovaného noex:
+- P2P architektura bez centrální koordinace
+- Discovery uzlů a formování clusteru
+- Kdy použít distribuci
+
+### [Cluster](../distribution/concepts/cluster.md)
+Discovery uzlů a membership:
+- Formování clusteru a seeds
+- Heartbeaty a detekce selhání
+- Síťové partice
+
+### [Vzdálený messaging](../distribution/concepts/remote-messaging.md)
+Komunikace mezi uzly:
+- RemoteCall a RemoteCast
+- Serializace a síťový transport
+- Vzory zpracování chyb
+
+### [GlobalRegistry](../distribution/concepts/global-registry.md)
+Cluster-wide pojmenování procesů:
+- Registrace procesů napříč uzly
+- Řešení konfliktů
+- Vzory vyhledávání
+
+### [DistributedSupervisor](../distribution/concepts/distributed-supervisor.md)
+Multi-node supervize:
+- Failover strategie
+- Umístění procesů
+- Zpracování selhání uzlů
+
 ## Rychlý přehled
 
 | Koncept | Účel | Klíčové typy |

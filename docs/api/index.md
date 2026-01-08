@@ -41,6 +41,20 @@ State persistence for GenServer processes.
 |--------|-------------|
 | [Persistence](./persistence.md) | State persistence with pluggable adapters |
 
+## Distribution
+
+APIs for building distributed systems.
+
+| Module | Description |
+|--------|-------------|
+| [Cluster](../distribution/api/cluster.md) | Node discovery and membership |
+| [RemoteCall](../distribution/api/remote-call.md) | Cross-node call/cast messaging |
+| [RemoteSpawn](../distribution/api/remote-spawn.md) | Remote process spawning |
+| [GlobalRegistry](../distribution/api/global-registry.md) | Cluster-wide process naming |
+| [RemoteMonitor](../distribution/api/remote-monitor.md) | Cross-node process monitoring |
+| [DistributedSupervisor](../distribution/api/distributed-supervisor.md) | Multi-node supervision |
+| [Distribution Types](../distribution/api/types.md) | Type definitions and errors |
+
 ## Types & Errors
 
 | Module | Description |
