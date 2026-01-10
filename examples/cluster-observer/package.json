@@ -6,7 +6,11 @@
   "scripts": {
     "start:a": "tsx node.ts --name nodeA --port 4369",
     "start:b": "tsx node.ts --name nodeB --port 4370 --seed nodeA@127.0.0.1:4369",
-    "start:c": "tsx node.ts --name nodeC --port 4371 --seed nodeA@127.0.0.1:4369"
+    "start:c": "tsx node.ts --name nodeC --port 4371 --seed nodeA@127.0.0.1:4369",
+    "start:a:dashboard": "tsx node.ts --name nodeA --port 4369 --dashboard 9876",
+    "start:b:dashboard": "tsx node.ts --name nodeB --port 4370 --seed nodeA@127.0.0.1:4369 --dashboard 9877",
+    "start:c:dashboard": "tsx node.ts --name nodeC --port 4371 --seed nodeA@127.0.0.1:4369 --dashboard 9878",
+    "dashboard": "noex-dashboard"
   },
   "dependencies": {
     "noex": "file:../.."

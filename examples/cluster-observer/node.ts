@@ -23,8 +23,10 @@ import {
   Supervisor,
   Observer,
   Cluster,
+  DashboardServer,
   type NodeInfo,
   type NodeDownReason,
+  type DashboardServerRef,
 } from 'noex';
 
 import {
@@ -42,6 +44,7 @@ interface CliArgs {
   readonly name: string;
   readonly port: number;
   readonly seeds: readonly string[];
+  readonly dashboardPort: number | null;
 }
 
 /**
@@ -51,6 +54,7 @@ function parseArgs(): CliArgs {
   const args = process.argv.slice(2);
   let name = '';
   let port = 4369;
+  let dashboardPort: number | null = null;
   const seeds: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -69,24 +73,29 @@ function parseArgs(): CliArgs {
       case '-s':
         seeds.push(args[++i] ?? '');
         break;
+      case '--dashboard':
+      case '-d':
+        dashboardPort = parseInt(args[++i] ?? '9876', 10);
+        break;
     }
   }
 
   if (!name) {
-    console.error('Usage: npx tsx node.ts --name <name> --port <port> [--seed <node@host:port>]');
+    console.error('Usage: npx tsx node.ts --name <name> --port <port> [--seed <node@host:port>] [--dashboard <port>]');
     console.error('');
     console.error('Options:');
-    console.error('  --name, -n    Node name (required)');
-    console.error('  --port, -p    Cluster port (default: 4369)');
-    console.error('  --seed, -s    Seed node to connect to (can be repeated)');
+    console.error('  --name, -n           Node name (required)');
+    console.error('  --port, -p           Cluster port (default: 4369)');
+    console.error('  --seed, -s           Seed node to connect to (can be repeated)');
+    console.error('  --dashboard, -d      Start DashboardServer on specified port (default: 9876)');
     console.error('');
     console.error('Example:');
-    console.error('  Terminal 1: npx tsx node.ts --name nodeA --port 4369');
-    console.error('  Terminal 2: npx tsx node.ts --name nodeB --port 4370 --seed nodeA@127.0.0.1:4369');
+    console.error('  Terminal 1: npx tsx node.ts --name nodeA --port 4369 --dashboard 9876');
+    console.error('  Terminal 2: npx noex-dashboard   # connects to dashboard server');
     process.exit(1);
   }
 
-  return { name, port, seeds: seeds.filter(Boolean) };
+  return { name, port, seeds: seeds.filter(Boolean), dashboardPort };
 }
 
 // =============================================================================
@@ -156,11 +165,13 @@ function printClusterSnapshot(snapshot: ClusterObserverSnapshot): void {
 interface AppState {
   stopPolling: (() => void) | null;
   supervisor: Awaited<ReturnType<typeof Supervisor.start>> | null;
+  dashboardServer: DashboardServerRef | null;
 }
 
 const state: AppState = {
   stopPolling: null,
   supervisor: null,
+  dashboardServer: null,
 };
 
 // =============================================================================
@@ -254,6 +265,24 @@ async function startClusterMonitoring(): Promise<void> {
 }
 
 // =============================================================================
+// Dashboard Server
+// =============================================================================
+
+/**
+ * Starts the DashboardServer for remote TUI connections.
+ */
+async function startDashboardServer(port: number): Promise<void> {
+  try {
+    state.dashboardServer = await DashboardServer.start({ port });
+    console.log(`  DashboardServer started on port ${port}`);
+    console.log(`  Connect with: npx noex-dashboard --port ${port}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`  Failed to start DashboardServer: ${message}`);
+  }
+}
+
+// =============================================================================
 // Graceful Shutdown
 // =============================================================================
 
@@ -262,6 +291,13 @@ async function startClusterMonitoring(): Promise<void> {
  */
 async function shutdown(): Promise<void> {
   console.log('\nShutting down...');
+
+  // Stop dashboard server
+  if (state.dashboardServer !== null) {
+    await DashboardServer.stop(state.dashboardServer);
+    state.dashboardServer = null;
+    console.log('  DashboardServer stopped');
+  }
 
   // Stop polling
   if (state.stopPolling !== null) {
@@ -318,14 +354,19 @@ async function main(): Promise<void> {
   // 3. Create local processes for demonstration
   await createLocalProcesses(config.name);
 
-  // 4. Start cluster-wide monitoring
+  // 4. Start DashboardServer if requested
+  if (config.dashboardPort !== null) {
+    await startDashboardServer(config.dashboardPort);
+  }
+
+  // 5. Start cluster-wide monitoring (console output)
   await startClusterMonitoring();
 
   console.log(`\n${SEPARATOR}`);
   console.log('Node is running. Press Ctrl+C to exit.');
   console.log(SEPARATOR);
 
-  // 5. Set up graceful shutdown handlers
+  // 6. Set up graceful shutdown handlers
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 }

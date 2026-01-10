@@ -15,29 +15,79 @@ This example demonstrates distributed process monitoring across multiple nodes i
 
 Open **three terminal windows**.
 
-### Terminal 1 - Start Node A (seed node)
+### Console Mode (text output)
+
+#### Terminal 1 - Start Node A (seed node)
 
 ```bash
 cd examples/cluster-observer
 npm install
 npm run start:a
-# Or: npx tsx node.ts --name nodeA --port 4369
 ```
 
-### Terminal 2 - Start Node B
+#### Terminal 2 - Start Node B
 
 ```bash
 cd examples/cluster-observer
 npm run start:b
-# Or: npx tsx node.ts --name nodeB --port 4370 --seed nodeA@127.0.0.1:4369
 ```
 
-### Terminal 3 - Start Node C
+#### Terminal 3 - Start Node C
 
 ```bash
 cd examples/cluster-observer
 npm run start:c
-# Or: npx tsx node.ts --name nodeC --port 4371 --seed nodeA@127.0.0.1:4369
+```
+
+### TUI Dashboard Mode (interactive)
+
+The dashboard uses a server/client architecture:
+1. Start the node with `--dashboard <port>` to run DashboardServer
+2. Connect from another terminal using `npx noex-dashboard`
+
+#### Terminal 1 - Node A with DashboardServer
+
+```bash
+cd examples/cluster-observer
+npm install
+npm run start:a:dashboard
+# Starts node + DashboardServer on port 9876
+```
+
+#### Terminal 2 - Connect TUI Dashboard
+
+```bash
+cd examples/cluster-observer
+npm run dashboard
+# Or: npx noex-dashboard --port 9876
+```
+
+#### Dashboard Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `q` | Quit dashboard |
+| `c` | Toggle local/cluster view |
+| `l` | Change layout (full/compact/minimal) |
+| `↑/↓` | Navigate process list |
+| `Enter` | Show process details |
+
+#### Multi-Node with Dashboards
+
+You can run multiple nodes, each with its own DashboardServer on different ports:
+
+```bash
+# Terminal 1: Node A + DashboardServer on port 9876
+npm run start:a:dashboard
+
+# Terminal 2: Node B + DashboardServer on port 9877
+npm run start:b:dashboard
+
+# Terminal 3: Connect to Node A's dashboard
+npx noex-dashboard --port 9876
+
+# Terminal 4: Connect to Node B's dashboard
+npx noex-dashboard --port 9877
 ```
 
 ## Expected Output
@@ -149,6 +199,7 @@ for (const node of snapshot.nodes) {
 | `--name` | `-n` | Node name (required) | - |
 | `--port` | `-p` | Cluster port | 4369 |
 | `--seed` | `-s` | Seed node (repeatable) | - |
+| `--dashboard` | `-d` | Start DashboardServer on specified port | - |
 
 ## Architecture
 
