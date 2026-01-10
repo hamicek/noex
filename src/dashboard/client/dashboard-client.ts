@@ -21,7 +21,7 @@
 
 import blessed from 'blessed';
 import contrib from 'blessed-contrib';
-import type { ObserverSnapshot } from '../../observer/types.js';
+import type { ObserverSnapshot, ClusterObserverSnapshot } from '../../observer/types.js';
 import type { ObserverEvent, ProcessTreeNode } from '../../core/types.js';
 import {
   type DashboardConfig,
@@ -36,6 +36,7 @@ import {
   MemoryGaugeWidget,
   EventLogWidget,
   ProcessDetailView,
+  ClusterTreeWidget,
   type GridPosition,
 } from '../widgets/index.js';
 import { formatReason } from '../utils/formatters.js';
@@ -84,6 +85,14 @@ export const DEFAULT_CLIENT_CONFIG: DashboardClientConfig = {
 type ClientState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped';
 
 /**
+ * View mode for dashboard client.
+ *
+ * - 'local': Shows local processes only (default)
+ * - 'cluster': Shows cluster-wide processes grouped by node
+ */
+type ViewMode = 'local' | 'cluster';
+
+/**
  * Layout configurations for different display modes.
  */
 const LAYOUTS = {
@@ -123,11 +132,13 @@ export class DashboardClient {
 
   private state: ClientState = 'idle';
   private currentLayout: DashboardLayout;
+  private viewMode: ViewMode = 'local';
   private screen: blessed.Widgets.Screen | null = null;
   private grid: InstanceType<typeof contrib.grid> | null = null;
 
   // Widgets
   private processTreeWidget: ProcessTreeWidget | null = null;
+  private clusterTreeWidget: ClusterTreeWidget | null = null;
   private statsTableWidget: StatsTableWidget | null = null;
   private memoryGaugeWidget: MemoryGaugeWidget | null = null;
   private eventLogWidget: EventLogWidget | null = null;
@@ -136,6 +147,8 @@ export class DashboardClient {
 
   // State
   private currentSnapshot: ObserverSnapshot | null = null;
+  private clusterSnapshot: ClusterObserverSnapshot | null = null;
+  private clusterAvailable = false;
   private startTime = 0;
   private serverUptime = 0;
   private connectionUnsubscribe: (() => void) | null = null;
@@ -237,6 +250,20 @@ export class DashboardClient {
    */
   getLayout(): DashboardLayout {
     return this.currentLayout;
+  }
+
+  /**
+   * Returns the current view mode.
+   */
+  getViewMode(): ViewMode {
+    return this.viewMode;
+  }
+
+  /**
+   * Returns whether cluster view is available on the connected server.
+   */
+  isClusterAvailable(): boolean {
+    return this.clusterAvailable;
   }
 
   /**
@@ -386,6 +413,9 @@ export class DashboardClient {
   private destroyWidgets(): void {
     this.processTreeWidget?.destroy();
     this.processTreeWidget = null;
+
+    this.clusterTreeWidget?.destroy();
+    this.clusterTreeWidget = null;
 
     this.statsTableWidget?.destroy();
     this.statsTableWidget = null;
