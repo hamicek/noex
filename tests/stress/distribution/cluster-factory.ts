@@ -93,7 +93,11 @@ export type NodeIPCMessage =
   | { type: 'dsup_get_children'; requestId: string; supervisorId: string }
   | { type: 'dsup_get_stats'; requestId: string; supervisorId: string }
   | { type: 'dsup_count_children'; requestId: string; supervisorId: string }
-  | { type: 'dsup_is_running'; requestId: string; supervisorId: string };
+  | { type: 'dsup_is_running'; requestId: string; supervisorId: string }
+  // ClusterObserver messages
+  | { type: 'observer_get_cluster_snapshot'; requestId: string; options?: ClusterObserverIPCOptions }
+  | { type: 'observer_get_node_snapshot'; requestId: string; targetNodeId: string; timeoutMs?: number }
+  | { type: 'observer_get_local_snapshot'; requestId: string };
 
 /**
  * Response types from child process.
@@ -152,7 +156,13 @@ export type NodeIPCResponse =
   | { type: 'dsup_count_error'; requestId: string; errorType: string; message: string }
   | { type: 'dsup_is_running_result'; requestId: string; isRunning: boolean }
   // DistributedSupervisor lifecycle events
-  | { type: 'dsup_lifecycle_event'; event: DistributedSupervisorEventIPC };
+  | { type: 'dsup_lifecycle_event'; event: DistributedSupervisorEventIPC }
+  // ClusterObserver responses
+  | { type: 'observer_cluster_snapshot_result'; requestId: string; snapshot: ClusterObserverSnapshotIPC }
+  | { type: 'observer_cluster_snapshot_error'; requestId: string; errorType: string; message: string }
+  | { type: 'observer_node_snapshot_result'; requestId: string; snapshot: ObserverSnapshotIPC }
+  | { type: 'observer_node_snapshot_error'; requestId: string; errorType: string; message: string }
+  | { type: 'observer_local_snapshot_result'; requestId: string; snapshot: ObserverSnapshotIPC };
 
 /**
  * GlobalRegistry statistics result from IPC.
@@ -252,6 +262,104 @@ export type DistributedSupervisorEventIPC =
   | { type: 'child_migrated'; supervisorId: string; childId: string; fromNode: string; toNode: string }
   | { type: 'node_failure_detected'; supervisorId: string; nodeId: string; affectedChildren: readonly string[] }
   | { type: 'max_restarts_exceeded'; supervisorId: string; childId: string };
+
+// =============================================================================
+// ClusterObserver IPC Types
+// =============================================================================
+
+/**
+ * Options for ClusterObserver getClusterSnapshot IPC call.
+ */
+export interface ClusterObserverIPCOptions {
+  readonly useCache?: boolean;
+  readonly timeout?: number;
+}
+
+/**
+ * Node observer status in IPC representation.
+ */
+export type NodeObserverStatusIPC = 'connected' | 'disconnected' | 'error' | 'timeout';
+
+/**
+ * Single node's observer snapshot in IPC representation.
+ */
+export interface NodeObserverSnapshotIPC {
+  readonly nodeId: string;
+  readonly status: NodeObserverStatusIPC;
+  readonly snapshot: ObserverSnapshotIPC | null;
+  readonly lastUpdate: number;
+  readonly error?: string;
+}
+
+/**
+ * Aggregated cluster statistics in IPC representation.
+ */
+export interface ClusterAggregatedStatsIPC {
+  readonly totalProcessCount: number;
+  readonly totalServerCount: number;
+  readonly totalSupervisorCount: number;
+  readonly totalMessages: number;
+  readonly totalRestarts: number;
+  readonly connectedNodeCount: number;
+  readonly totalNodeCount: number;
+}
+
+/**
+ * Cluster-wide observer snapshot in IPC representation.
+ */
+export interface ClusterObserverSnapshotIPC {
+  readonly timestamp: number;
+  readonly localNodeId: string;
+  readonly nodes: readonly NodeObserverSnapshotIPC[];
+  readonly aggregated: ClusterAggregatedStatsIPC;
+}
+
+/**
+ * Local observer snapshot in IPC representation.
+ */
+export interface ObserverSnapshotIPC {
+  readonly timestamp: number;
+  readonly processCount: number;
+  readonly servers: readonly GenServerStatsIPC[];
+  readonly supervisors: readonly SupervisorStatsIPC[];
+  readonly totalMessages: number;
+  readonly totalRestarts: number;
+  readonly memoryStats: MemoryStatsIPC;
+}
+
+/**
+ * GenServer statistics in IPC representation.
+ */
+export interface GenServerStatsIPC {
+  readonly id: string;
+  readonly name: string | null;
+  readonly status: string;
+  readonly messageCount: number;
+  readonly lastMessageAt: number | null;
+  readonly startedAt: number;
+}
+
+/**
+ * Supervisor statistics in IPC representation.
+ */
+export interface SupervisorStatsIPC {
+  readonly id: string;
+  readonly name: string | null;
+  readonly strategy: string;
+  readonly childCount: number;
+  readonly restartCount: number;
+  readonly startedAt: number;
+}
+
+/**
+ * Memory statistics in IPC representation.
+ */
+export interface MemoryStatsIPC {
+  readonly heapUsed: number;
+  readonly heapTotal: number;
+  readonly rss: number;
+  readonly external: number;
+}
 
 /**
  * Crash modes for node simulation.
@@ -1283,6 +1391,121 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
     );
   }
 
+  // ===========================================================================
+  // ClusterObserver Methods
+  // ===========================================================================
+
+  /** Counter for ClusterObserver request IDs */
+  private observerRequestIdCounter = 0;
+
+  /**
+   * Gets a cluster-wide observer snapshot from a specific node.
+   *
+   * @param nodeId - Node to query
+   * @param options - Options for the snapshot
+   * @param timeoutMs - Timeout in milliseconds
+   * @returns Cluster observer snapshot
+   */
+  async getClusterObserverSnapshot(
+    nodeId: string,
+    options?: ClusterObserverIPCOptions,
+    timeoutMs: number = 10000,
+  ): Promise<ClusterObserverSnapshotIPC> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `observer_cluster_${this.observerRequestIdCounter++}_${Date.now()}`;
+
+    const result = await this.sendMessageWithId(
+      node,
+      { type: 'observer_get_cluster_snapshot', requestId, options },
+      requestId,
+      timeoutMs + 5000,
+    );
+
+    if (result && result.error) {
+      throw new Error(`${result.errorType}: ${result.message}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Gets a remote node's observer snapshot from a specific node.
+   *
+   * @param fromNodeId - Node to query from
+   * @param targetNodeId - Target node to get snapshot of
+   * @param timeoutMs - Timeout in milliseconds
+   * @returns Observer snapshot of the target node
+   */
+  async getRemoteNodeSnapshot(
+    fromNodeId: string,
+    targetNodeId: string,
+    timeoutMs: number = 5000,
+  ): Promise<ObserverSnapshotIPC> {
+    const node = this.nodes.get(fromNodeId);
+    if (!node) {
+      throw new Error(`Node ${fromNodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${fromNodeId} is not running`);
+    }
+
+    const requestId = `observer_node_${this.observerRequestIdCounter++}_${Date.now()}`;
+
+    const result = await this.sendMessageWithId(
+      node,
+      { type: 'observer_get_node_snapshot', requestId, targetNodeId, timeoutMs },
+      requestId,
+      timeoutMs + 5000,
+    );
+
+    if (result && result.error) {
+      throw new Error(`${result.errorType}: ${result.message}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Gets a local observer snapshot from a specific node.
+   *
+   * @param nodeId - Node to query
+   * @param timeoutMs - Timeout in milliseconds
+   * @returns Local observer snapshot
+   */
+  async getLocalObserverSnapshot(
+    nodeId: string,
+    timeoutMs: number = 5000,
+  ): Promise<ObserverSnapshotIPC> {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`);
+    }
+
+    if (node.status !== 'running') {
+      throw new Error(`Node ${nodeId} is not running`);
+    }
+
+    const requestId = `observer_local_${this.observerRequestIdCounter++}_${Date.now()}`;
+
+    const result = await this.sendMessageWithId(
+      node,
+      { type: 'observer_get_local_snapshot', requestId },
+      requestId,
+      timeoutMs + 5000,
+    );
+
+    return result;
+  }
+
   /**
    * Starts the cluster by spawning all node processes.
    * Called internally by TestClusterFactory.
@@ -1694,6 +1917,35 @@ export class TestCluster extends EventEmitter<TestClusterEvents> {
 
       case 'dsup_lifecycle_event':
         this.emit('dsupLifecycleEvent', msg.event, node.nodeId);
+        break;
+
+      // ClusterObserver responses
+      case 'observer_cluster_snapshot_result':
+        this.resolvePending(node, msg.requestId, msg.snapshot);
+        break;
+
+      case 'observer_cluster_snapshot_error':
+        this.resolvePending(node, msg.requestId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+        });
+        break;
+
+      case 'observer_node_snapshot_result':
+        this.resolvePending(node, msg.requestId, msg.snapshot);
+        break;
+
+      case 'observer_node_snapshot_error':
+        this.resolvePending(node, msg.requestId, {
+          error: true,
+          errorType: msg.errorType,
+          message: msg.message,
+        });
+        break;
+
+      case 'observer_local_snapshot_result':
+        this.resolvePending(node, msg.requestId, msg.snapshot);
         break;
     }
   }

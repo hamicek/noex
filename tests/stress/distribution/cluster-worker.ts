@@ -166,6 +166,19 @@ async function main(): Promise<void> {
         case 'dsup_is_running':
           handleDsupIsRunning(msg.requestId, msg.supervisorId);
           break;
+
+        // ClusterObserver messages
+        case 'observer_get_cluster_snapshot':
+          await handleObserverGetClusterSnapshot(msg.requestId, msg.options);
+          break;
+
+        case 'observer_get_node_snapshot':
+          await handleObserverGetNodeSnapshot(msg.requestId, msg.targetNodeId, msg.timeoutMs);
+          break;
+
+        case 'observer_get_local_snapshot':
+          handleObserverGetLocalSnapshot(msg.requestId);
+          break;
       }
     } catch (error) {
       sendResponse({
@@ -1302,6 +1315,145 @@ async function main(): Promise<void> {
       requestId,
       isRunning,
     });
+  }
+
+  // ===========================================================================
+  // ClusterObserver Handlers
+  // ===========================================================================
+
+  /**
+   * Gets a cluster-wide observer snapshot.
+   */
+  async function handleObserverGetClusterSnapshot(
+    requestId: string,
+    options?: { useCache?: boolean; timeout?: number },
+  ): Promise<void> {
+    try {
+      // Dynamic import to avoid circular dependencies
+      const { ClusterObserver } = await import('../../../src/observer/cluster-observer.js');
+
+      const snapshot = await ClusterObserver.getClusterSnapshot(options);
+
+      // Convert to IPC-safe format
+      sendResponse({
+        type: 'observer_cluster_snapshot_result',
+        requestId,
+        snapshot: {
+          timestamp: snapshot.timestamp,
+          localNodeId: snapshot.localNodeId,
+          nodes: snapshot.nodes.map((n) => ({
+            nodeId: n.nodeId,
+            status: n.status,
+            snapshot: n.snapshot ? convertObserverSnapshot(n.snapshot) : null,
+            lastUpdate: n.lastUpdate,
+            error: n.error,
+          })),
+          aggregated: {
+            totalProcessCount: snapshot.aggregated.totalProcessCount,
+            totalServerCount: snapshot.aggregated.totalServerCount,
+            totalSupervisorCount: snapshot.aggregated.totalSupervisorCount,
+            totalMessages: snapshot.aggregated.totalMessages,
+            totalRestarts: snapshot.aggregated.totalRestarts,
+            connectedNodeCount: snapshot.aggregated.connectedNodeCount,
+            totalNodeCount: snapshot.aggregated.totalNodeCount,
+          },
+        },
+      });
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'observer_cluster_snapshot_error',
+        requestId,
+        errorType,
+        message,
+      });
+    }
+  }
+
+  /**
+   * Gets an observer snapshot from a remote node.
+   */
+  async function handleObserverGetNodeSnapshot(
+    requestId: string,
+    targetNodeId: string,
+    timeoutMs?: number,
+  ): Promise<void> {
+    try {
+      const { ClusterObserver } = await import('../../../src/observer/cluster-observer.js');
+
+      const snapshot = await ClusterObserver.getNodeSnapshot(targetNodeId as any, timeoutMs);
+
+      sendResponse({
+        type: 'observer_node_snapshot_result',
+        requestId,
+        snapshot: convertObserverSnapshot(snapshot),
+      });
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      sendResponse({
+        type: 'observer_node_snapshot_error',
+        requestId,
+        errorType,
+        message,
+      });
+    }
+  }
+
+  /**
+   * Gets the local observer snapshot.
+   */
+  function handleObserverGetLocalSnapshot(requestId: string): void {
+    // Dynamic import to avoid circular dependencies
+    import('../../../src/observer/observer.js').then(({ Observer }) => {
+      const snapshot = Observer.getSnapshot();
+
+      sendResponse({
+        type: 'observer_local_snapshot_result',
+        requestId,
+        snapshot: convertObserverSnapshot(snapshot),
+      });
+    }).catch((error) => {
+      sendResponse({
+        type: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+
+  /**
+   * Converts an ObserverSnapshot to IPC-safe format.
+   */
+  function convertObserverSnapshot(snapshot: any): any {
+    return {
+      timestamp: snapshot.timestamp,
+      processCount: snapshot.processCount,
+      servers: snapshot.servers.map((s: any) => ({
+        id: s.id,
+        name: s.name ?? null,
+        status: s.status,
+        messageCount: s.messageCount,
+        lastMessageAt: s.lastMessageAt ?? null,
+        startedAt: s.startedAt,
+      })),
+      supervisors: snapshot.supervisors.map((s: any) => ({
+        id: s.id,
+        name: s.name ?? null,
+        strategy: s.strategy,
+        childCount: s.childCount,
+        restartCount: s.restartCount,
+        startedAt: s.startedAt,
+      })),
+      totalMessages: snapshot.totalMessages,
+      totalRestarts: snapshot.totalRestarts,
+      memoryStats: {
+        heapUsed: snapshot.memoryStats.heapUsed,
+        heapTotal: snapshot.memoryStats.heapTotal,
+        rss: snapshot.memoryStats.rss,
+        external: snapshot.memoryStats.external,
+      },
+    };
   }
 
   // Signal ready state

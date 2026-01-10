@@ -351,14 +351,20 @@ export const CallHandler = {
     fromNodeId: NodeId,
     sendReply: (reply: CallReplyMessage | CallErrorMessage) => Promise<void>,
   ): Promise<void> {
-    // Import GenServer dynamically to avoid circular dependency
+    // Import GenServer and Registry dynamically to avoid circular dependency
     const { GenServer } = await import('../../core/gen-server.js');
+    const { Registry } = await import('../../core/registry.js');
 
     const { callId, ref, msg } = message;
 
     try {
-      // Get the server reference by ID
-      const serverRef = GenServer._getRefById(ref.id);
+      // Get the server reference - first try by process ID, then by registered name
+      let serverRef = GenServer._getRefById(ref.id);
+
+      // If not found by ID, try Registry lookup (for named servers)
+      if (!serverRef) {
+        serverRef = Registry.whereis(ref.id);
+      }
 
       if (!serverRef) {
         const errorReply: CallErrorMessage = {
@@ -418,14 +424,20 @@ export const CallHandler = {
    * @internal
    */
   async handleIncomingCast(message: CastMessage): Promise<void> {
-    // Import GenServer dynamically to avoid circular dependency
+    // Import GenServer and Registry dynamically to avoid circular dependency
     const { GenServer } = await import('../../core/gen-server.js');
+    const { Registry } = await import('../../core/registry.js');
 
     const { ref, msg } = message;
 
     try {
-      // Get the server reference by ID
-      const serverRef = GenServer._getRefById(ref.id);
+      // Get the server reference - first try by process ID, then by registered name
+      let serverRef = GenServer._getRefById(ref.id);
+
+      // If not found by ID, try Registry lookup (for named servers)
+      if (!serverRef) {
+        serverRef = Registry.whereis(ref.id);
+      }
 
       if (!serverRef) {
         // Silently ignore casts to non-existent servers
