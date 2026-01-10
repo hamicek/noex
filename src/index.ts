@@ -32,6 +32,7 @@ export type {
   GenServerStats,
   SupervisorStats,
   ProcessTreeNode,
+  MemoryStats,
   ObserverEvent,
   // Persistence types (re-exported from core/types.ts)
   StateMetadata,
@@ -123,6 +124,33 @@ export type {
   DashboardServerConfig,
   DashboardServerRef,
 } from './dashboard/server/dashboard-server.js';
+
+// Dashboard Protocol (for building custom dashboard clients)
+export {
+  serializeMessage,
+  parseMessage,
+  ProtocolError,
+  PROTOCOL_VERSION,
+  LENGTH_PREFIX_SIZE,
+  MAX_MESSAGE_SIZE,
+} from './dashboard/server/protocol.js';
+export type {
+  ServerMessage,
+  ClientMessage,
+  WelcomeMessage,
+  SnapshotMessage,
+  EventMessage,
+  ErrorMessage,
+  ClusterSnapshotMessage,
+  ClusterStatusMessage,
+  GetSnapshotRequest,
+  StopProcessRequest,
+  PingRequest,
+  GetClusterSnapshotRequest,
+  GetClusterStatusRequest,
+  ParseResult,
+  ProtocolErrorCode,
+} from './dashboard/server/protocol.js';
 
 // Persistence
 export { MemoryAdapter, FileAdapter, SQLiteAdapter } from './persistence/adapters/index.js';
