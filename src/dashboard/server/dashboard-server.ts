@@ -9,6 +9,8 @@ import net from 'node:net';
 import { GenServer } from '../../core/gen-server.js';
 import type { GenServerBehavior, GenServerRef, ObserverEvent } from '../../core/types.js';
 import { Observer } from '../../observer/observer.js';
+import { ClusterObserver } from '../../observer/cluster-observer.js';
+import { Cluster } from '../../distribution/cluster/cluster.js';
 import {
   serializeMessage,
   parseMessage,
@@ -423,6 +425,35 @@ function createDashboardServerBehavior(
       case 'ping':
         // No response needed, just keeps connection alive
         break;
+
+      case 'get_cluster_status': {
+        const isClusterRunning = Cluster.getStatus() === 'running';
+        const payload: { readonly available: boolean; readonly nodeId?: string } = isClusterRunning
+          ? { available: true, nodeId: Cluster.getLocalNodeId() }
+          : { available: false };
+        sendToClient(client, { type: 'cluster_status', payload });
+        break;
+      }
+
+      case 'get_cluster_snapshot': {
+        if (Cluster.getStatus() !== 'running') {
+          sendError(client, 'CLUSTER_NOT_AVAILABLE', 'Cluster is not running');
+          break;
+        }
+
+        ClusterObserver.getClusterSnapshot()
+          .then((snapshot) => {
+            sendToClient(client, { type: 'cluster_snapshot', payload: snapshot });
+          })
+          .catch((error) => {
+            sendError(
+              client,
+              'CLUSTER_ERROR',
+              error instanceof Error ? error.message : 'Unknown error',
+            );
+          });
+        break;
+      }
     }
   }
 

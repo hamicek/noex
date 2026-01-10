@@ -11,7 +11,9 @@
 import blessed from 'blessed';
 import contrib from 'blessed-contrib';
 import { Observer } from '../observer/index.js';
-import type { ObserverSnapshot } from '../observer/types.js';
+import { ClusterObserver } from '../observer/cluster-observer.js';
+import { Cluster } from '../distribution/cluster/cluster.js';
+import type { ObserverSnapshot, ClusterObserverSnapshot } from '../observer/types.js';
 import type { ObserverEvent } from '../core/types.js';
 import {
   type DashboardConfig,
@@ -26,6 +28,7 @@ import {
   MemoryGaugeWidget,
   EventLogWidget,
   ProcessDetailView,
+  ClusterTreeWidget,
   type GridPosition,
 } from './widgets/index.js';
 import type { ProcessTreeNode } from '../core/types.js';
@@ -35,6 +38,14 @@ import { formatReason } from './utils/formatters.js';
  * Dashboard state enum for lifecycle management.
  */
 type DashboardState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped';
+
+/**
+ * View mode for dashboard.
+ *
+ * - 'local': Shows local processes only (default)
+ * - 'cluster': Shows cluster-wide processes grouped by node
+ */
+type ViewMode = 'local' | 'cluster';
 
 /**
  * Layout configurations for different display modes.
@@ -63,6 +74,29 @@ const LAYOUTS = {
 } as const satisfies Record<string, Record<string, GridPosition>>;
 
 /**
+ * Layout configurations for cluster view mode.
+ * Cluster view focuses on the cluster tree widget.
+ */
+const CLUSTER_LAYOUTS = {
+  full: {
+    clusterTree: { row: 0, col: 0, rowSpan: 6, colSpan: 6 },
+    statsTable: { row: 0, col: 6, rowSpan: 6, colSpan: 6 },
+    memoryGauge: { row: 6, col: 0, rowSpan: 3, colSpan: 4 },
+    eventLog: { row: 6, col: 4, rowSpan: 4, colSpan: 8 },
+    statusBar: { row: 10, col: 0, rowSpan: 2, colSpan: 12 },
+  },
+  compact: {
+    clusterTree: { row: 0, col: 0, rowSpan: 9, colSpan: 5 },
+    statsTable: { row: 0, col: 5, rowSpan: 9, colSpan: 7 },
+    statusBar: { row: 10, col: 0, rowSpan: 2, colSpan: 12 },
+  },
+  minimal: {
+    clusterTree: { row: 0, col: 0, rowSpan: 10, colSpan: 12 },
+    statusBar: { row: 10, col: 0, rowSpan: 2, colSpan: 12 },
+  },
+} as const satisfies Record<string, Record<string, GridPosition>>;
+
+/**
  * Interactive TUI dashboard for monitoring noex processes.
  *
  * @example
@@ -84,11 +118,13 @@ export class Dashboard {
 
   private state: DashboardState = 'idle';
   private currentLayout: DashboardConfig['layout'];
+  private viewMode: ViewMode = 'local';
   private screen: blessed.Widgets.Screen | null = null;
   private grid: InstanceType<typeof contrib.grid> | null = null;
 
   // Widgets
   private processTreeWidget: ProcessTreeWidget | null = null;
+  private clusterTreeWidget: ClusterTreeWidget | null = null;
   private statsTableWidget: StatsTableWidget | null = null;
   private memoryGaugeWidget: MemoryGaugeWidget | null = null;
   private eventLogWidget: EventLogWidget | null = null;
@@ -97,8 +133,9 @@ export class Dashboard {
   // Process Detail View
   private processDetailView: ProcessDetailView | null = null;
 
-  // Current snapshot for detail lookups
+  // Current snapshots for detail lookups
   private currentSnapshot: ObserverSnapshot | null = null;
+  private currentClusterSnapshot: ClusterObserverSnapshot | null = null;
 
   // Timing
   private startTime: number = 0;
@@ -106,6 +143,7 @@ export class Dashboard {
   // Subscriptions
   private observerUnsubscribe: (() => void) | null = null;
   private pollingUnsubscribe: (() => void) | null = null;
+  private clusterPollingUnsubscribe: (() => void) | null = null;
 
   /**
    * Creates a new Dashboard instance.
@@ -167,6 +205,11 @@ export class Dashboard {
     if (this.pollingUnsubscribe) {
       this.pollingUnsubscribe();
       this.pollingUnsubscribe = null;
+    }
+
+    if (this.clusterPollingUnsubscribe) {
+      this.clusterPollingUnsubscribe();
+      this.clusterPollingUnsubscribe = null;
     }
 
     if (this.observerUnsubscribe) {
@@ -258,6 +301,81 @@ export class Dashboard {
   }
 
   /**
+   * Switches between local and cluster view modes.
+   *
+   * Cluster view requires an active cluster connection.
+   * If cluster is not running, the switch is rejected with a warning.
+   *
+   * @param mode - The view mode to switch to
+   */
+  switchViewMode(mode: ViewMode): void {
+    if (this.state !== 'running' || !this.screen) return;
+    if (mode === this.viewMode) return;
+
+    // Check cluster availability when switching to cluster mode
+    if (mode === 'cluster' && Cluster.getStatus() !== 'running') {
+      this.logEvent('warning', 'Cluster is not running. Cannot switch to cluster view.');
+      return;
+    }
+
+    // Store current snapshot for restoration
+    const snapshot = this.currentSnapshot;
+    const clusterSnapshot = this.currentClusterSnapshot;
+
+    // Destroy current widgets
+    this.destroyWidgets();
+
+    // Destroy current grid
+    if (this.grid) {
+      const children = [...this.screen.children];
+      for (const child of children) {
+        child.destroy();
+      }
+      this.grid = null;
+    }
+
+    // Update view mode
+    this.viewMode = mode;
+
+    // Handle polling subscription changes
+    if (mode === 'cluster') {
+      // Stop local polling, start cluster polling
+      if (this.pollingUnsubscribe) {
+        this.pollingUnsubscribe();
+        this.pollingUnsubscribe = null;
+      }
+      this.startClusterPolling();
+    } else {
+      // Stop cluster polling, start local polling
+      if (this.clusterPollingUnsubscribe) {
+        this.clusterPollingUnsubscribe();
+        this.clusterPollingUnsubscribe = null;
+      }
+      this.startPolling();
+    }
+
+    // Recreate layout
+    this.createLayout();
+
+    // Restore data
+    if (mode === 'local' && snapshot) {
+      this.updateWidgets(snapshot);
+    } else if (mode === 'cluster' && clusterSnapshot) {
+      this.updateClusterWidgets(clusterSnapshot);
+    }
+
+    this.logEvent('info', `Switched to ${mode} view`);
+    this.render();
+  }
+
+  /**
+   * Returns the current view mode.
+   */
+  getViewMode(): ViewMode {
+    return this.viewMode;
+  }
+
+  /**
    * Initializes the blessed screen with proper configuration.
    */
   private initializeScreen(): void {
@@ -309,18 +427,32 @@ export class Dashboard {
   }
 
   /**
-   * Creates dashboard widgets based on the current layout mode.
+   * Creates dashboard widgets based on the current layout and view mode.
    *
    * Different layouts show different widget combinations:
    * - full: All widgets (process tree, stats, memory gauge, event log)
    * - compact: Process tree + stats table only
-   * - minimal: Stats table only
+   * - minimal: Stats table only (or cluster tree in cluster mode)
    */
   private createWidgets(): void {
     if (!this.grid) return;
 
-    const layout = LAYOUTS[this.currentLayout];
     const widgetConfig = { theme: this.theme };
+
+    if (this.viewMode === 'cluster') {
+      this.createClusterWidgets(widgetConfig);
+    } else {
+      this.createLocalWidgets(widgetConfig);
+    }
+  }
+
+  /**
+   * Creates widgets for local view mode.
+   */
+  private createLocalWidgets(widgetConfig: { theme: DashboardTheme }): void {
+    if (!this.grid) return;
+
+    const layout = LAYOUTS[this.currentLayout];
 
     // Process Tree (full + compact layouts)
     if ('processTree' in layout) {
@@ -361,6 +493,54 @@ export class Dashboard {
   }
 
   /**
+   * Creates widgets for cluster view mode.
+   */
+  private createClusterWidgets(widgetConfig: { theme: DashboardTheme }): void {
+    if (!this.grid) return;
+
+    const layout = CLUSTER_LAYOUTS[this.currentLayout];
+
+    // Cluster Tree (all cluster layouts)
+    if ('clusterTree' in layout) {
+      this.clusterTreeWidget = new ClusterTreeWidget(widgetConfig);
+      this.clusterTreeWidget.create(this.grid, layout.clusterTree);
+    }
+
+    // Stats Table (full + compact cluster layouts)
+    if ('statsTable' in layout) {
+      this.statsTableWidget = new StatsTableWidget(widgetConfig);
+      this.statsTableWidget.create(this.grid, layout.statsTable);
+    }
+
+    // Memory Gauge (full layout only)
+    if ('memoryGauge' in layout) {
+      this.memoryGaugeWidget = new MemoryGaugeWidget(widgetConfig);
+      this.memoryGaugeWidget.create(this.grid, layout.memoryGauge);
+    }
+
+    // Event Log (full layout only)
+    if ('eventLog' in layout) {
+      this.eventLogWidget = new EventLogWidget({
+        theme: this.theme,
+        maxEntries: this.config.maxEventLogSize,
+      });
+      this.eventLogWidget.create(this.grid, layout.eventLog);
+    }
+
+    // Status Bar (all layouts)
+    this.createStatusBar();
+
+    // Process Detail View (modal, not part of grid)
+    this.processDetailView = new ProcessDetailView({ theme: this.theme });
+
+    // Set initial focus on cluster tree
+    const clusterTreeElement = this.clusterTreeWidget?.getElement();
+    if (clusterTreeElement) {
+      clusterTreeElement.focus();
+    }
+  }
+
+  /**
    * Creates the status bar at the bottom of the screen.
    */
   private createStatusBar(): void {
@@ -385,6 +565,9 @@ export class Dashboard {
   private destroyWidgets(): void {
     this.processTreeWidget?.destroy();
     this.processTreeWidget = null;
+
+    this.clusterTreeWidget?.destroy();
+    this.clusterTreeWidget = null;
 
     this.statsTableWidget?.destroy();
     this.statsTableWidget = null;
@@ -460,6 +643,12 @@ export class Dashboard {
     this.screen.key(['3'], () => {
       this.switchLayout('minimal');
     });
+
+    // View mode switching
+    this.screen.key(['c'], () => {
+      const newMode = this.viewMode === 'local' ? 'cluster' : 'local';
+      this.switchViewMode(newMode);
+    });
   }
 
   /**
@@ -482,6 +671,28 @@ export class Dashboard {
           const snapshot = Observer.getSnapshot();
           this.updateWidgets(snapshot);
           this.render();
+        }
+      },
+    );
+  }
+
+  /**
+   * Starts the polling loop for cluster-wide updates.
+   */
+  private startClusterPolling(): void {
+    // Use a longer interval for cluster polling due to network overhead
+    const clusterPollingInterval = Math.max(this.config.refreshInterval * 2, 2000);
+
+    this.clusterPollingUnsubscribe = ClusterObserver.startPolling(
+      clusterPollingInterval,
+      (event) => {
+        if (event.type === 'cluster_snapshot_update') {
+          this.updateClusterWidgets(event.snapshot);
+          this.render();
+        } else if (event.type === 'node_timeout') {
+          this.logEvent('warning', `Node timeout: ${event.nodeId}`);
+        } else if (event.type === 'node_error') {
+          this.logEvent('error', `Node error: ${event.nodeId} - ${event.error}`);
         }
       },
     );
@@ -513,7 +724,7 @@ export class Dashboard {
   }
 
   /**
-   * Updates all widgets with fresh data.
+   * Updates all widgets with fresh data (local view).
    */
   private updateWidgets(snapshot: ObserverSnapshot): void {
     this.currentSnapshot = snapshot;
@@ -524,7 +735,33 @@ export class Dashboard {
   }
 
   /**
-   * Updates the status bar with summary information.
+   * Updates all widgets with cluster data (cluster view).
+   */
+  private updateClusterWidgets(clusterSnapshot: ClusterObserverSnapshot): void {
+    this.currentClusterSnapshot = clusterSnapshot;
+
+    // Update cluster tree widget
+    this.clusterTreeWidget?.update({ clusterSnapshot });
+
+    // Aggregate servers from all nodes for stats table
+    const allServers = clusterSnapshot.nodes.flatMap(node =>
+      node.status === 'connected' && node.snapshot
+        ? node.snapshot.servers
+        : [],
+    );
+    this.statsTableWidget?.update({ servers: allServers });
+
+    // Use local memory stats (aggregate would be misleading)
+    const localNode = clusterSnapshot.nodes.find(n => n.nodeId === clusterSnapshot.localNodeId);
+    if (localNode?.snapshot) {
+      this.memoryGaugeWidget?.update({ memoryStats: localNode.snapshot.memoryStats });
+    }
+
+    this.updateClusterStatusBar(clusterSnapshot);
+  }
+
+  /**
+   * Updates the status bar with summary information (local view).
    */
   private updateStatusBar(snapshot: ObserverSnapshot): void {
     if (!this.statusBar) return;
@@ -534,11 +771,33 @@ export class Dashboard {
     const serverCount = snapshot.servers.length;
     const supervisorCount = snapshot.supervisors.length;
     const layoutIndicator = this.getLayoutIndicator();
+    const viewIndicator = this.getViewIndicator();
 
     const content =
-      ` [q]uit [r]efresh [?]help [1-3]layout` +
-      `  |  ${layoutIndicator}` +
+      ` [q]uit [r]efresh [?]help [1-3]layout [c]luster` +
+      `  |  ${layoutIndicator} ${viewIndicator}` +
       `  |  Processes: ${processCount} (${serverCount} servers, ${supervisorCount} supervisors)` +
+      `  |  Up: ${uptime}`;
+
+    this.statusBar.setContent(content);
+  }
+
+  /**
+   * Updates the status bar with cluster summary information.
+   */
+  private updateClusterStatusBar(clusterSnapshot: ClusterObserverSnapshot): void {
+    if (!this.statusBar) return;
+
+    const uptime = this.formatUptime(Date.now() - this.startTime);
+    const { aggregated } = clusterSnapshot;
+    const layoutIndicator = this.getLayoutIndicator();
+    const viewIndicator = this.getViewIndicator();
+
+    const content =
+      ` [q]uit [r]efresh [?]help [1-3]layout [c]luster` +
+      `  |  ${layoutIndicator} ${viewIndicator}` +
+      `  |  Nodes: ${aggregated.connectedNodeCount}/${aggregated.totalNodeCount}` +
+      `  |  Processes: ${aggregated.totalProcessCount}` +
       `  |  Up: ${uptime}`;
 
     this.statusBar.setContent(content);
@@ -559,6 +818,13 @@ export class Dashboard {
   }
 
   /**
+   * Returns a visual indicator for the current view mode.
+   */
+  private getViewIndicator(): string {
+    return this.viewMode === 'local' ? '[Local]' : '[Cluster]';
+  }
+
+  /**
    * Logs an event to the event log widget.
    */
   private logEvent(severity: 'info' | 'success' | 'warning' | 'error', message: string): void {
@@ -575,8 +841,8 @@ export class Dashboard {
       parent: this.screen,
       top: 'center',
       left: 'center',
-      width: 50,
-      height: 19,
+      width: 52,
+      height: 22,
       label: ' Keyboard Shortcuts ',
       tags: true,
       border: { type: 'line' },
@@ -597,6 +863,9 @@ export class Dashboard {
   {${this.theme.primary}-fg}1{/${this.theme.primary}-fg}                  Full layout (all widgets)
   {${this.theme.primary}-fg}2{/${this.theme.primary}-fg}                  Compact layout (tree + stats)
   {${this.theme.primary}-fg}3{/${this.theme.primary}-fg}                  Minimal layout (stats only)
+
+  {${this.theme.secondary}-fg}View Modes:{/${this.theme.secondary}-fg}
+  {${this.theme.primary}-fg}c{/${this.theme.primary}-fg}                  Toggle local/cluster view
 
   {${this.theme.textMuted}-fg}Press any key to close{/${this.theme.textMuted}-fg}
 `,

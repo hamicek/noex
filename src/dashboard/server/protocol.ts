@@ -5,7 +5,7 @@
  * [4 bytes: message length (big-endian uint32)][JSON payload]
  */
 
-import type { ObserverSnapshot } from '../../observer/types.js';
+import type { ObserverSnapshot, ClusterObserverSnapshot } from '../../observer/types.js';
 import type { ObserverEvent } from '../../core/types.js';
 
 // =============================================================================
@@ -51,13 +51,36 @@ export interface ErrorMessage {
 }
 
 /**
+ * Cluster snapshot message.
+ * Contains aggregated data from all nodes in the cluster.
+ */
+export interface ClusterSnapshotMessage {
+  readonly type: 'cluster_snapshot';
+  readonly payload: ClusterObserverSnapshot;
+}
+
+/**
+ * Cluster availability status message.
+ * Indicates whether cluster mode is available.
+ */
+export interface ClusterStatusMessage {
+  readonly type: 'cluster_status';
+  readonly payload: {
+    readonly available: boolean;
+    readonly nodeId?: string;
+  };
+}
+
+/**
  * All possible server-to-client message types.
  */
 export type ServerMessage =
   | WelcomeMessage
   | SnapshotMessage
   | EventMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | ClusterSnapshotMessage
+  | ClusterStatusMessage;
 
 // =============================================================================
 // Client -> Server Messages
@@ -89,12 +112,28 @@ export interface PingRequest {
 }
 
 /**
+ * Request cluster snapshot (if cluster is available).
+ */
+export interface GetClusterSnapshotRequest {
+  readonly type: 'get_cluster_snapshot';
+}
+
+/**
+ * Request cluster status.
+ */
+export interface GetClusterStatusRequest {
+  readonly type: 'get_cluster_status';
+}
+
+/**
  * All possible client-to-server message types.
  */
 export type ClientMessage =
   | GetSnapshotRequest
   | StopProcessRequest
-  | PingRequest;
+  | PingRequest
+  | GetClusterSnapshotRequest
+  | GetClusterStatusRequest;
 
 // =============================================================================
 // Protocol Constants

@@ -28,3 +28,7 @@ export type { LogEvent, EventSeverity, EventLogConfig } from './event-log.js';
 // Process Detail View
 export { ProcessDetailView } from './process-detail.js';
 export type { ProcessDetailData } from './process-detail.js';
+
+// Cluster Tree Widget
+export { ClusterTreeWidget } from './cluster-tree.js';
+export type { ClusterTreeData } from './cluster-tree.js';
