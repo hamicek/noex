@@ -1,0 +1,19 @@
+{
+  "name": "noex-cluster-observer-example",
+  "version": "1.0.0",
+  "description": "Example: Distributed process monitoring across cluster nodes",
+  "type": "module",
+  "scripts": {
+    "start:a": "tsx node.ts --name nodeA --port 4369",
+    "start:b": "tsx node.ts --name nodeB --port 4370 --seed nodeA@127.0.0.1:4369",
+    "start:c": "tsx node.ts --name nodeC --port 4371 --seed nodeA@127.0.0.1:4369"
+  },
+  "dependencies": {
+    "noex": "file:../.."
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
