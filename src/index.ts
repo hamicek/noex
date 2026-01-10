@@ -83,7 +83,7 @@ export {
 } from './services/rate-limiter.js';
 
 // Observer
-export { Observer, AlertManager } from './observer/index.js';
+export { Observer, AlertManager, ClusterObserver } from './observer/index.js';
 export type {
   ObserverSnapshot,
   ObserverEventHandler,
@@ -92,6 +92,14 @@ export type {
   AlertType,
   AlertEvent,
   AlertEventHandler,
+  // ClusterObserver types
+  NodeObserverStatus,
+  NodeObserverSnapshot,
+  ClusterAggregatedStats,
+  ClusterObserverSnapshot,
+  ClusterObserverEvent,
+  ClusterObserverEventHandler,
+  ClusterSnapshotOptions,
 } from './observer/index.js';
 
 // Observer export utilities
