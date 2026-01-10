@@ -6,6 +6,13 @@
  */
 
 export { Observer } from './observer.js';
+export {
+  startObserverService,
+  stopObserverService,
+  isObserverServiceRunning,
+  getObserverServiceRef,
+  OBSERVER_SERVICE_NAME,
+} from './observer-service.js';
 export type {
   ObserverSnapshot,
   ObserverEventHandler,
@@ -15,6 +22,8 @@ export type {
   AlertType,
   AlertEvent,
   AlertEventHandler,
+  ObserverServiceCallMessage,
+  ObserverServiceCallReply,
 } from './types.js';
 export {
   buildProcessTree,

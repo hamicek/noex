@@ -124,3 +124,35 @@ export type AlertEvent =
  * Handler for AlertManager events.
  */
 export type AlertEventHandler = (event: AlertEvent) => void;
+
+// =============================================================================
+// Observer Service Types (for remote queries)
+// =============================================================================
+
+/**
+ * Message types for querying the Observer Service remotely.
+ *
+ * The Observer Service is a GenServer that runs on each cluster node,
+ * exposing the local Observer's data for remote access. This enables
+ * the ClusterObserver to aggregate snapshots from all nodes.
+ */
+export type ObserverServiceCallMessage =
+  | { readonly type: 'get_snapshot' }
+  | { readonly type: 'get_server_stats' }
+  | { readonly type: 'get_supervisor_stats' }
+  | { readonly type: 'get_process_tree' }
+  | { readonly type: 'get_process_count' };
+
+/**
+ * Reply types from the Observer Service.
+ *
+ * Each reply includes the type discriminator and the corresponding data.
+ * Error replies are returned when the Observer is not available.
+ */
+export type ObserverServiceCallReply =
+  | { readonly type: 'snapshot'; readonly data: ObserverSnapshot }
+  | { readonly type: 'server_stats'; readonly data: readonly import('../core/types.js').GenServerStats[] }
+  | { readonly type: 'supervisor_stats'; readonly data: readonly import('../core/types.js').SupervisorStats[] }
+  | { readonly type: 'process_tree'; readonly data: readonly import('../core/types.js').ProcessTreeNode[] }
+  | { readonly type: 'process_count'; readonly data: number }
+  | { readonly type: 'error'; readonly message: string };

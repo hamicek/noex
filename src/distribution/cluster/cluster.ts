@@ -47,6 +47,7 @@ import { Transport } from '../transport/index.js';
 import { Membership } from './membership.js';
 import { MonitorHandler, RemoteMonitor } from '../monitor/index.js';
 import { GenServer } from '../../core/gen-server.js';
+import { startObserverService, stopObserverService } from '../../observer/observer-service.js';
 
 // =============================================================================
 // Types
@@ -323,6 +324,9 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
 
       // Start monitor handler (subscribes to lifecycle events)
       monitorHandler.start();
+
+      // Start Observer Service for remote queries
+      await startObserverService();
 
       // Start heartbeat broadcasting
       this.startHeartbeat();
@@ -918,6 +922,9 @@ class ClusterImpl extends EventEmitter<ClusterEvents> {
 
   private async cleanup(): Promise<void> {
     this.stopHeartbeat();
+
+    // Stop Observer Service
+    await stopObserverService();
 
     // Clear outgoing monitors first (rejects pending, cleans up registry)
     RemoteMonitor._clear();
