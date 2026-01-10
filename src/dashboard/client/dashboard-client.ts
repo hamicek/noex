@@ -114,6 +114,29 @@ const LAYOUTS = {
   },
 } as const satisfies Record<string, Record<string, GridPosition>>;
 
+/**
+ * Layout configurations for cluster view mode.
+ * Cluster view focuses on the cluster tree widget.
+ */
+const CLUSTER_LAYOUTS = {
+  full: {
+    clusterTree: { row: 0, col: 0, rowSpan: 6, colSpan: 6 },
+    statsTable: { row: 0, col: 6, rowSpan: 6, colSpan: 6 },
+    memoryGauge: { row: 6, col: 0, rowSpan: 3, colSpan: 4 },
+    eventLog: { row: 6, col: 4, rowSpan: 4, colSpan: 8 },
+    statusBar: { row: 10, col: 0, rowSpan: 2, colSpan: 12 },
+  },
+  compact: {
+    clusterTree: { row: 0, col: 0, rowSpan: 9, colSpan: 5 },
+    statsTable: { row: 0, col: 5, rowSpan: 9, colSpan: 7 },
+    statusBar: { row: 10, col: 0, rowSpan: 2, colSpan: 12 },
+  },
+  minimal: {
+    clusterTree: { row: 0, col: 0, rowSpan: 10, colSpan: 12 },
+    statusBar: { row: 10, col: 0, rowSpan: 2, colSpan: 12 },
+  },
+} as const satisfies Record<string, Record<string, GridPosition>>;
+
 // =============================================================================
 // DashboardClient Class
 // =============================================================================
