@@ -328,6 +328,30 @@ describe('DashboardClient', () => {
       expect(() => client.stop()).not.toThrow();
     });
   });
+
+  describe('getViewMode()', () => {
+    it('returns local by default', () => {
+      const client = new DashboardClient();
+      expect(client.getViewMode()).toBe('local');
+    });
+  });
+
+  describe('isClusterAvailable()', () => {
+    it('returns false by default', () => {
+      const client = new DashboardClient();
+      expect(client.isClusterAvailable()).toBe(false);
+    });
+  });
+
+  describe('switchViewMode() when not running', () => {
+    it('does not change view mode when not running', () => {
+      const client = new DashboardClient();
+      expect(client.getViewMode()).toBe('local');
+
+      client.switchViewMode('cluster');
+      expect(client.getViewMode()).toBe('local'); // Should not change
+    });
+  });
 });
 
 describe('DashboardServer', () => {

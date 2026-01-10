@@ -297,6 +297,7 @@ export class DashboardClient {
     if (layout === this.currentLayout) return;
 
     const snapshot = this.currentSnapshot;
+    const clusterSnap = this.clusterSnapshot;
 
     this.destroyWidgets();
 
@@ -311,11 +312,71 @@ export class DashboardClient {
     this.currentLayout = layout;
     this.createLayout();
 
-    if (snapshot) {
+    // Restore data based on current view mode
+    if (this.viewMode === 'cluster' && clusterSnap) {
+      this.updateClusterWidgets(clusterSnap);
+    } else if (snapshot) {
       this.updateWidgets(snapshot);
     }
 
     this.logEvent('info', `Switched to ${layout} layout`);
+    this.render();
+  }
+
+  /**
+   * Switches between local and cluster view modes.
+   *
+   * Cluster view requires the server to have ClusterObserver configured.
+   * If cluster is not available, the switch is rejected with a warning.
+   *
+   * @param mode - The view mode to switch to
+   */
+  switchViewMode(mode: ViewMode): void {
+    if (this.state !== 'running' || !this.screen) return;
+    if (mode === this.viewMode) return;
+
+    // Check cluster availability when switching to cluster mode
+    if (mode === 'cluster' && !this.clusterAvailable) {
+      this.logEvent('warning', 'Cluster is not available on this server');
+      return;
+    }
+
+    // Store current snapshots for restoration
+    const snapshot = this.currentSnapshot;
+    const clusterSnap = this.clusterSnapshot;
+
+    // Destroy current widgets
+    this.destroyWidgets();
+
+    // Destroy current grid
+    if (this.grid) {
+      const children = [...this.screen.children];
+      for (const child of children) {
+        child.destroy();
+      }
+      this.grid = null;
+    }
+
+    // Update view mode
+    this.viewMode = mode;
+
+    // Recreate layout with new view mode
+    this.createLayout();
+
+    // Restore data and request fresh data from server
+    if (mode === 'local') {
+      if (snapshot) {
+        this.updateWidgets(snapshot);
+      }
+      this.connection.requestSnapshot();
+    } else {
+      if (clusterSnap) {
+        this.updateClusterWidgets(clusterSnap);
+      }
+      this.connection.requestClusterSnapshot();
+    }
+
+    this.logEvent('info', `Switched to ${mode} view`);
     this.render();
   }
 
@@ -369,8 +430,19 @@ export class DashboardClient {
   private createWidgets(): void {
     if (!this.grid) return;
 
-    const layout = LAYOUTS[this.currentLayout];
     const widgetConfig = { theme: this.theme };
+
+    if (this.viewMode === 'cluster') {
+      this.createClusterWidgets(widgetConfig);
+    } else {
+      this.createLocalWidgets(widgetConfig);
+    }
+  }
+
+  private createLocalWidgets(widgetConfig: { theme: DashboardTheme }): void {
+    if (!this.grid) return;
+
+    const layout = LAYOUTS[this.currentLayout];
 
     // Process Tree (full + compact layouts)
     if ('processTree' in layout) {
@@ -410,10 +482,56 @@ export class DashboardClient {
     }
   }
 
+  private createClusterWidgets(widgetConfig: { theme: DashboardTheme }): void {
+    if (!this.grid) return;
+
+    const layout = CLUSTER_LAYOUTS[this.currentLayout];
+
+    // Cluster Tree (all cluster layouts)
+    if ('clusterTree' in layout) {
+      this.clusterTreeWidget = new ClusterTreeWidget(widgetConfig);
+      this.clusterTreeWidget.create(this.grid, layout.clusterTree);
+    }
+
+    // Stats Table (full + compact cluster layouts)
+    if ('statsTable' in layout) {
+      this.statsTableWidget = new StatsTableWidget(widgetConfig);
+      this.statsTableWidget.create(this.grid, layout.statsTable);
+    }
+
+    // Memory Gauge (full layout only)
+    if ('memoryGauge' in layout) {
+      this.memoryGaugeWidget = new MemoryGaugeWidget(widgetConfig);
+      this.memoryGaugeWidget.create(this.grid, layout.memoryGauge);
+    }
+
+    // Event Log (full layout only)
+    if ('eventLog' in layout) {
+      this.eventLogWidget = new EventLogWidget({
+        theme: this.theme,
+        maxEntries: this.config.maxEventLogSize,
+      });
+      this.eventLogWidget.create(this.grid, layout.eventLog);
+    }
+
+    // Status Bar (all layouts)
+    this.createStatusBar();
+
+    // Process Detail View (modal)
+    this.processDetailView = new ProcessDetailView({ theme: this.theme });
+
+    // Set initial focus on cluster tree or stats table
+    const focusElement = this.clusterTreeWidget?.getElement() ?? this.statsTableWidget?.getElement();
+    if (focusElement) {
+      focusElement.focus();
+    }
+  }
+
   private createStatusBar(): void {
     if (!this.grid) return;
 
-    const layout = LAYOUTS[this.currentLayout];
+    const layouts = this.viewMode === 'cluster' ? CLUSTER_LAYOUTS : LAYOUTS;
+    const layout = layouts[this.currentLayout];
     const pos = layout.statusBar;
     this.statusBar = this.grid.set(
       pos.row,
@@ -511,6 +629,12 @@ export class DashboardClient {
     this.screen.key(['1'], () => this.switchLayout('full'));
     this.screen.key(['2'], () => this.switchLayout('compact'));
     this.screen.key(['3'], () => this.switchLayout('minimal'));
+
+    // View mode switching (local/cluster)
+    this.screen.key(['c'], () => {
+      const newMode = this.viewMode === 'local' ? 'cluster' : 'local';
+      this.switchViewMode(newMode);
+    });
   }
 
   // ===========================================================================
@@ -561,6 +685,8 @@ export class DashboardClient {
           'success',
           `Server v${message.payload.version} (uptime: ${this.formatUptime(this.serverUptime)})`,
         );
+        // Request cluster status to know if cluster view is available
+        this.connection.requestClusterStatus();
         break;
 
       case 'snapshot':
@@ -573,6 +699,17 @@ export class DashboardClient {
 
       case 'error':
         this.logEvent('error', `Server error [${message.payload.code}]: ${message.payload.message}`);
+        break;
+
+      case 'cluster_status':
+        this.clusterAvailable = message.payload.available;
+        if (this.clusterAvailable) {
+          this.logEvent('info', `Cluster available (node: ${message.payload.nodeId ?? 'unknown'})`);
+        }
+        break;
+
+      case 'cluster_snapshot':
+        this.updateClusterWidgets(message.payload);
         break;
     }
   }
@@ -610,15 +747,53 @@ export class DashboardClient {
     this.render();
   }
 
+  private updateClusterWidgets(snapshot: ClusterObserverSnapshot): void {
+    this.clusterSnapshot = snapshot;
+
+    // Update cluster tree widget
+    this.clusterTreeWidget?.update({ clusterSnapshot: snapshot });
+
+    // Aggregate servers from all connected nodes for stats table
+    const allServers = snapshot.nodes.flatMap((node) =>
+      node.status === 'connected' && node.snapshot ? node.snapshot.servers : [],
+    );
+    this.statsTableWidget?.update({ servers: allServers });
+
+    // Use local node's memory stats (aggregating across nodes would be misleading)
+    const localNode = snapshot.nodes.find((n) => n.nodeId === snapshot.localNodeId);
+    if (localNode?.snapshot) {
+      this.memoryGaugeWidget?.update({ memoryStats: localNode.snapshot.memoryStats });
+    }
+
+    this.updateStatusBar();
+    this.render();
+  }
+
   private updateStatusBar(): void {
     if (!this.statusBar) return;
 
     const uptime = this.formatUptime(Date.now() - this.startTime);
     const connectionStatus = this.getConnectionStatusIndicator();
     const layoutIndicator = this.getLayoutIndicator();
+    const viewModeIndicator = this.getViewModeIndicator();
 
     let processInfo = 'Waiting for data...';
-    if (this.currentSnapshot) {
+
+    if (this.viewMode === 'cluster' && this.clusterSnapshot) {
+      // Cluster view: show aggregated stats across nodes
+      const { nodes, localNodeId } = this.clusterSnapshot;
+      const connectedNodes = nodes.filter((n) => n.status === 'connected');
+      const totalServers = connectedNodes.reduce(
+        (sum, n) => sum + (n.snapshot?.servers.length ?? 0),
+        0,
+      );
+      const totalProcesses = connectedNodes.reduce(
+        (sum, n) => sum + (n.snapshot?.processCount ?? 0),
+        0,
+      );
+      processInfo = `Cluster: ${connectedNodes.length}/${nodes.length} nodes, ${totalProcesses} processes, ${totalServers} servers (local: ${localNodeId})`;
+    } else if (this.currentSnapshot) {
+      // Local view: show local stats
       const { processCount } = this.currentSnapshot;
       const serverCount = this.currentSnapshot.servers.length;
       const supervisorCount = this.currentSnapshot.supervisors.length;
@@ -626,13 +801,21 @@ export class DashboardClient {
     }
 
     const content =
-      ` [q]uit [r]efresh [?]help [1-3]layout` +
+      ` [q]uit [r]efresh [?]help [1-3]layout [c]luster` +
       `  |  ${connectionStatus}` +
       `  |  ${layoutIndicator}` +
+      `  |  ${viewModeIndicator}` +
       `  |  ${processInfo}` +
       `  |  Up: ${uptime}`;
 
     this.statusBar.setContent(content);
+  }
+
+  private getViewModeIndicator(): string {
+    if (this.viewMode === 'cluster') {
+      return '{cyan-fg}[Cluster]{/cyan-fg}';
+    }
+    return this.clusterAvailable ? '[Local]' : '{gray-fg}[Local]{/gray-fg}';
   }
 
   private getConnectionStatusIndicator(): string {
@@ -728,12 +911,16 @@ export class DashboardClient {
   private showHelp(): void {
     if (!this.screen) return;
 
+    const clusterStatus = this.clusterAvailable
+      ? `{green-fg}available{/green-fg}`
+      : `{gray-fg}not available{/gray-fg}`;
+
     const helpBox = blessed.box({
       parent: this.screen,
       top: 'center',
       left: 'center',
       width: 52,
-      height: 21,
+      height: 24,
       label: ' Keyboard Shortcuts (Remote Dashboard) ',
       tags: true,
       border: { type: 'line' },
@@ -749,6 +936,7 @@ export class DashboardClient {
   {${this.theme.primary}-fg}Shift+Tab{/${this.theme.primary}-fg}          Previous widget
   {${this.theme.primary}-fg}Enter{/${this.theme.primary}-fg}              Show process detail
   {${this.theme.primary}-fg}Arrow keys{/${this.theme.primary}-fg}         Navigate within widget
+  {${this.theme.primary}-fg}c{/${this.theme.primary}-fg}                  Toggle cluster/local view
 
   {${this.theme.secondary}-fg}Layouts:{/${this.theme.secondary}-fg}
   {${this.theme.primary}-fg}1{/${this.theme.primary}-fg}                  Full layout
@@ -756,6 +944,7 @@ export class DashboardClient {
   {${this.theme.primary}-fg}3{/${this.theme.primary}-fg}                  Minimal layout
 
   {${this.theme.textMuted}-fg}Remote server: ${this.config.host}:${this.config.port}{/${this.theme.textMuted}-fg}
+  {${this.theme.textMuted}-fg}Cluster: ${clusterStatus}{/${this.theme.textMuted}-fg}
   {${this.theme.textMuted}-fg}Press any key to close{/${this.theme.textMuted}-fg}
 `,
     });
