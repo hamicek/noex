@@ -526,9 +526,32 @@ Observer.subscribe((event) => {
 
 ---
 
+## Distribuovaný monitoring
+
+Pro cluster-wide monitoring napříč více uzly použijte `ClusterObserver`:
+
+```typescript
+import { Observer } from 'noex';
+import { ClusterObserver, Cluster } from 'noex/distribution';
+
+// Lokální monitoring (synchronní)
+const localSnapshot = Observer.getSnapshot();
+
+// Cluster-wide monitoring (asynchronní)
+if (Cluster.getStatus() === 'running') {
+  const clusterSnapshot = await ClusterObserver.getClusterSnapshot();
+  console.log(`Cluster: ${clusterSnapshot.aggregated.totalProcessCount} procesů`);
+}
+```
+
+Viz [ClusterObserver API](../distribution/api/cluster-observer.md) pro podrobnosti.
+
+---
+
 ## Související
 
 - [AlertManager API](./alert-manager.md) - Konfigurace alertů
 - [Dashboard API](./dashboard.md) - Web dashboard
 - [GenServer API](./genserver.md) - Implementace procesů
 - [Supervisor API](./supervisor.md) - Supervize procesů
+- [ClusterObserver API](../distribution/api/cluster-observer.md) - Cluster-wide monitoring

@@ -526,9 +526,32 @@ Observer.subscribe((event) => {
 
 ---
 
+## Distributed Monitoring
+
+For cluster-wide monitoring across multiple nodes, use `ClusterObserver`:
+
+```typescript
+import { Observer } from 'noex';
+import { ClusterObserver, Cluster } from 'noex/distribution';
+
+// Local monitoring (synchronous)
+const localSnapshot = Observer.getSnapshot();
+
+// Cluster-wide monitoring (asynchronous)
+if (Cluster.getStatus() === 'running') {
+  const clusterSnapshot = await ClusterObserver.getClusterSnapshot();
+  console.log(`Cluster: ${clusterSnapshot.aggregated.totalProcessCount} processes`);
+}
+```
+
+See [ClusterObserver API](../distribution/api/cluster-observer.md) for details.
+
+---
+
 ## Related
 
 - [AlertManager API](./alert-manager.md) - Alert configuration
 - [Dashboard API](./dashboard.md) - Web dashboard
 - [GenServer API](./genserver.md) - Process implementation
 - [Supervisor API](./supervisor.md) - Process supervision
+- [ClusterObserver API](../distribution/api/cluster-observer.md) - Cluster-wide monitoring
