@@ -244,6 +244,16 @@ describe('DashboardConnection', () => {
       const connection = new DashboardConnection();
       expect(connection.requestSnapshot()).toBe(false);
     });
+
+    it('requestClusterSnapshot() returns false when not connected', () => {
+      const connection = new DashboardConnection();
+      expect(connection.requestClusterSnapshot()).toBe(false);
+    });
+
+    it('requestClusterStatus() returns false when not connected', () => {
+      const connection = new DashboardConnection();
+      expect(connection.requestClusterStatus()).toBe(false);
+    });
   });
 
   describe('disconnect()', () => {
@@ -535,6 +545,72 @@ describe('Server-Client Integration', () => {
     }
 
     expect(connection.isConnected()).toBe(true);
+
+    connection.disconnect();
+  });
+
+  it('client can request cluster status', async () => {
+    serverRef = await DashboardServer.start({ port: testPort });
+
+    const connection = new DashboardConnection({
+      port: testPort,
+      autoReconnect: false,
+    });
+
+    let clusterStatusReceived = false;
+    let clusterAvailable = false;
+
+    connection.onEvent((event) => {
+      if (event.type === 'message' && event.message.type === 'cluster_status') {
+        clusterStatusReceived = true;
+        clusterAvailable = event.message.payload.available;
+      }
+    });
+
+    await connection.connect();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Request cluster status
+    const sent = connection.requestClusterStatus();
+    expect(sent).toBe(true);
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(clusterStatusReceived).toBe(true);
+    // Server without ClusterObserver should report cluster as unavailable
+    expect(clusterAvailable).toBe(false);
+
+    connection.disconnect();
+  });
+
+  it('client can request cluster snapshot (returns error when unavailable)', async () => {
+    serverRef = await DashboardServer.start({ port: testPort });
+
+    const connection = new DashboardConnection({
+      port: testPort,
+      autoReconnect: false,
+    });
+
+    let errorReceived = false;
+    let errorCode = '';
+
+    connection.onEvent((event) => {
+      if (event.type === 'message' && event.message.type === 'error') {
+        errorReceived = true;
+        errorCode = event.message.payload.code;
+      }
+    });
+
+    await connection.connect();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Request cluster snapshot when no ClusterObserver is configured
+    const sent = connection.requestClusterSnapshot();
+    expect(sent).toBe(true);
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Server should respond with error since no ClusterObserver is configured
+    expect(errorReceived).toBe(true);
+    expect(errorCode).toBe('CLUSTER_NOT_AVAILABLE');
 
     connection.disconnect();
   });

@@ -212,6 +212,26 @@ export class DashboardConnection {
     return this.send({ type: 'get_snapshot' });
   }
 
+  /**
+   * Requests a cluster snapshot from the server.
+   *
+   * Only available when the server has ClusterObserver configured.
+   * The server will respond with a `cluster_snapshot` message.
+   */
+  requestClusterSnapshot(): boolean {
+    return this.send({ type: 'get_cluster_snapshot' });
+  }
+
+  /**
+   * Requests the cluster availability status from the server.
+   *
+   * The server will respond with a `cluster_status` message indicating
+   * whether cluster mode is available.
+   */
+  requestClusterStatus(): boolean {
+    return this.send({ type: 'get_cluster_status' });
+  }
+
   // ===========================================================================
   // Private Methods
   // ===========================================================================
