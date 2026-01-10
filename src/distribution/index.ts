@@ -237,3 +237,18 @@ export {
   type DistributedSupervisorEventHandler,
   type ChildRegistrationStatus,
 } from './supervisor/index.js';
+
+// =============================================================================
+// Cluster Observer
+// =============================================================================
+
+export {
+  ClusterObserver,
+  type NodeObserverStatus,
+  type NodeObserverSnapshot,
+  type ClusterAggregatedStats,
+  type ClusterObserverSnapshot,
+  type ClusterObserverEvent,
+  type ClusterObserverEventHandler,
+  type ClusterSnapshotOptions,
+} from '../observer/index.js';

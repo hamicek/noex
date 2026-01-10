@@ -6,6 +6,7 @@
  */
 
 export { Observer } from './observer.js';
+export { ClusterObserver } from './cluster-observer.js';
 export {
   startObserverService,
   stopObserverService,
@@ -24,6 +25,13 @@ export type {
   AlertEventHandler,
   ObserverServiceCallMessage,
   ObserverServiceCallReply,
+  NodeObserverStatus,
+  NodeObserverSnapshot,
+  ClusterAggregatedStats,
+  ClusterObserverSnapshot,
+  ClusterObserverEvent,
+  ClusterObserverEventHandler,
+  ClusterSnapshotOptions,
 } from './types.js';
 export {
   buildProcessTree,

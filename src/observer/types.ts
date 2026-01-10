@@ -156,3 +156,118 @@ export type ObserverServiceCallReply =
   | { readonly type: 'process_tree'; readonly data: readonly import('../core/types.js').ProcessTreeNode[] }
   | { readonly type: 'process_count'; readonly data: number }
   | { readonly type: 'error'; readonly message: string };
+
+// =============================================================================
+// Cluster Observer Types
+// =============================================================================
+
+/**
+ * Connection status of a node in the cluster observer context.
+ *
+ * - `connected`: Node responded successfully to observer query
+ * - `disconnected`: Node is known but not responding
+ * - `error`: Query to node failed with an error
+ * - `timeout`: Query to node timed out
+ */
+export type NodeObserverStatus = 'connected' | 'disconnected' | 'error' | 'timeout';
+
+/**
+ * Observer snapshot from a single node in the cluster.
+ *
+ * Captures both the snapshot data and metadata about the query status.
+ */
+export interface NodeObserverSnapshot {
+  /** Unique identifier of the node */
+  readonly nodeId: import('../distribution/types.js').NodeId;
+
+  /** Status of the observer query to this node */
+  readonly status: NodeObserverStatus;
+
+  /** Observer snapshot from the node, null if query failed */
+  readonly snapshot: ObserverSnapshot | null;
+
+  /** Unix timestamp when this data was last updated */
+  readonly lastUpdate: number;
+
+  /** Error message if status is 'error' or 'timeout' */
+  readonly error?: string;
+}
+
+/**
+ * Aggregated statistics across all nodes in the cluster.
+ */
+export interface ClusterAggregatedStats {
+  /** Total number of processes across all connected nodes */
+  readonly totalProcessCount: number;
+
+  /** Total number of GenServers across all connected nodes */
+  readonly totalServerCount: number;
+
+  /** Total number of Supervisors across all connected nodes */
+  readonly totalSupervisorCount: number;
+
+  /** Total messages processed across all connected nodes */
+  readonly totalMessages: number;
+
+  /** Total restarts across all connected nodes */
+  readonly totalRestarts: number;
+
+  /** Number of nodes that responded successfully */
+  readonly connectedNodeCount: number;
+
+  /** Total number of nodes in the cluster (including failed) */
+  readonly totalNodeCount: number;
+}
+
+/**
+ * Complete snapshot of the cluster state.
+ *
+ * Aggregates observer snapshots from all nodes and provides
+ * cluster-wide statistics.
+ */
+export interface ClusterObserverSnapshot {
+  /** Unix timestamp when the cluster snapshot was created */
+  readonly timestamp: number;
+
+  /** Identifier of the local node that created this snapshot */
+  readonly localNodeId: import('../distribution/types.js').NodeId;
+
+  /** Individual snapshots from each node */
+  readonly nodes: readonly NodeObserverSnapshot[];
+
+  /** Aggregated statistics across all nodes */
+  readonly aggregated: ClusterAggregatedStats;
+}
+
+/**
+ * Events emitted by the ClusterObserver.
+ *
+ * Discriminated union for type-safe event handling.
+ */
+export type ClusterObserverEvent =
+  | { readonly type: 'cluster_snapshot_update'; readonly snapshot: ClusterObserverSnapshot }
+  | { readonly type: 'node_snapshot_update'; readonly nodeId: import('../distribution/types.js').NodeId; readonly snapshot: ObserverSnapshot }
+  | { readonly type: 'node_error'; readonly nodeId: import('../distribution/types.js').NodeId; readonly error: string }
+  | { readonly type: 'node_timeout'; readonly nodeId: import('../distribution/types.js').NodeId };
+
+/**
+ * Handler function for ClusterObserver events.
+ */
+export type ClusterObserverEventHandler = (event: ClusterObserverEvent) => void;
+
+/**
+ * Options for fetching cluster snapshot.
+ */
+export interface ClusterSnapshotOptions {
+  /**
+   * Whether to use cached data if available.
+   * @default true
+   */
+  readonly useCache?: boolean;
+
+  /**
+   * Timeout in milliseconds for each node query.
+   * @default 5000
+   */
+  readonly timeout?: number;
+}
