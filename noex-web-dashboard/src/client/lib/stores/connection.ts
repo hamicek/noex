@@ -211,6 +211,9 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
     state.set('connected');
     lastError.set(null);
     resetReconnectState();
+    // Request initial data
+    send({ type: 'get_snapshot' });
+    send({ type: 'get_cluster_status' });
   }
 
   function handleClose(): void {
