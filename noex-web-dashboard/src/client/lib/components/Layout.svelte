@@ -17,9 +17,7 @@
   import StatsTable from './StatsTable.svelte';
   import MemoryGauge from './MemoryGauge.svelte';
   import EventLog from './EventLog.svelte';
-  import { snapshot, type ProcessTreeNode } from '../stores/snapshot.js';
-  import { cluster } from '../stores/cluster.js';
-  import type { GenServerStats } from '../stores/snapshot.js';
+  import type { ProcessTreeNode, GenServerStats } from '../stores/snapshot.js';
 
   // ---------------------------------------------------------------------------
   // Types
@@ -80,7 +78,6 @@
   // ---------------------------------------------------------------------------
 
   const isClusterView = $derived(viewMode === 'cluster');
-  const hasData = $derived(viewMode === 'cluster' ? cluster.hasData : snapshot.hasData);
 
   // ---------------------------------------------------------------------------
   // Layout Configuration
