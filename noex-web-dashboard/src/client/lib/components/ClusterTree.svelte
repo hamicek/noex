@@ -358,6 +358,8 @@
     border-radius: 6px;
     font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
     font-size: 0.8125rem;
+    overflow-y: auto;
+    max-height: 100%;
   }
 
   /* Empty state */
@@ -642,6 +644,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+    max-height: 200px;
+    overflow-y: auto;
   }
 
   .server-item {
