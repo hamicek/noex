@@ -7,8 +7,8 @@
   import { connection } from './lib/stores/connection.js';
   import { cluster } from './lib/stores/cluster.js';
   import { themeStore } from './lib/utils/theme.js';
-  import { Layout, type LayoutMode, type ViewMode } from './lib/components/index.js';
-  import type { ProcessTreeNode, GenServerStats } from './lib/stores/snapshot.js';
+  import { Layout, ProcessDetail, type LayoutMode, type ViewMode } from './lib/components/index.js';
+  import { snapshot, type ProcessTreeNode, type GenServerStats } from './lib/stores/snapshot.js';
 
   // Application State
   let viewMode = $state<ViewMode>('local');
@@ -17,6 +17,7 @@
   let showHelp = $state(false);
   let selectedNodeId = $state<string | null>(null);
   let selectedProcessId = $state<string | null>(null);
+  let selectedProcess = $state<ProcessTreeNode | null>(null);
 
   // Store-derived state (using subscriptions)
   let isConnected = $state(false);
@@ -69,6 +70,14 @@
     if (showHelp) {
       if (event.key === 'Escape' || event.key === '?' || event.key === 'h') {
         showHelp = false;
+        event.preventDefault();
+      }
+      return;
+    }
+
+    if (selectedProcess !== null) {
+      if (event.key === 'Escape') {
+        closeProcessDetail();
         event.preventDefault();
       }
       return;
@@ -134,10 +143,20 @@
 
   function handleProcessSelect(node: ProcessTreeNode): void {
     selectedProcessId = node.id;
+    selectedProcess = node;
   }
 
   function handleServerClick(server: GenServerStats): void {
     selectedProcessId = server.id;
+    // Find the process tree node for this server
+    const processInfo = snapshot.findProcess(server.id);
+    if (processInfo?.treeNode) {
+      selectedProcess = processInfo.treeNode;
+    }
+  }
+
+  function closeProcessDetail(): void {
+    selectedProcess = null;
   }
 
   function closeHelp(): void {
@@ -251,6 +270,8 @@
       </div>
     </div>
   {/if}
+
+  <ProcessDetail process={selectedProcess} onClose={closeProcessDetail} />
 </div>
 
 <style>

@@ -34,6 +34,7 @@ export { default as StatusBar } from './StatusBar.svelte';
 export { default as StatsTable } from './StatsTable.svelte';
 export { default as MemoryGauge } from './MemoryGauge.svelte';
 export { default as ProcessTree } from './ProcessTree.svelte';
+export { default as ProcessDetail } from './ProcessDetail.svelte';
 export { default as ClusterTree } from './ClusterTree.svelte';
 export { default as EventLog } from './EventLog.svelte';
 
