@@ -10,11 +10,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { cluster, type NodeObserverSnapshot } from '../stores/cluster.js';
+  import type { GenServerStats } from 'noex';
   import {
     formatNodeId,
     formatNumber,
     formatBytes,
     formatDuration,
+    truncate,
   } from '../utils/formatters.js';
 
   // ---------------------------------------------------------------------------
@@ -28,6 +30,8 @@
     nodeIdMaxLength?: number;
     /** Callback when a node is selected. */
     onNodeSelect?: (nodeId: string) => void;
+    /** Callback when a server is clicked. */
+    onServerClick?: (server: GenServerStats) => void;
     /** Currently selected node ID. */
     selectedNodeId?: string | null;
   }
@@ -42,6 +46,7 @@
     showDetails = true,
     nodeIdMaxLength = 24,
     onNodeSelect,
+    onServerClick,
     selectedNodeId = null,
   }: Props = $props();
 
@@ -124,6 +129,11 @@
 
   function handleNodeClick(nodeId: string): void {
     onNodeSelect?.(nodeId);
+  }
+
+  function handleServerClick(server: GenServerStats, event: MouseEvent): void {
+    event.stopPropagation();
+    onServerClick?.(server);
   }
 
   function toggleNodeExpanded(nodeId: string, event: MouseEvent): void {
@@ -306,6 +316,29 @@
                   <dd>{formatDuration(getNodeUptime(node))} ago</dd>
                 </div>
               </dl>
+
+              {#if node.snapshot.servers.length > 0}
+                <div class="servers-section">
+                  <h4 class="servers-title">GenServers</h4>
+                  <ul class="servers-list">
+                    {#each node.snapshot.servers as server (server.id)}
+                      <li>
+                        <button
+                          type="button"
+                          class="server-item"
+                          onclick={(e) => handleServerClick(server, e)}
+                        >
+                          <span class="server-status status-{server.status}">●</span>
+                          <span class="server-name">{truncate(server.id, 30)}</span>
+                          <span class="server-stats">
+                            {server.messageCount} msgs, q:{server.queueSize}
+                          </span>
+                        </button>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
             </div>
           {/if}
         </li>
@@ -583,6 +616,84 @@
     margin: 0;
     font-weight: 500;
     color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Servers section */
+  .servers-section {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border-muted);
+  }
+
+  .servers-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    color: var(--color-text-muted);
+  }
+
+  .servers-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .server-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.375rem 0.5rem;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.75rem;
+    text-align: left;
+    color: var(--color-text);
+    transition: background-color 100ms ease, border-color 100ms ease;
+  }
+
+  .server-item:hover {
+    background-color: var(--color-hover);
+    border-color: var(--color-border);
+  }
+
+  .server-item:focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: -2px;
+  }
+
+  .server-status {
+    flex-shrink: 0;
+    font-size: 0.625rem;
+  }
+
+  .server-status.status-running { color: var(--color-success); }
+  .server-status.status-initializing { color: var(--color-primary); }
+  .server-status.status-stopping { color: var(--color-warning); }
+  .server-status.status-stopped { color: var(--color-error); }
+
+  .server-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  }
+
+  .server-stats {
+    flex-shrink: 0;
+    font-size: 0.6875rem;
+    color: var(--color-text-muted);
     font-variant-numeric: tabular-nums;
   }
 

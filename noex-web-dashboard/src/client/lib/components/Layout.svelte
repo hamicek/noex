@@ -159,6 +159,7 @@
             <ClusterTree
               showDetails={config.showDetails}
               onNodeSelect={onNodeSelect}
+              onServerClick={onServerClick}
               selectedNodeId={selectedNodeId}
             />
           {:else}
@@ -196,6 +197,7 @@
             <ClusterTree
               showDetails={config.showDetails}
               onNodeSelect={onNodeSelect}
+              onServerClick={onServerClick}
               selectedNodeId={selectedNodeId}
             />
           {:else}
@@ -225,6 +227,7 @@
             <ClusterTree
               showDetails={false}
               onNodeSelect={onNodeSelect}
+              onServerClick={onServerClick}
               selectedNodeId={selectedNodeId}
             />
           {:else}
