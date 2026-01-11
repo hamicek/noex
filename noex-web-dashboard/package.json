@@ -13,6 +13,7 @@
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "tsc -p tsconfig.node.json",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
     "start": "node dist/bin/noex-web-dashboard.js",
     "preview": "vite preview"
   },
