@@ -14,9 +14,8 @@
   import { connection } from './lib/stores/connection.js';
   import { snapshot } from './lib/stores/snapshot.js';
   import { cluster } from './lib/stores/cluster.js';
-  import { events } from './lib/stores/events.js';
   import { themeStore } from './lib/utils/theme.js';
-  import { StatusBar, MemoryGauge, ClusterTree } from './lib/components/index.js';
+  import { StatusBar, MemoryGauge, ClusterTree, EventLog } from './lib/components/index.js';
 
   // ---------------------------------------------------------------------------
   // Types
@@ -265,13 +264,7 @@
         </section>
 
         <section class="widget-panel widget-events" aria-label="Event log">
-          <div class="placeholder-widget">
-            <span class="placeholder-icon">&#128220;</span>
-            <p>Event Log</p>
-            <p class="placeholder-hint">
-              {events.count} events
-            </p>
-          </div>
+          <EventLog showToolbar={true} maxDisplayCount={100} />
         </section>
       </div>
     {:else if layoutMode === 'compact'}
