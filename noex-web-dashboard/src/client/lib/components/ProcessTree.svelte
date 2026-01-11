@@ -79,16 +79,24 @@
   let expandedNodes = $state<Set<string>>(new Set());
   let treeContainer: HTMLElement | null = $state(null);
 
-  // Store subscription
+  // Store subscriptions
   let treeValue = $state<readonly ProcessTreeNode[]>([]);
-  let unsubscribe: (() => void) | null = null;
+  let processCountValue = $state(0);
+  let supervisorCountValue = $state(0);
+  let serverCountValue = $state(0);
+  let unsubscribers: Array<() => void> = [];
 
   onMount(() => {
-    unsubscribe = snapshot.tree.subscribe(v => treeValue = v);
+    unsubscribers = [
+      snapshot.tree.subscribe((v) => (treeValue = v)),
+      snapshot.processCount.subscribe((v) => (processCountValue = v)),
+      snapshot.supervisorCount.subscribe((v) => (supervisorCountValue = v)),
+      snapshot.serverCount.subscribe((v) => (serverCountValue = v)),
+    ];
   });
 
   onDestroy(() => {
-    unsubscribe?.();
+    unsubscribers.forEach((fn) => fn());
   });
 
   // ---------------------------------------------------------------------------
@@ -330,15 +338,15 @@
     <header class="tree-header">
       <div class="header-stats">
         <span class="stat">
-          <span class="stat-value">{snapshot.processCount}</span>
+          <span class="stat-value">{processCountValue}</span>
           <span class="stat-label">processes</span>
         </span>
         <span class="stat">
-          <span class="stat-value">{snapshot.supervisorCount}</span>
+          <span class="stat-value">{supervisorCountValue}</span>
           <span class="stat-label">supervisors</span>
         </span>
         <span class="stat">
-          <span class="stat-value">{snapshot.serverCount}</span>
+          <span class="stat-value">{serverCountValue}</span>
           <span class="stat-label">servers</span>
         </span>
       </div>
