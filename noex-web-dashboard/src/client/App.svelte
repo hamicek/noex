@@ -15,7 +15,8 @@
   import { snapshot } from './lib/stores/snapshot.js';
   import { cluster } from './lib/stores/cluster.js';
   import { themeStore } from './lib/utils/theme.js';
-  import { StatusBar, MemoryGauge, ClusterTree, EventLog } from './lib/components/index.js';
+  import { StatusBar, MemoryGauge, ClusterTree, ProcessTree, EventLog } from './lib/components/index.js';
+  import type { ProcessTreeNode } from './lib/stores/snapshot.js';
 
   // ---------------------------------------------------------------------------
   // Types
@@ -33,6 +34,7 @@
   let startTime = $state(Date.now());
   let showHelp = $state(false);
   let selectedNodeId = $state<string | null>(null);
+  let selectedProcessId = $state<string | null>(null);
 
   // Theme cleanup function
   let themeCleanup: (() => void) | null = null;
@@ -168,6 +170,10 @@
     selectedNodeId = nodeId;
   }
 
+  function handleProcessSelect(node: ProcessTreeNode): void {
+    selectedProcessId = node.id;
+  }
+
   function closeHelp(): void {
     showHelp = false;
   }
@@ -239,13 +245,11 @@
               selectedNodeId={selectedNodeId}
             />
           {:else}
-            <div class="placeholder-widget">
-              <span class="placeholder-icon">&#128202;</span>
-              <p>Process Tree</p>
-              <p class="placeholder-hint">
-                {hasSnapshot ? `${snapshot.processCount} processes` : 'Waiting for data...'}
-              </p>
-            </div>
+            <ProcessTree
+              showDetails={true}
+              onProcessSelect={handleProcessSelect}
+              selectedProcessId={selectedProcessId}
+            />
           {/if}
         </section>
 
@@ -278,13 +282,11 @@
               selectedNodeId={selectedNodeId}
             />
           {:else}
-            <div class="placeholder-widget">
-              <span class="placeholder-icon">&#128202;</span>
-              <p>Process Tree</p>
-              <p class="placeholder-hint">
-                {hasSnapshot ? `${snapshot.processCount} processes` : 'Waiting for data...'}
-              </p>
-            </div>
+            <ProcessTree
+              showDetails={false}
+              onProcessSelect={handleProcessSelect}
+              selectedProcessId={selectedProcessId}
+            />
           {/if}
         </section>
 
