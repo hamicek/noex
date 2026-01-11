@@ -32,7 +32,7 @@ import { dirname, resolve, sep } from 'node:path';
 const VERSION = '0.1.0';
 const DEFAULT_HOST = 'localhost';
 const DEFAULT_PORT = 9876;
-const DEFAULT_WEB_PORT = 3000;
+const DEFAULT_WEB_PORT = 7210;
 
 // Resolve static path relative to this file's location
 // Handles both development (bin/) and production (dist/bin/) paths

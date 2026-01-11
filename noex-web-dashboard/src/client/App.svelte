@@ -1,26 +1,16 @@
 <!--
   App.svelte - Root application component for noex web dashboard.
-
-  Orchestrates the entire dashboard application:
-  - Theme initialization and management
-  - WebSocket connection lifecycle
-  - View mode switching (local/cluster)
-  - Layout mode switching (full/compact/minimal)
-  - Keyboard shortcut handling
-  - Component coordination
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import { connection } from './lib/stores/connection.js';
   import { cluster } from './lib/stores/cluster.js';
   import { themeStore } from './lib/utils/theme.js';
   import { Layout, type LayoutMode, type ViewMode } from './lib/components/index.js';
   import type { ProcessTreeNode, GenServerStats } from './lib/stores/snapshot.js';
 
-  // ---------------------------------------------------------------------------
   // Application State
-  // ---------------------------------------------------------------------------
-
   let viewMode = $state<ViewMode>('local');
   let layoutMode = $state<LayoutMode>('full');
   let startTime = $state(Date.now());
@@ -28,55 +18,54 @@
   let selectedNodeId = $state<string | null>(null);
   let selectedProcessId = $state<string | null>(null);
 
+  // Store-derived state (using subscriptions)
+  let isConnected = $state(false);
+  let connectionState = $state<string>('disconnected');
+  let reconnectAttemptValue = $state(0);
+  let hasErrorValue = $state(false);
+  let lastErrorValue = $state<string | null>(null);
+  let hasCluster = $state(false);
+  let isDarkValue = $state(true);
+
+  // Derived
+  const isClusterView = $derived(viewMode === 'cluster');
+
   // Theme cleanup function
   let themeCleanup: (() => void) | null = null;
 
-  // ---------------------------------------------------------------------------
-  // Derived State
-  // ---------------------------------------------------------------------------
-
-  const isConnected = $derived(connection.isConnected);
-  const hasCluster = $derived(cluster.isAvailable);
-  const isClusterView = $derived(viewMode === 'cluster');
-
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
+  // Store subscriptions
+  let unsubscribers: Array<() => void> = [];
 
   onMount(() => {
-    // Initialize theme system
     themeCleanup = themeStore.initialize();
-
-    // Connect to WebSocket server
     connection.connect();
-
-    // Set up keyboard event listener
     window.addEventListener('keydown', handleKeydown);
+
+    // Subscribe to stores
+    unsubscribers = [
+      connection.isConnected.subscribe(v => isConnected = v),
+      connection.state.subscribe(v => connectionState = v),
+      connection.reconnectAttempt.subscribe(v => reconnectAttemptValue = v),
+      connection.hasError.subscribe(v => hasErrorValue = v),
+      connection.lastError.subscribe(v => lastErrorValue = v),
+      cluster.isAvailable.subscribe(v => hasCluster = v),
+      themeStore.isDark.subscribe(v => isDarkValue = v),
+    ];
   });
 
   onDestroy(() => {
-    // Clean up theme listener
     themeCleanup?.();
-
-    // Disconnect from WebSocket
     connection.disconnect();
-
-    // Remove keyboard event listener
     window.removeEventListener('keydown', handleKeydown);
+    unsubscribers.forEach(fn => fn());
   });
 
-  // ---------------------------------------------------------------------------
-  // Keyboard Handlers
-  // ---------------------------------------------------------------------------
-
   function handleKeydown(event: KeyboardEvent): void {
-    // Ignore if typing in an input field
     const target = event.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
       return;
     }
 
-    // Handle help modal first
     if (showHelp) {
       if (event.key === 'Escape' || event.key === '?' || event.key === 'h') {
         showHelp = false;
@@ -87,57 +76,39 @@
 
     switch (event.key) {
       case 'r':
-        // Refresh - request new snapshot
         handleRefresh();
         event.preventDefault();
         break;
-
       case 'c':
-        // Toggle cluster/local view
         handleToggleView();
         event.preventDefault();
         break;
-
       case '1':
-        // Full layout
         layoutMode = 'full';
         event.preventDefault();
         break;
-
       case '2':
-        // Compact layout
         layoutMode = 'compact';
         event.preventDefault();
         break;
-
       case '3':
-        // Minimal layout
         layoutMode = 'minimal';
         event.preventDefault();
         break;
-
       case '?':
       case 'h':
-        // Show help
         showHelp = true;
         event.preventDefault();
         break;
-
       case 't':
-        // Toggle theme
         themeStore.toggle();
         event.preventDefault();
         break;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Actions
-  // ---------------------------------------------------------------------------
-
   function handleRefresh(): void {
-    if (!connection.isConnected) return;
-
+    if (!get(connection.isConnected)) return;
     if (viewMode === 'cluster') {
       connection.requestClusterSnapshot();
     } else {
@@ -147,7 +118,7 @@
 
   function handleToggleView(): void {
     if (viewMode === 'local') {
-      if (cluster.isAvailable) {
+      if (get(cluster.isAvailable)) {
         viewMode = 'cluster';
         connection.requestClusterSnapshot();
       }
@@ -176,11 +147,11 @@
 
 <div class="app">
   <Layout
-    layoutMode={layoutMode}
-    viewMode={viewMode}
-    startTime={startTime}
-    selectedProcessId={selectedProcessId}
-    selectedNodeId={selectedNodeId}
+    {layoutMode}
+    {viewMode}
+    {startTime}
+    {selectedProcessId}
+    {selectedNodeId}
     onProcessSelect={handleProcessSelect}
     onNodeSelect={handleNodeSelect}
     onServerClick={handleServerClick}
@@ -214,7 +185,7 @@
             onclick={() => themeStore.toggle()}
             title="Toggle Theme (t)"
           >
-            {themeStore.isDark ? 'Light' : 'Dark'}
+            {isDarkValue ? 'Light' : 'Dark'}
           </button>
         </div>
       </header>
@@ -226,16 +197,16 @@
           <div class="connection-status">
             <div class="spinner" aria-hidden="true"></div>
             <p class="status-text">
-              {#if connection.state === 'connecting'}
+              {#if connectionState === 'connecting'}
                 Connecting to server...
-              {:else if connection.state === 'reconnecting'}
-                Reconnecting (attempt {connection.reconnectAttempt})...
+              {:else if connectionState === 'reconnecting'}
+                Reconnecting (attempt {reconnectAttemptValue})...
               {:else}
                 Disconnected
               {/if}
             </p>
-            {#if connection.hasError}
-              <p class="error-text">{connection.lastError}</p>
+            {#if hasErrorValue}
+              <p class="error-text">{lastErrorValue}</p>
             {/if}
           </div>
         </div>
@@ -243,8 +214,8 @@
     {/snippet}
   </Layout>
 
-  <!-- Help Modal -->
   {#if showHelp}
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       class="modal-overlay"
       role="dialog"
@@ -254,47 +225,24 @@
       onclick={closeHelp}
       onkeydown={(e) => e.key === 'Escape' && closeHelp()}
     >
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
       <div class="modal-content" role="document" onclick={(e) => e.stopPropagation()} onkeypress={() => {}}>
         <header class="modal-header">
           <h2 id="help-title">Keyboard Shortcuts</h2>
           <button type="button" class="modal-close" onclick={closeHelp} aria-label="Close">
-            \u2715
+            &#x2715;
           </button>
         </header>
         <div class="modal-body">
           <dl class="shortcuts-list">
-            <div class="shortcut-item">
-              <dt><kbd>r</kbd></dt>
-              <dd>Refresh data</dd>
-            </div>
-            <div class="shortcut-item">
-              <dt><kbd>c</kbd></dt>
-              <dd>Toggle cluster/local view</dd>
-            </div>
-            <div class="shortcut-item">
-              <dt><kbd>1</kbd></dt>
-              <dd>Full layout</dd>
-            </div>
-            <div class="shortcut-item">
-              <dt><kbd>2</kbd></dt>
-              <dd>Compact layout</dd>
-            </div>
-            <div class="shortcut-item">
-              <dt><kbd>3</kbd></dt>
-              <dd>Minimal layout</dd>
-            </div>
-            <div class="shortcut-item">
-              <dt><kbd>t</kbd></dt>
-              <dd>Toggle theme</dd>
-            </div>
-            <div class="shortcut-item">
-              <dt><kbd>?</kbd> / <kbd>h</kbd></dt>
-              <dd>Show this help</dd>
-            </div>
-            <div class="shortcut-item">
-              <dt><kbd>Esc</kbd></dt>
-              <dd>Close dialogs</dd>
-            </div>
+            <div class="shortcut-item"><dt><kbd>r</kbd></dt><dd>Refresh data</dd></div>
+            <div class="shortcut-item"><dt><kbd>c</kbd></dt><dd>Toggle cluster/local view</dd></div>
+            <div class="shortcut-item"><dt><kbd>1</kbd></dt><dd>Full layout</dd></div>
+            <div class="shortcut-item"><dt><kbd>2</kbd></dt><dd>Compact layout</dd></div>
+            <div class="shortcut-item"><dt><kbd>3</kbd></dt><dd>Minimal layout</dd></div>
+            <div class="shortcut-item"><dt><kbd>t</kbd></dt><dd>Toggle theme</dd></div>
+            <div class="shortcut-item"><dt><kbd>?</kbd> / <kbd>h</kbd></dt><dd>Show this help</dd></div>
+            <div class="shortcut-item"><dt><kbd>Esc</kbd></dt><dd>Close dialogs</dd></div>
           </dl>
         </div>
         <footer class="modal-footer">
@@ -306,20 +254,12 @@
 </div>
 
 <style>
-  /* ---------------------------------------------------------------------------
-   * Root Application Container
-   * ------------------------------------------------------------------------- */
-
   .app {
     height: 100vh;
     background-color: var(--color-background);
     color: var(--color-text);
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   }
-
-  /* ---------------------------------------------------------------------------
-   * Header (passed to Layout via snippet)
-   * ------------------------------------------------------------------------- */
 
   .app-header {
     display: flex;
@@ -338,10 +278,7 @@
     color: var(--color-primary);
   }
 
-  .app-controls {
-    display: flex;
-    gap: 0.5rem;
-  }
+  .app-controls { display: flex; gap: 0.5rem; }
 
   .control-button {
     padding: 0.375rem 0.75rem;
@@ -360,20 +297,13 @@
     border-color: var(--color-border-focus);
   }
 
-  .control-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  .control-button:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .control-button.active {
     background-color: var(--color-primary);
     color: var(--color-text-inverse);
     border-color: var(--color-primary);
   }
-
-  /* ---------------------------------------------------------------------------
-   * Connection Overlay (passed to Layout via snippet)
-   * ------------------------------------------------------------------------- */
 
   .connection-overlay {
     position: absolute;
@@ -406,25 +336,10 @@
     animation: spin 1s linear infinite;
   }
 
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-  .status-text {
-    margin: 0;
-    font-size: 1rem;
-    color: var(--color-text);
-  }
-
-  .error-text {
-    margin: 0;
-    font-size: 0.875rem;
-    color: var(--color-error);
-  }
-
-  /* ---------------------------------------------------------------------------
-   * Help Modal
-   * ------------------------------------------------------------------------- */
+  .status-text { margin: 0; font-size: 1rem; color: var(--color-text); }
+  .error-text { margin: 0; font-size: 0.875rem; color: var(--color-error); }
 
   .modal-overlay {
     position: fixed;
@@ -453,12 +368,7 @@
     border-bottom: 1px solid var(--color-border-muted);
   }
 
-  .modal-header h2 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--color-text);
-  }
+  .modal-header h2 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--color-text); }
 
   .modal-close {
     display: flex;
@@ -476,38 +386,12 @@
     transition: background-color 150ms ease;
   }
 
-  .modal-close:hover {
-    background-color: var(--color-hover);
-    color: var(--color-text);
-  }
-
-  .modal-body {
-    padding: 1rem;
-  }
-
-  .shortcuts-list {
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .shortcut-item {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .shortcut-item dt {
-    flex-shrink: 0;
-    min-width: 5rem;
-  }
-
-  .shortcut-item dd {
-    margin: 0;
-    color: var(--color-text-muted);
-    font-size: 0.875rem;
-  }
+  .modal-close:hover { background-color: var(--color-hover); color: var(--color-text); }
+  .modal-body { padding: 1rem; }
+  .shortcuts-list { margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+  .shortcut-item { display: flex; align-items: center; gap: 1rem; }
+  .shortcut-item dt { flex-shrink: 0; min-width: 5rem; }
+  .shortcut-item dd { margin: 0; color: var(--color-text-muted); font-size: 0.875rem; }
 
   .shortcut-item kbd {
     display: inline-flex;
@@ -525,25 +409,8 @@
     border-radius: 3px;
   }
 
-  .modal-footer {
-    padding: 0.75rem 1rem;
-    border-top: 1px solid var(--color-border-muted);
-    text-align: center;
-  }
+  .modal-footer { padding: 0.75rem 1rem; border-top: 1px solid var(--color-border-muted); text-align: center; }
+  .help-hint { margin: 0; font-size: 0.75rem; color: var(--color-text-muted); }
 
-  .help-hint {
-    margin: 0;
-    font-size: 0.75rem;
-    color: var(--color-text-muted);
-  }
-
-  /* ---------------------------------------------------------------------------
-   * Responsive Adjustments
-   * ------------------------------------------------------------------------- */
-
-  @media (max-width: 768px) {
-    .app-controls {
-      flex-wrap: wrap;
-    }
-  }
+  @media (max-width: 768px) { .app-controls { flex-wrap: wrap; } }
 </style>

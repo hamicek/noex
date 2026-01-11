@@ -9,7 +9,7 @@
   - Clear functionality
 -->
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, onMount, onDestroy } from 'svelte';
   import { events, type LoggedEvent, type EventType, type ObserverEvent } from '../stores/events.js';
   import { formatTime, formatReason, truncate } from '../utils/formatters.js';
 
@@ -61,6 +61,27 @@
   let isUserScrolling = $state(false);
   let lastScrollTop = $state(0);
 
+  // Store-derived state (via subscriptions)
+  let allEventsValue = $state<LoggedEvent[]>([]);
+  let eventCountValue = $state(0);
+  let isPausedValue = $state(false);
+  let latestEventValue = $state<LoggedEvent | null>(null);
+
+  let unsubscribers: Array<() => void> = [];
+
+  onMount(() => {
+    unsubscribers = [
+      events.all.subscribe((v) => (allEventsValue = v as LoggedEvent[])),
+      events.count.subscribe((v) => (eventCountValue = v)),
+      events.paused.subscribe((v) => (isPausedValue = v)),
+      events.latest.subscribe((v) => (latestEventValue = v)),
+    ];
+  });
+
+  onDestroy(() => {
+    unsubscribers.forEach((fn) => fn());
+  });
+
   // ---------------------------------------------------------------------------
   // Event Type Configuration
   // ---------------------------------------------------------------------------
@@ -97,38 +118,24 @@
    */
   const filteredEvents = $derived(
     activeFilter !== null
-      ? events.filterByType(activeFilter)
-      : events.all
+      ? allEventsValue.filter((e) => e.event.type === activeFilter)
+      : allEventsValue
   );
 
   /**
    * Events to display, limited by maxDisplayCount.
    */
-  const displayEvents = $derived(
-    filteredEvents.slice(-maxDisplayCount)
-  );
+  const displayEvents = $derived(filteredEvents.slice(-maxDisplayCount));
 
   /**
    * Formatted events for rendering.
    */
-  const formattedEvents = $derived(
-    displayEvents.map(formatEvent)
-  );
-
-  /**
-   * Whether the log is currently paused.
-   */
-  const isPaused = $derived(events.paused);
+  const formattedEvents = $derived(displayEvents.map(formatEvent));
 
   /**
    * Whether there are events to display.
    */
   const hasEvents = $derived(displayEvents.length > 0);
-
-  /**
-   * Current event count for status display.
-   */
-  const eventCount = $derived(events.count);
 
   /**
    * Filtered event count.
@@ -217,7 +224,7 @@
 
   // Auto-scroll when new events arrive
   $effect(() => {
-    if (autoScroll && events.newest && !isPaused) {
+    if (autoScroll && latestEventValue && !isPausedValue) {
       scrollToBottom();
     }
   });
@@ -289,9 +296,9 @@
       <div class="toolbar-left">
         <span class="event-count">
           {#if activeFilter !== null}
-            {filteredCount}/{eventCount}
+            {filteredCount}/{eventCountValue}
           {:else}
-            {eventCount}
+            {eventCountValue}
           {/if}
           events
         </span>
@@ -315,11 +322,11 @@
         <button
           type="button"
           class="action-button"
-          class:active={isPaused}
+          class:active={isPausedValue}
           onclick={togglePause}
-          title={isPaused ? 'Resume (collecting paused)' : 'Pause (stop collecting)'}
+          title={isPausedValue ? 'Resume (collecting paused)' : 'Pause (stop collecting)'}
         >
-          {isPaused ? 'Resume' : 'Pause'}
+          {isPausedValue ? 'Resume' : 'Pause'}
         </button>
 
         {#if isUserScrolling}
@@ -382,7 +389,7 @@
     {/if}
   </div>
 
-  {#if isPaused}
+  {#if isPausedValue}
     <div class="pause-indicator" aria-live="assertive">
       Paused
     </div>

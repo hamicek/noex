@@ -9,6 +9,7 @@
   - Contextual statistics per process
 -->
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { snapshot, type ProcessTreeNode, type GenServerStats, type SupervisorStats } from '../stores/snapshot.js';
   import {
     formatNumber,
@@ -78,6 +79,18 @@
   let expandedNodes = $state<Set<string>>(new Set());
   let treeContainer: HTMLElement | null = $state(null);
 
+  // Store subscription
+  let treeValue = $state<readonly ProcessTreeNode[]>([]);
+  let unsubscribe: (() => void) | null = null;
+
+  onMount(() => {
+    unsubscribe = snapshot.tree.subscribe(v => treeValue = v);
+  });
+
+  onDestroy(() => {
+    unsubscribe?.();
+  });
+
   // ---------------------------------------------------------------------------
   // Status Configuration
   // ---------------------------------------------------------------------------
@@ -93,14 +106,13 @@
   // Computed Values
   // ---------------------------------------------------------------------------
 
-  const tree = $derived(snapshot.tree);
-  const hasProcesses = $derived(tree.length > 0);
+  const hasProcesses = $derived(treeValue.length > 0);
 
   // Initialize all supervisors as expanded on first render
   $effect(() => {
-    if (tree.length > 0 && expandedNodes.size === 0) {
+    if (treeValue.length > 0 && expandedNodes.size === 0) {
       const initialExpanded = new Set<string>();
-      collectSupervisorIds(tree, initialExpanded);
+      collectSupervisorIds(treeValue, initialExpanded);
       expandedNodes = initialExpanded;
     }
   });
@@ -142,7 +154,7 @@
     return result;
   }
 
-  const visibleNodes = $derived(flattenVisibleTree(tree));
+  const visibleNodes = $derived(flattenVisibleTree(treeValue));
 
   const selectedIndex = $derived(
     selectedProcessId !== null
@@ -426,7 +438,7 @@
         {/each}
       {/snippet}
 
-      {@render renderNodes(tree, '', true)}
+      {@render renderNodes(treeValue, '', true)}
     </div>
   {/if}
 </div>

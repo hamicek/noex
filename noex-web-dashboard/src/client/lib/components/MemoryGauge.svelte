@@ -7,7 +7,8 @@
   - Smooth CSS transitions
 -->
 <script lang="ts">
-  import { snapshot } from '../stores/snapshot.js';
+  import { onMount, onDestroy } from 'svelte';
+  import { snapshot, type MemoryStats } from '../stores/snapshot.js';
   import { formatBytes, calculatePercent } from '../utils/formatters.js';
 
   // ---------------------------------------------------------------------------
@@ -42,13 +43,32 @@
     showDetails = true,
   }: Props = $props();
 
+  // Store-derived state (via subscriptions)
+  let memoryStatsValue = $state<MemoryStats>({
+    heapUsed: 0,
+    heapTotal: 0,
+    external: 0,
+    rss: 0,
+    timestamp: 0,
+  });
+
+  let unsubscribe: (() => void) | null = null;
+
+  onMount(() => {
+    unsubscribe = snapshot.memoryStats.subscribe((v) => (memoryStatsValue = v));
+  });
+
+  onDestroy(() => {
+    unsubscribe?.();
+  });
+
   // ---------------------------------------------------------------------------
   // Computed Values
   // ---------------------------------------------------------------------------
 
-  // Use provided values or fall back to snapshot store
-  const usedBytes = $derived(heapUsed ?? snapshot.memoryStats.heapUsed);
-  const totalBytes = $derived(heapTotal ?? snapshot.memoryStats.heapTotal);
+  // Use provided values or fall back to subscribed memory stats
+  const usedBytes = $derived(heapUsed ?? memoryStatsValue.heapUsed);
+  const totalBytes = $derived(heapTotal ?? memoryStatsValue.heapTotal);
 
   // Calculate percentage (clamped to 0-100)
   const percentage = $derived(calculatePercent(usedBytes, totalBytes));

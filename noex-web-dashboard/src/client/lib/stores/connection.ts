@@ -1,7 +1,7 @@
 /**
  * WebSocket connection state management for the Svelte dashboard.
  *
- * Provides reactive connection state using Svelte 5 runes, handling:
+ * Provides reactive connection state using Svelte stores, handling:
  * - Connection lifecycle (connect, disconnect, reconnect)
  * - Exponential backoff for automatic reconnection
  * - Message dispatching to registered handlers
@@ -10,6 +10,7 @@
  * @module stores/connection
  */
 
+import { writable, derived, get } from 'svelte/store';
 import type {
   ObserverSnapshot,
   ClusterObserverSnapshot,
@@ -64,7 +65,7 @@ type AnyMessageHandler = (payload: unknown) => void;
  * Configuration for the WebSocket connection.
  */
 export interface ConnectionConfig {
-  /** WebSocket URL. @default 'ws://localhost:3000/ws' */
+  /** WebSocket URL. @default 'ws://localhost:7210/ws' */
   readonly url: string;
   /** Initial reconnect delay in milliseconds. @default 1000 */
   readonly reconnectDelayMs: number;
@@ -81,7 +82,7 @@ export interface ConnectionConfig {
 // =============================================================================
 
 const DEFAULT_CONFIG: ConnectionConfig = {
-  url: `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost:3000'}/ws`,
+  url: `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost:7210'}/ws`,
   reconnectDelayMs: 1000,
   maxReconnectDelayMs: 30000,
   reconnectBackoffMultiplier: 1.5,
@@ -94,45 +95,25 @@ const DEFAULT_CONFIG: ConnectionConfig = {
 
 /**
  * Creates a WebSocket connection store with reactive state.
- *
- * @example
- * ```typescript
- * const connection = createConnectionStore();
- *
- * // Subscribe to messages
- * connection.onMessage('snapshot', (payload) => {
- *   console.log('Received snapshot:', payload);
- * });
- *
- * // Connect
- * connection.connect();
- *
- * // Send message
- * connection.send({ type: 'get_snapshot' });
- *
- * // Access reactive state
- * console.log(connection.state); // 'connected'
- * console.log(connection.isConnected); // true
- * ```
  */
 function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
   const resolvedConfig: ConnectionConfig = { ...DEFAULT_CONFIG, ...config };
 
   // ---------------------------------------------------------------------------
-  // Reactive State (Svelte 5 runes)
+  // Writable Stores
   // ---------------------------------------------------------------------------
 
-  let state = $state<ConnectionState>('disconnected');
-  let bridgeConnected = $state(false);
-  let lastError = $state<string | null>(null);
-  let reconnectAttempt = $state(0);
-  let serverVersion = $state<string | null>(null);
-  let serverUptime = $state<number | null>(null);
+  const state = writable<ConnectionState>('disconnected');
+  const bridgeConnected = writable(false);
+  const lastError = writable<string | null>(null);
+  const reconnectAttempt = writable(0);
+  const serverVersion = writable<string | null>(null);
+  const serverUptime = writable<number | null>(null);
 
-  // Derived state
-  const isConnected = $derived(state === 'connected');
-  const isReconnecting = $derived(state === 'reconnecting');
-  const hasError = $derived(lastError !== null);
+  // Derived stores
+  const isConnected = derived(state, ($state) => $state === 'connected');
+  const isReconnecting = derived(state, ($state) => $state === 'reconnecting');
+  const hasError = derived(lastError, ($lastError) => $lastError !== null);
 
   // ---------------------------------------------------------------------------
   // Private State
@@ -150,7 +131,7 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
   // ---------------------------------------------------------------------------
 
   function resetReconnectState(): void {
-    reconnectAttempt = 0;
+    reconnectAttempt.set(0);
     currentReconnectDelay = resolvedConfig.reconnectDelayMs;
     clearReconnectTimeout();
   }
@@ -163,14 +144,15 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
   }
 
   function scheduleReconnect(): void {
-    if (resolvedConfig.maxReconnectAttempts > 0 && reconnectAttempt >= resolvedConfig.maxReconnectAttempts) {
-      state = 'disconnected';
-      lastError = `Max reconnect attempts (${resolvedConfig.maxReconnectAttempts}) exceeded`;
+    const currentAttempt = get(reconnectAttempt);
+    if (resolvedConfig.maxReconnectAttempts > 0 && currentAttempt >= resolvedConfig.maxReconnectAttempts) {
+      state.set('disconnected');
+      lastError.set(`Max reconnect attempts (${resolvedConfig.maxReconnectAttempts}) exceeded`);
       return;
     }
 
-    state = 'reconnecting';
-    reconnectAttempt++;
+    state.set('reconnecting');
+    reconnectAttempt.update((n) => n + 1);
 
     reconnectTimeout = setTimeout(() => {
       connect();
@@ -188,7 +170,7 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
       const message = JSON.parse(event.data as string) as ServerMessage;
       dispatchMessage(message);
     } catch {
-      lastError = 'Failed to parse server message';
+      lastError.set('Failed to parse server message');
     }
   }
 
@@ -196,19 +178,19 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
     // Handle internal state updates
     switch (message.type) {
       case 'welcome':
-        serverVersion = message.payload.version;
-        serverUptime = message.payload.serverUptime;
+        serverVersion.set(message.payload.version);
+        serverUptime.set(message.payload.serverUptime);
         break;
 
       case 'connection_status':
-        bridgeConnected = message.payload.connected;
+        bridgeConnected.set(message.payload.connected);
         if (message.payload.error) {
-          lastError = message.payload.error;
+          lastError.set(message.payload.error);
         }
         break;
 
       case 'error':
-        lastError = `${message.payload.code}: ${message.payload.message}`;
+        lastError.set(`${message.payload.code}: ${message.payload.message}`);
         break;
     }
 
@@ -226,23 +208,24 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
   }
 
   function handleOpen(): void {
-    state = 'connected';
-    lastError = null;
+    state.set('connected');
+    lastError.set(null);
     resetReconnectState();
   }
 
   function handleClose(): void {
     socket = null;
+    const currentState = get(state);
 
-    if (state === 'connected' || state === 'connecting') {
+    if (currentState === 'connected' || currentState === 'connecting') {
       scheduleReconnect();
     } else {
-      state = 'disconnected';
+      state.set('disconnected');
     }
   }
 
   function handleError(): void {
-    lastError = 'WebSocket connection error';
+    lastError.set('WebSocket connection error');
   }
 
   // ---------------------------------------------------------------------------
@@ -258,8 +241,8 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
     }
 
     clearReconnectTimeout();
-    state = 'connecting';
-    lastError = null;
+    state.set('connecting');
+    lastError.set(null);
 
     try {
       socket = new WebSocket(resolvedConfig.url);
@@ -269,8 +252,8 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
       socket.addEventListener('close', handleClose);
       socket.addEventListener('error', handleError);
     } catch {
-      state = 'disconnected';
-      lastError = 'Failed to create WebSocket connection';
+      state.set('disconnected');
+      lastError.set('Failed to create WebSocket connection');
       scheduleReconnect();
     }
   }
@@ -289,15 +272,12 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
       socket = null;
     }
 
-    state = 'disconnected';
-    bridgeConnected = false;
+    state.set('disconnected');
+    bridgeConnected.set(false);
   }
 
   /**
    * Sends a message to the server.
-   *
-   * @param message - Message to send
-   * @returns Whether the message was sent successfully
    */
   function send(message: ClientMessage): boolean {
     if (socket === null || socket.readyState !== WebSocket.OPEN) {
@@ -335,9 +315,6 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
 
   /**
    * Sends a stop process command to the server.
-   *
-   * @param processId - ID of the process to stop
-   * @param reason - Optional reason for stopping
    */
   function stopProcess(processId: string, reason?: string): boolean {
     return send({
@@ -348,10 +325,6 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
 
   /**
    * Registers a handler for a specific message type.
-   *
-   * @param type - Message type to handle
-   * @param handler - Handler function
-   * @returns Unsubscribe function
    */
   function onMessage<T extends ServerMessage['type']>(
     type: T,
@@ -363,7 +336,6 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
       handlers.set(type, typeHandlers);
     }
 
-    // Cast to AnyMessageHandler - type safety is ensured by the Map key
     const anyHandler = handler as AnyMessageHandler;
     typeHandlers.add(anyHandler);
 
@@ -379,7 +351,7 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
    * Clears the last error.
    */
   function clearError(): void {
-    lastError = null;
+    lastError.set(null);
   }
 
   // ---------------------------------------------------------------------------
@@ -387,16 +359,16 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
   // ---------------------------------------------------------------------------
 
   return {
-    // Reactive getters
-    get state() { return state; },
-    get isConnected() { return isConnected; },
-    get isReconnecting() { return isReconnecting; },
-    get bridgeConnected() { return bridgeConnected; },
-    get lastError() { return lastError; },
-    get hasError() { return hasError; },
-    get reconnectAttempt() { return reconnectAttempt; },
-    get serverVersion() { return serverVersion; },
-    get serverUptime() { return serverUptime; },
+    // Stores for subscription
+    state,
+    isConnected,
+    isReconnecting,
+    bridgeConnected,
+    lastError,
+    hasError,
+    reconnectAttempt,
+    serverVersion,
+    serverUptime,
 
     // Methods
     connect,
@@ -417,11 +389,8 @@ function createConnectionStore(config: Partial<ConnectionConfig> = {}) {
 
 /**
  * Global connection store instance.
- *
- * Provides reactive WebSocket connection state for the entire application.
- * Use `connection.connect()` to establish connection on app start.
  */
 export const connection = createConnectionStore();
 
-// Export factory for testing or multiple connections
+// Export factory for testing
 export { createConnectionStore };

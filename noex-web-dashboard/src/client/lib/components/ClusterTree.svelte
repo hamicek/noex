@@ -8,6 +8,7 @@
   - Selection support for node inspection
 -->
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { cluster, type NodeObserverSnapshot } from '../stores/cluster.js';
   import {
     formatNodeId,
@@ -50,6 +51,33 @@
 
   let expandedNodes = $state<Set<string>>(new Set());
 
+  // Store-derived state (via subscriptions)
+  let nodesValue = $state<NodeObserverSnapshot[]>([]);
+  let hasNodesValue = $state(false);
+  let isAvailableValue = $state(false);
+  let localNodeIdValue = $state<string | symbol | null>(null);
+  let connectedNodeCountValue = $state(0);
+  let nodeCountValue = $state(0);
+  let totalProcessCountValue = $state(0);
+
+  let unsubscribers: Array<() => void> = [];
+
+  onMount(() => {
+    unsubscribers = [
+      cluster.nodes.subscribe((v) => (nodesValue = v as NodeObserverSnapshot[])),
+      cluster.hasNodes.subscribe((v) => (hasNodesValue = v)),
+      cluster.isAvailable.subscribe((v) => (isAvailableValue = v)),
+      cluster.localNodeId.subscribe((v) => (localNodeIdValue = v)),
+      cluster.connectedNodeCount.subscribe((v) => (connectedNodeCountValue = v)),
+      cluster.nodeCount.subscribe((v) => (nodeCountValue = v)),
+      cluster.totalProcessCount.subscribe((v) => (totalProcessCountValue = v)),
+    ];
+  });
+
+  onDestroy(() => {
+    unsubscribers.forEach((fn) => fn());
+  });
+
   // ---------------------------------------------------------------------------
   // Status Mapping
   // ---------------------------------------------------------------------------
@@ -72,7 +100,7 @@
   // ---------------------------------------------------------------------------
 
   const sortedNodes = $derived(
-    [...cluster.nodes].sort((a, b) => {
+    [...nodesValue].sort((a, b) => {
       // Sort by status priority, then by nodeId
       const statusPriority: Record<NodeStatus, number> = {
         connected: 0,
@@ -83,11 +111,12 @@
       const statusDiff = statusPriority[a.status] - statusPriority[b.status];
       if (statusDiff !== 0) return statusDiff;
       return String(a.nodeId).localeCompare(String(b.nodeId));
-    }),
+    })
   );
 
-  const hasNodes = $derived(cluster.hasNodes);
-  const isLocalNode = $derived((nodeId: string) => nodeId === cluster.localNodeId);
+  function isLocalNode(nodeId: string): boolean {
+    return localNodeIdValue !== null && String(localNodeIdValue) === nodeId;
+  }
 
   // ---------------------------------------------------------------------------
   // Event Handlers
@@ -147,12 +176,12 @@
 </script>
 
 <div class="cluster-tree" role="tree" aria-label="Cluster nodes">
-  {#if !hasNodes}
+  {#if !hasNodesValue}
     <div class="empty-state">
       <span class="empty-icon" aria-hidden="true">\u2601</span>
       <p class="empty-message">No cluster nodes available</p>
       <p class="empty-hint">
-        {#if !cluster.isAvailable}
+        {#if !isAvailableValue}
           Cluster mode is not enabled
         {:else}
           Waiting for node discovery...
@@ -163,17 +192,17 @@
     <header class="tree-header">
       <div class="header-stats">
         <span class="stat">
-          <span class="stat-value">{cluster.connectedNodeCount}</span>
-          <span class="stat-label">/{cluster.nodeCount} nodes</span>
+          <span class="stat-value">{connectedNodeCountValue}</span>
+          <span class="stat-label">/{nodeCountValue} nodes</span>
         </span>
         <span class="stat">
-          <span class="stat-value">{formatNumber(cluster.totalProcessCount)}</span>
+          <span class="stat-value">{formatNumber(totalProcessCountValue)}</span>
           <span class="stat-label">processes</span>
         </span>
       </div>
-      {#if cluster.localNodeId}
+      {#if localNodeIdValue}
         <div class="local-node-badge" title="Local node">
-          \u2302 {formatNodeId(String(cluster.localNodeId), 16)}
+          \u2302 {formatNodeId(String(localNodeIdValue), 16)}
         </div>
       {/if}
     </header>

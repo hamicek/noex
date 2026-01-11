@@ -71,7 +71,7 @@ Then open `http://localhost:3000` in your browser.
 |--------|-------|-------------|---------|
 | `--host <address>` | `-H` | DashboardServer host | `localhost` |
 | `--port <number>` | `-p` | DashboardServer TCP port | `9876` |
-| `--web-port <number>` | `-w` | Web server HTTP port | `3000` |
+| `--web-port <number>` | `-w` | Web server HTTP port | `7210` |
 | `--static-path <path>` | `-s` | Path to built Svelte SPA | `./dist/client` |
 | `--open` | `-o` | Open browser automatically | `false` |
 | `--quiet` | `-q` | Suppress non-essential output | `false` |

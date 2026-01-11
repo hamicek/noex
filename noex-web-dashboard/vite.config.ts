@@ -3,7 +3,11 @@ import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [
+    svelte({
+      configFile: resolve(import.meta.dirname, 'svelte.config.js'),
+    }),
+  ],
 
   root: resolve(import.meta.dirname, 'src/client'),
 

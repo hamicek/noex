@@ -8,6 +8,7 @@
   - Click handler for process details
 -->
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { snapshot, type GenServerStats } from '../stores/snapshot.js';
   import {
     formatNumber,
@@ -75,6 +76,18 @@
   let sortDirection = $state<SortDirection>('asc');
   let tableContainer: HTMLElement | null = $state(null);
 
+  // Store subscription
+  let serversValue = $state<readonly GenServerStats[]>([]);
+  let unsubscribe: (() => void) | null = null;
+
+  onMount(() => {
+    unsubscribe = snapshot.servers.subscribe(v => serversValue = v);
+  });
+
+  onDestroy(() => {
+    unsubscribe?.();
+  });
+
   // ---------------------------------------------------------------------------
   // Column Configuration
   // ---------------------------------------------------------------------------
@@ -93,14 +106,9 @@
   // ---------------------------------------------------------------------------
 
   /**
-   * Servers from snapshot.
-   */
-  const servers = $derived(snapshot.servers);
-
-  /**
    * Sorted servers based on current sort configuration.
    */
-  const sortedServers = $derived(sortServers(servers, sortColumn, sortDirection));
+  const sortedServers = $derived(sortServers(serversValue, sortColumn, sortDirection));
 
   /**
    * Servers limited to maxRows.
@@ -115,7 +123,7 @@
   /**
    * Total server count.
    */
-  const serverCount = $derived(servers.length);
+  const serverCount = $derived(serversValue.length);
 
   /**
    * Index of currently selected row.

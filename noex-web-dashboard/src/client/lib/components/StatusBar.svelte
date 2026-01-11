@@ -5,6 +5,7 @@
   and keyboard shortcut hints in a fixed bottom bar.
 -->
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { connection, type ConnectionState } from '../stores/connection.js';
   import { snapshot } from '../stores/snapshot.js';
   import { cluster } from '../stores/cluster.js';
@@ -36,6 +37,41 @@
     startTime = Date.now(),
   }: Props = $props();
 
+  // Store-derived state (via subscriptions)
+  let connectionStateValue = $state<ConnectionState>('disconnected');
+  let clusterIsAvailableValue = $state(false);
+  let clusterHasDataValue = $state(false);
+  let clusterConnectedNodeCountValue = $state(0);
+  let clusterNodeCountValue = $state(0);
+  let clusterTotalProcessCountValue = $state(0);
+  let clusterTotalServerCountValue = $state(0);
+  let snapshotHasDataValue = $state(false);
+  let snapshotProcessCountValue = $state(0);
+  let snapshotServerCountValue = $state(0);
+  let snapshotSupervisorCountValue = $state(0);
+
+  let unsubscribers: Array<() => void> = [];
+
+  onMount(() => {
+    unsubscribers = [
+      connection.state.subscribe((v) => (connectionStateValue = v)),
+      cluster.isAvailable.subscribe((v) => (clusterIsAvailableValue = v)),
+      cluster.hasData.subscribe((v) => (clusterHasDataValue = v)),
+      cluster.connectedNodeCount.subscribe((v) => (clusterConnectedNodeCountValue = v)),
+      cluster.nodeCount.subscribe((v) => (clusterNodeCountValue = v)),
+      cluster.totalProcessCount.subscribe((v) => (clusterTotalProcessCountValue = v)),
+      cluster.totalServerCount.subscribe((v) => (clusterTotalServerCountValue = v)),
+      snapshot.hasData.subscribe((v) => (snapshotHasDataValue = v)),
+      snapshot.processCount.subscribe((v) => (snapshotProcessCountValue = v)),
+      snapshot.serverCount.subscribe((v) => (snapshotServerCountValue = v)),
+      snapshot.supervisorCount.subscribe((v) => (snapshotSupervisorCountValue = v)),
+    ];
+  });
+
+  onDestroy(() => {
+    unsubscribers.forEach((fn) => fn());
+  });
+
   // Derived reactive state
   const uptime = $derived(formatUptime(Date.now() - startTime));
 
@@ -55,9 +91,7 @@
     disconnected: { label: 'Disconnected', className: 'status-disconnected' },
   };
 
-  function getConnectionStatus(): StatusIndicator {
-    return CONNECTION_STATUS_MAP[connection.state];
-  }
+  const connectionStatus = $derived(CONNECTION_STATUS_MAP[connectionStateValue]);
 
   // ---------------------------------------------------------------------------
   // Layout Indicator
@@ -73,28 +107,25 @@
   // View Mode Indicator
   // ---------------------------------------------------------------------------
 
-  function getViewModeClassName(): string {
-    if (viewMode === 'cluster') return 'view-cluster';
-    return cluster.isAvailable ? 'view-local' : 'view-local-only';
-  }
+  const viewModeClassName = $derived(
+    viewMode === 'cluster' ? 'view-cluster' : clusterIsAvailableValue ? 'view-local' : 'view-local-only'
+  );
 
   // ---------------------------------------------------------------------------
   // Process Information
   // ---------------------------------------------------------------------------
 
-  function getProcessInfo(): string {
-    if (viewMode === 'cluster' && cluster.hasData) {
-      const { connectedNodeCount, nodeCount, totalProcessCount, totalServerCount } = cluster;
-      return `Cluster: ${connectedNodeCount}/${nodeCount} nodes, ${totalProcessCount} processes, ${totalServerCount} servers`;
+  const processInfo = $derived.by(() => {
+    if (viewMode === 'cluster' && clusterHasDataValue) {
+      return `Cluster: ${clusterConnectedNodeCountValue}/${clusterNodeCountValue} nodes, ${clusterTotalProcessCountValue} processes, ${clusterTotalServerCountValue} servers`;
     }
 
-    if (snapshot.hasData) {
-      const { processCount, serverCount, supervisorCount } = snapshot;
-      return `Processes: ${processCount} (${serverCount} servers, ${supervisorCount} supervisors)`;
+    if (snapshotHasDataValue) {
+      return `Processes: ${snapshotProcessCountValue} (${snapshotServerCountValue} servers, ${snapshotSupervisorCountValue} supervisors)`;
     }
 
     return 'Waiting for data...';
-  }
+  });
 </script>
 
 <footer class="status-bar">
@@ -110,8 +141,8 @@
 
   <div class="status-group">
     <span class="label">Status:</span>
-    <span class="connection-status {getConnectionStatus().className}">
-      {getConnectionStatus().label}
+    <span class="connection-status {connectionStatus.className}">
+      {connectionStatus.label}
     </span>
   </div>
 
@@ -126,7 +157,7 @@
 
   <div class="status-group">
     <span class="label">View:</span>
-    <span class="view-indicator {getViewModeClassName()}">
+    <span class="view-indicator {viewModeClassName}">
       [{viewMode === 'cluster' ? 'Cluster' : 'Local'}]
     </span>
   </div>
@@ -134,7 +165,7 @@
   <div class="divider" aria-hidden="true"></div>
 
   <div class="process-info">
-    {getProcessInfo()}
+    {processInfo}
   </div>
 
   <div class="spacer"></div>

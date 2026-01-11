@@ -155,7 +155,7 @@ export const DEFAULT_CONFIG: BridgeServerConfig = {
     reconnectBackoffMultiplier: 1.5,
   },
   ws: {
-    port: 3000,
+    port: 7210,
     wsPath: '/ws',
   },
   staticPath: './dist/client',
