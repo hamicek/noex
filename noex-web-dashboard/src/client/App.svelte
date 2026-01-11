@@ -148,11 +148,13 @@
 
   function handleServerClick(server: GenServerStats): void {
     selectedProcessId = server.id;
-    // Find the process tree node for this server
-    const processInfo = snapshot.findProcess(server.id);
-    if (processInfo?.treeNode) {
-      selectedProcess = processInfo.treeNode;
-    }
+    // Create ProcessTreeNode from GenServerStats
+    selectedProcess = {
+      id: server.id,
+      type: 'genserver',
+      stats: server,
+      children: [],
+    };
   }
 
   function closeProcessDetail(): void {
