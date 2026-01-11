@@ -12,18 +12,10 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { connection } from './lib/stores/connection.js';
-  import { snapshot } from './lib/stores/snapshot.js';
   import { cluster } from './lib/stores/cluster.js';
   import { themeStore } from './lib/utils/theme.js';
-  import { StatusBar, MemoryGauge, ClusterTree, ProcessTree, EventLog } from './lib/components/index.js';
-  import type { ProcessTreeNode } from './lib/stores/snapshot.js';
-
-  // ---------------------------------------------------------------------------
-  // Types
-  // ---------------------------------------------------------------------------
-
-  type ViewMode = 'local' | 'cluster';
-  type LayoutMode = 'full' | 'compact' | 'minimal';
+  import { Layout, type LayoutMode, type ViewMode } from './lib/components/index.js';
+  import type { ProcessTreeNode, GenServerStats } from './lib/stores/snapshot.js';
 
   // ---------------------------------------------------------------------------
   // Application State
@@ -44,7 +36,6 @@
   // ---------------------------------------------------------------------------
 
   const isConnected = $derived(connection.isConnected);
-  const hasSnapshot = $derived(snapshot.hasData);
   const hasCluster = $derived(cluster.isAvailable);
   const isClusterView = $derived(viewMode === 'cluster');
 
@@ -174,161 +165,83 @@
     selectedProcessId = node.id;
   }
 
+  function handleServerClick(server: GenServerStats): void {
+    selectedProcessId = server.id;
+  }
+
   function closeHelp(): void {
     showHelp = false;
   }
 </script>
 
-<div class="app" class:layout-full={layoutMode === 'full'} class:layout-compact={layoutMode === 'compact'} class:layout-minimal={layoutMode === 'minimal'}>
-  <header class="app-header">
-    <h1 class="app-title">noex Dashboard</h1>
-    <div class="app-controls">
-      <button
-        type="button"
-        class="control-button"
-        onclick={handleRefresh}
-        disabled={!isConnected}
-        title="Refresh (r)"
-      >
-        Refresh
-      </button>
-      <button
-        type="button"
-        class="control-button"
-        class:active={isClusterView}
-        onclick={handleToggleView}
-        disabled={!hasCluster && viewMode === 'local'}
-        title="Toggle Cluster View (c)"
-      >
-        {isClusterView ? 'Cluster' : 'Local'}
-      </button>
-      <button
-        type="button"
-        class="control-button"
-        onclick={() => themeStore.toggle()}
-        title="Toggle Theme (t)"
-      >
-        {themeStore.isDark ? 'Light' : 'Dark'}
-      </button>
-    </div>
-  </header>
-
-  <main class="app-content">
-    {#if !isConnected}
-      <div class="connection-overlay">
-        <div class="connection-status">
-          <div class="spinner" aria-hidden="true"></div>
-          <p class="status-text">
-            {#if connection.state === 'connecting'}
-              Connecting to server...
-            {:else if connection.state === 'reconnecting'}
-              Reconnecting (attempt {connection.reconnectAttempt})...
-            {:else}
-              Disconnected
-            {/if}
-          </p>
-          {#if connection.hasError}
-            <p class="error-text">{connection.lastError}</p>
-          {/if}
-        </div>
-      </div>
-    {/if}
-
-    {#if layoutMode === 'full'}
-      <!-- Full layout: all widgets visible -->
-      <div class="grid-full">
-        <section class="widget-panel widget-main" aria-label="Main view">
-          {#if isClusterView}
-            <ClusterTree
-              showDetails={true}
-              onNodeSelect={handleNodeSelect}
-              selectedNodeId={selectedNodeId}
-            />
-          {:else}
-            <ProcessTree
-              showDetails={true}
-              onProcessSelect={handleProcessSelect}
-              selectedProcessId={selectedProcessId}
-            />
-          {/if}
-        </section>
-
-        <section class="widget-panel widget-stats" aria-label="Statistics">
-          <div class="placeholder-widget">
-            <span class="placeholder-icon">&#128203;</span>
-            <p>Stats Table</p>
-            <p class="placeholder-hint">
-              {hasSnapshot ? `${snapshot.serverCount} servers, ${snapshot.supervisorCount} supervisors` : 'Waiting for data...'}
-            </p>
-          </div>
-        </section>
-
-        <section class="widget-panel widget-memory" aria-label="Memory usage">
-          <MemoryGauge showDetails={true} />
-        </section>
-
-        <section class="widget-panel widget-events" aria-label="Event log">
-          <EventLog showToolbar={true} maxDisplayCount={100} />
-        </section>
-      </div>
-    {:else if layoutMode === 'compact'}
-      <!-- Compact layout: main view + stats only -->
-      <div class="grid-compact">
-        <section class="widget-panel widget-main" aria-label="Main view">
-          {#if isClusterView}
-            <ClusterTree
-              showDetails={false}
-              onNodeSelect={handleNodeSelect}
-              selectedNodeId={selectedNodeId}
-            />
-          {:else}
-            <ProcessTree
-              showDetails={false}
-              onProcessSelect={handleProcessSelect}
-              selectedProcessId={selectedProcessId}
-            />
-          {/if}
-        </section>
-
-        <section class="widget-panel widget-stats" aria-label="Statistics">
-          <div class="placeholder-widget">
-            <span class="placeholder-icon">&#128203;</span>
-            <p>Stats Table</p>
-            <p class="placeholder-hint">
-              {hasSnapshot ? `${snapshot.serverCount} servers` : 'Waiting for data...'}
-            </p>
-          </div>
-        </section>
-      </div>
-    {:else}
-      <!-- Minimal layout: stats only -->
-      <div class="grid-minimal">
-        <section class="widget-panel widget-stats-full" aria-label="Statistics">
-          {#if isClusterView}
-            <ClusterTree
-              showDetails={false}
-              onNodeSelect={handleNodeSelect}
-              selectedNodeId={selectedNodeId}
-            />
-          {:else}
-            <div class="placeholder-widget">
-              <span class="placeholder-icon">&#128203;</span>
-              <p>Stats Table</p>
-              <p class="placeholder-hint">
-                {hasSnapshot ? `${snapshot.serverCount} servers, ${snapshot.processCount} processes` : 'Waiting for data...'}
-              </p>
-            </div>
-          {/if}
-        </section>
-      </div>
-    {/if}
-  </main>
-
-  <StatusBar
-    viewMode={viewMode}
+<div class="app">
+  <Layout
     layoutMode={layoutMode}
+    viewMode={viewMode}
     startTime={startTime}
-  />
+    selectedProcessId={selectedProcessId}
+    selectedNodeId={selectedNodeId}
+    onProcessSelect={handleProcessSelect}
+    onNodeSelect={handleNodeSelect}
+    onServerClick={handleServerClick}
+  >
+    {#snippet header()}
+      <header class="app-header">
+        <h1 class="app-title">noex Dashboard</h1>
+        <div class="app-controls">
+          <button
+            type="button"
+            class="control-button"
+            onclick={handleRefresh}
+            disabled={!isConnected}
+            title="Refresh (r)"
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            class="control-button"
+            class:active={isClusterView}
+            onclick={handleToggleView}
+            disabled={!hasCluster && viewMode === 'local'}
+            title="Toggle Cluster View (c)"
+          >
+            {isClusterView ? 'Cluster' : 'Local'}
+          </button>
+          <button
+            type="button"
+            class="control-button"
+            onclick={() => themeStore.toggle()}
+            title="Toggle Theme (t)"
+          >
+            {themeStore.isDark ? 'Light' : 'Dark'}
+          </button>
+        </div>
+      </header>
+    {/snippet}
+
+    {#snippet overlay()}
+      {#if !isConnected}
+        <div class="connection-overlay">
+          <div class="connection-status">
+            <div class="spinner" aria-hidden="true"></div>
+            <p class="status-text">
+              {#if connection.state === 'connecting'}
+                Connecting to server...
+              {:else if connection.state === 'reconnecting'}
+                Reconnecting (attempt {connection.reconnectAttempt})...
+              {:else}
+                Disconnected
+              {/if}
+            </p>
+            {#if connection.hasError}
+              <p class="error-text">{connection.lastError}</p>
+            {/if}
+          </div>
+        </div>
+      {/if}
+    {/snippet}
+  </Layout>
 
   <!-- Help Modal -->
   {#if showHelp}
@@ -393,17 +306,21 @@
 </div>
 
 <style>
-  /* Base App Styles */
+  /* ---------------------------------------------------------------------------
+   * Root Application Container
+   * ------------------------------------------------------------------------- */
+
   .app {
-    display: flex;
-    flex-direction: column;
     height: 100vh;
     background-color: var(--color-background);
     color: var(--color-text);
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   }
 
-  /* Header */
+  /* ---------------------------------------------------------------------------
+   * Header (passed to Layout via snippet)
+   * ------------------------------------------------------------------------- */
+
   .app-header {
     display: flex;
     justify-content: space-between;
@@ -454,16 +371,10 @@
     border-color: var(--color-primary);
   }
 
-  /* Content Area */
-  .app-content {
-    flex: 1;
-    min-height: 0;
-    padding: 1rem;
-    overflow: auto;
-    position: relative;
-  }
+  /* ---------------------------------------------------------------------------
+   * Connection Overlay (passed to Layout via snippet)
+   * ------------------------------------------------------------------------- */
 
-  /* Connection Overlay */
   .connection-overlay {
     position: absolute;
     inset: 0;
@@ -511,85 +422,10 @@
     color: var(--color-error);
   }
 
-  /* Grid Layouts */
-  .grid-full {
-    display: grid;
-    grid-template-columns: 1fr 2fr;
-    grid-template-rows: 2fr 1fr 1fr;
-    gap: 1rem;
-    height: 100%;
-  }
+  /* ---------------------------------------------------------------------------
+   * Help Modal
+   * ------------------------------------------------------------------------- */
 
-  .grid-full .widget-main {
-    grid-row: 1 / 3;
-  }
-
-  .grid-full .widget-stats {
-    grid-row: 1 / 2;
-  }
-
-  .grid-full .widget-memory {
-    grid-row: 2 / 3;
-    grid-column: 2 / 3;
-  }
-
-  .grid-full .widget-events {
-    grid-row: 3 / 4;
-    grid-column: 1 / 3;
-  }
-
-  .grid-compact {
-    display: grid;
-    grid-template-columns: 1fr 2fr;
-    gap: 1rem;
-    height: 100%;
-  }
-
-  .grid-minimal {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    height: 100%;
-  }
-
-  /* Widget Panels */
-  .widget-panel {
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  /* Placeholder Widgets */
-  .placeholder-widget {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    padding: 2rem;
-    background-color: var(--color-background-elevated);
-    border: 1px dashed var(--color-border);
-    border-radius: 6px;
-    text-align: center;
-    color: var(--color-text-muted);
-  }
-
-  .placeholder-icon {
-    font-size: 2.5rem;
-    margin-bottom: 0.75rem;
-    opacity: 0.5;
-  }
-
-  .placeholder-widget p {
-    margin: 0;
-  }
-
-  .placeholder-hint {
-    font-size: 0.8125rem;
-    margin-top: 0.25rem !important;
-    opacity: 0.7;
-  }
-
-  /* Modal */
   .modal-overlay {
     position: fixed;
     inset: 0;
@@ -701,25 +537,11 @@
     color: var(--color-text-muted);
   }
 
-  /* Responsive Adjustments */
+  /* ---------------------------------------------------------------------------
+   * Responsive Adjustments
+   * ------------------------------------------------------------------------- */
+
   @media (max-width: 768px) {
-    .grid-full {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto;
-    }
-
-    .grid-full .widget-main,
-    .grid-full .widget-stats,
-    .grid-full .widget-memory,
-    .grid-full .widget-events {
-      grid-row: auto;
-      grid-column: auto;
-    }
-
-    .grid-compact {
-      grid-template-columns: 1fr;
-    }
-
     .app-controls {
       flex-wrap: wrap;
     }
