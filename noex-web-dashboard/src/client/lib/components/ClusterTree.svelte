@@ -441,6 +441,7 @@
   }
 
   .node-item {
+    position: relative;
     border-radius: 4px;
     transition: background-color 150ms ease;
   }
@@ -589,6 +590,8 @@
 
   /* Node details */
   .node-details {
+    position: relative;
+    z-index: 1;
     padding: 0.5rem 0.5rem 0.5rem 2rem;
     border-top: 1px solid var(--color-border-muted);
     margin-top: 0.25rem;
@@ -649,12 +652,14 @@
   }
 
   .server-item {
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
     gap: 0.5rem;
     width: 100%;
     padding: 0.375rem 0.5rem;
-    background: none;
+    background-color: var(--color-background-sunken);
     border: 1px solid transparent;
     border-radius: 4px;
     cursor: pointer;
