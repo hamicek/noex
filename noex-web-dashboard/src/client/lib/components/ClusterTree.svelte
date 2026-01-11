@@ -321,12 +321,12 @@
                 <div class="servers-section">
                   <h4 class="servers-title">GenServers</h4>
                   <ul class="servers-list">
-                    {#each node.snapshot.servers as server (server.id)}
+                    {#each node.snapshot.servers as server (`${nodeIdStr}:${server.id}`)}
                       <li>
                         <button
                           type="button"
                           class="server-item"
-                          onclick={(e) => handleServerClick(server, e)}
+                          onclick={() => onServerClick?.(server)}
                         >
                           <span class="server-status status-{server.status}">●</span>
                           <span class="server-name">{truncate(server.id, 30)}</span>
