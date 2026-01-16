@@ -20,6 +20,8 @@
     }
   },
   "bin": {
+    "noex": "./dist/bin/noex-init.js",
+    "noex-init": "./dist/bin/noex-init.js",
     "noex-dashboard": "./dist/bin/noex-dashboard.js"
   },
   "files": [
@@ -31,6 +33,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
