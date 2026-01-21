@@ -1,59 +1,16 @@
 ---
 import FullPageLayout from '../../layouts/FullPageLayout.astro';
-import { useTranslations } from '../../i18n/utils';
+import { useTranslations, getTranslations } from '../../i18n/utils';
+import Hero from '../../components/sections/Hero.svelte';
 
 const locale = 'cs';
 const t = useTranslations(locale);
+const translations = getTranslations(locale);
 ---
 
 <FullPageLayout locale={locale} currentPath="/cs/">
   <!-- Section 1: Hero -->
-  <section class="snap-section bg-bg-primary">
-    <div class="max-w-4xl mx-auto text-center">
-      <h1 class="text-5xl md:text-7xl font-bold mb-6">
-        <span class="text-accent-primary">noex</span>
-      </h1>
-      <p class="text-2xl md:text-4xl font-semibold mb-4 text-text-primary">
-        {t('hero.headline')}
-      </p>
-      <p class="text-lg md:text-xl text-text-secondary mb-8 max-w-2xl mx-auto">
-        {t('hero.subheadline')}
-      </p>
-      <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a
-          href="#features"
-          class="px-8 py-3 bg-accent-primary text-bg-primary font-semibold rounded-lg glow-primary hover:bg-accent-primary/90 transition-all"
-        >
-          {t('hero.cta.getStarted')}
-        </a>
-        <a
-          href="https://github.com/your-org/noex"
-          target="_blank"
-          rel="noopener"
-          class="px-8 py-3 border border-border text-text-primary rounded-lg hover:border-accent-secondary hover:text-accent-secondary transition-all"
-        >
-          {t('hero.cta.viewGithub')}
-        </a>
-      </div>
-
-      <!-- Scroll down indicator -->
-      <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-        <svg
-          class="w-6 h-6 text-text-secondary"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M19 14l-7 7m0 0l-7-7m7 7V3"
-          />
-        </svg>
-      </div>
-    </div>
-  </section>
+  <Hero translations={translations.hero} client:load />
 
   <!-- Section 2: Problem Statement -->
   <section class="snap-section bg-bg-secondary">
