@@ -88,11 +88,12 @@
     { type: 'tree', content: '│   └─ ● event-bus (running)    │ │ rate-limiter    │ running │ 156  │ 1.1 MB │ 01:23 │' },
     { type: 'tree', content: '│                               │ │ event-bus       │ running │ 2.1k │ 3.2 MB │ 01:23 │' },
     { type: 'footer', content: '└───────────────────────────────┘ └───────────────────────────────────────────────────┘' },
-    { type: 'gauge', content: '┌─ Memory ──────┐ ┌─ Event Log ─────────────────────────────────────────────────────┐' },
-    { type: 'gauge', content: '│ ████████░░░░░ │ │ [12:34:56] ✓ GenServer started: counter                        │' },
-    { type: 'gauge', content: '│   67% / 256MB │ │ [12:34:57] ✓ GenServer started: cache                          │' },
-    { type: 'gauge', content: '└───────────────┘ │ [12:34:58] ℹ Supervisor started: main (4 children)              │' },
-    { type: 'status', content: ' [q]uit [r]efresh [?]help [1-3]layout │ Processes: 4 │ Up: 00:01:23                │' }
+    { type: 'gauge', content: '┌─ Memory ──────────────────────┐ ┌─ Event Log ───────────────────────────────────────┐' },
+    { type: 'gauge', content: '│ ████████░░░░░                 │ │ [12:34:56] ✓ GenServer started: counter           │' },
+    { type: 'gauge', content: '│   67% / 256MB                 │ │ [12:34:57] ✓ GenServer started: cache             │' },
+    { type: 'gauge', content: '│                               │ │ [12:34:58] ℹ Supervisor: main (4 children)        │' },
+    { type: 'footer', content: '└───────────────────────────────┘ └───────────────────────────────────────────────────┘' },
+    { type: 'status', content: ' [q]uit [r]efresh [?]help [1-3]layout │ Processes: 4 │ Up: 00:01:23' }
   ];
 
   function getLineClass(type: string): string {
@@ -456,7 +457,7 @@
   }
 
   .tui-border {
-    color: var(--color-border);
+    color: var(--color-text-secondary);
   }
 
   .tui-status {
