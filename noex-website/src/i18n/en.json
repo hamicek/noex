@@ -145,9 +145,27 @@
   },
   "cta": {
     "title": "Ready to build resilient systems?",
+    "subtitle": "Get started in minutes with a simple npm install",
     "install": "Install with npm",
-    "docs": "Documentation",
-    "github": "GitHub"
+    "copied": "Copied!",
+    "steps": {
+      "title": "Quick Start",
+      "install": "Install the package",
+      "import": "Import and use",
+      "run": "Run your process"
+    },
+    "docs": "Read the Docs",
+    "github": "Star on GitHub",
+    "links": {
+      "examples": "Examples",
+      "api": "API Reference",
+      "contributing": "Contributing"
+    },
+    "community": {
+      "title": "Join the Community",
+      "github": "GitHub Discussions",
+      "discord": "Discord Server"
+    }
   },
   "footer": {
     "copyright": "2024 noex",

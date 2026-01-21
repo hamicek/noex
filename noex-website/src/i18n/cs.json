@@ -145,9 +145,27 @@
   },
   "cta": {
     "title": "Připraveni budovat odolné systémy?",
+    "subtitle": "Začněte za pár minut jednoduchou instalací přes npm",
     "install": "Instalujte přes npm",
-    "docs": "Dokumentace",
-    "github": "GitHub"
+    "copied": "Zkopírováno!",
+    "steps": {
+      "title": "Rychlý start",
+      "install": "Nainstalujte balíček",
+      "import": "Importujte a používejte",
+      "run": "Spusťte svůj proces"
+    },
+    "docs": "Přečíst dokumentaci",
+    "github": "Hvězda na GitHubu",
+    "links": {
+      "examples": "Příklady",
+      "api": "API Reference",
+      "contributing": "Přispívání"
+    },
+    "community": {
+      "title": "Připojte se ke komunitě",
+      "github": "GitHub Diskuze",
+      "discord": "Discord Server"
+    }
   },
   "footer": {
     "copyright": "2024 noex",
