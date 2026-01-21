@@ -71,13 +71,25 @@
   },
   "observability": {
     "title": "Observabilita v základu",
-    "subtitle": "Monitorujte své procesy v reálném čase",
+    "subtitle": "Monitorujte své procesy v reálném čase bez jakékoli konfigurace",
     "features": {
       "dashboard": "Webový dashboard",
       "tui": "Terminálové UI",
       "metrics": "Metriky procesů",
       "logs": "Strukturované logy"
-    }
+    },
+    "descriptions": {
+      "dashboard": "Webové rozhraní pro vzdálený monitoring",
+      "tui": "Interaktivní terminálový dashboard s klávesovou navigací",
+      "metrics": "CPU, paměť a propustnost zpráv v reálném čase",
+      "logs": "Události s časovými razítky a úrovní závažnosti"
+    },
+    "badges": {
+      "realtime": "Aktualizace v reálném čase",
+      "zeroConfig": "Bez konfigurace",
+      "cluster": "Podpora clusteru"
+    },
+    "command": "npx noex dashboard"
   },
   "distribution": {
     "title": "Distribuovaný od návrhu",

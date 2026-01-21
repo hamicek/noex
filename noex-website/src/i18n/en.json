@@ -71,13 +71,25 @@
   },
   "observability": {
     "title": "Observability Built-in",
-    "subtitle": "Monitor your processes in real-time",
+    "subtitle": "Monitor your processes in real-time with zero configuration",
     "features": {
       "dashboard": "Web Dashboard",
       "tui": "Terminal UI",
       "metrics": "Process Metrics",
       "logs": "Structured Logs"
-    }
+    },
+    "descriptions": {
+      "dashboard": "Web-based interface for remote monitoring",
+      "tui": "Interactive terminal dashboard with keyboard navigation",
+      "metrics": "Real-time CPU, memory, and message throughput",
+      "logs": "Timestamped events with severity levels"
+    },
+    "badges": {
+      "realtime": "Real-time updates",
+      "zeroConfig": "Zero configuration",
+      "cluster": "Cluster support"
+    },
+    "command": "npx noex dashboard"
   },
   "distribution": {
     "title": "Distributed by Design",
