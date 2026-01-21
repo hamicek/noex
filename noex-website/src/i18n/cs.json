@@ -7,7 +7,15 @@
     "features": "Funkce",
     "docs": "Dokumentace",
     "playground": "Hřiště",
-    "github": "GitHub"
+    "github": "GitHub",
+    "hero": "Domů",
+    "problem": "Proč noex",
+    "services": "Služby",
+    "observability": "Observabilita",
+    "distribution": "Distribuce",
+    "cta": "Začít",
+    "openMenu": "Otevřít menu",
+    "closeMenu": "Zavřít menu"
   },
   "hero": {
     "headline": "Erlang/OTP vzory pro Node.js",

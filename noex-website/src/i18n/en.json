@@ -7,7 +7,15 @@
     "features": "Features",
     "docs": "Docs",
     "playground": "Playground",
-    "github": "GitHub"
+    "github": "GitHub",
+    "hero": "Home",
+    "problem": "Why noex",
+    "services": "Services",
+    "observability": "Observability",
+    "distribution": "Distribution",
+    "cta": "Get Started",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   },
   "hero": {
     "headline": "Erlang/OTP Patterns for Node.js",

@@ -2,7 +2,7 @@
 import '../styles/global.css';
 import { type Locale, useTranslations, locales, getLocalizedPath } from '../i18n/utils';
 import ScrollIndicator from '../components/ui/ScrollIndicator.svelte';
-import LanguageSwitcher from '../components/ui/LanguageSwitcher.svelte';
+import Navigation from '../components/ui/Navigation.svelte';
 
 interface Props {
   locale: Locale;
@@ -12,6 +12,22 @@ interface Props {
 const { locale, currentPath = '/' } = Astro.props;
 const t = useTranslations(locale);
 const scrollIndicatorLabel = locale === 'cs' ? 'Sekce stránky' : 'Page sections';
+
+// Navigation translations
+const navTranslations = {
+  features: t('nav.features'),
+  playground: t('nav.playground'),
+  github: t('nav.github'),
+  hero: t('nav.hero'),
+  problem: t('nav.problem'),
+  services: t('nav.services'),
+  observability: t('nav.observability'),
+  distribution: t('nav.distribution'),
+  cta: t('nav.cta'),
+  openMenu: t('nav.openMenu'),
+  closeMenu: t('nav.closeMenu'),
+};
+
 const langSwitcherTranslations = {
   label: t('languageSwitcher.label'),
   currentLang: t('languageSwitcher.currentLang'),
@@ -46,32 +62,13 @@ const langSwitcherTranslations = {
   </head>
   <body class="snap-container">
     <!-- Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 nav-blur">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16">
-          <!-- Logo -->
-          <a href={`/${locale}/`} class="flex items-center space-x-2">
-            <span class="text-2xl font-bold text-accent-primary">noex</span>
-          </a>
-
-          <!-- Nav Links -->
-          <div class="hidden md:flex items-center space-x-8">
-            <a href="#features" class="nav-link">{t('nav.features')}</a>
-            <a href="#playground" class="nav-link">{t('nav.playground')}</a>
-            <a href="https://github.com/your-org/noex" target="_blank" rel="noopener" class="nav-link">
-              {t('nav.github')}
-            </a>
-          </div>
-
-          <!-- Language Switcher -->
-          <LanguageSwitcher
-            currentLocale={locale}
-            currentPath={currentPath}
-            translations={langSwitcherTranslations}
-          />
-        </div>
-      </div>
-    </nav>
+    <Navigation
+      {locale}
+      {currentPath}
+      translations={navTranslations}
+      langSwitcherTranslations={langSwitcherTranslations}
+      client:load
+    />
 
     <!-- Main Content with Scroll Snap -->
     <main>
@@ -80,25 +77,5 @@ const langSwitcherTranslations = {
 
     <!-- Scroll Indicator with keyboard navigation -->
     <ScrollIndicator client:only="svelte" ariaLabel={scrollIndicatorLabel} />
-
-    <style>
-      @reference "../styles/global.css";
-
-      /* Navigation blur effect */
-      .nav-blur {
-        background: rgba(10, 10, 15, 0.8);
-        backdrop-filter: blur(12px);
-        border-bottom: 1px solid var(--color-border);
-      }
-
-      .nav-link {
-        color: var(--color-text-secondary);
-        transition: color 0.15s ease;
-      }
-
-      .nav-link:hover {
-        color: var(--color-text-primary);
-      }
-    </style>
   </body>
 </html>

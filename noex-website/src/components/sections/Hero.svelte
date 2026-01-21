@@ -64,7 +64,7 @@
   }
 </script>
 
-<section class="hero-section snap-section bg-bg-primary">
+<section id="hero" class="hero-section snap-section bg-bg-primary">
   <!-- Animated Grid Background -->
   <div class="grid-background" aria-hidden="true">
     <div class="grid-overlay"></div>

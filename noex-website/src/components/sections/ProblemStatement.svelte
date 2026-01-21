@@ -75,6 +75,7 @@
 </script>
 
 <section
+  id="problem"
   bind:this={sectionRef}
   class="problem-section snap-section bg-bg-secondary"
   aria-labelledby="problem-title"
