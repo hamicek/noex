@@ -1,5 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import BitcoinDonate from '../ui/BitcoinDonate.svelte';
+
+  interface SupportTranslations {
+    title: string;
+    description: string;
+    btc: string;
+    btcCopied: string;
+    kofi: string;
+  }
 
   interface CtaTranslations {
     title: string;
@@ -34,15 +43,21 @@
   interface Props {
     translations: CtaTranslations;
     footerTranslations: FooterTranslations;
+    supportTranslations: SupportTranslations;
     githubUrl?: string;
     docsUrl?: string;
+    btcAddress?: string;
+    kofiUrl?: string;
   }
 
   let {
     translations,
     footerTranslations,
+    supportTranslations,
     githubUrl = 'https://github.com/wyattjoh/noex',
-    docsUrl = 'https://github.com/wyattjoh/noex#readme'
+    docsUrl = 'https://github.com/wyattjoh/noex#readme',
+    btcAddress = 'bc1qXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+    kofiUrl = 'https://ko-fi.com/noex'
   }: Props = $props();
 
   let sectionRef: HTMLElement | null = $state(null);
@@ -281,6 +296,39 @@ const counter = await Counter.start();`;
         </svg>
         {translations.links.contributing}
       </a>
+    </div>
+
+    <!-- Support Section -->
+    <div
+      class="support-section"
+      class:visible={isVisible}
+    >
+      <h3 class="support-title">{supportTranslations.title}</h3>
+      <p class="support-description">{supportTranslations.description}</p>
+
+      <div class="support-options">
+        <!-- Bitcoin -->
+        <div class="support-card glass-card">
+          <BitcoinDonate
+            address={btcAddress}
+            btcLabel={supportTranslations.btc}
+            copiedLabel={supportTranslations.btcCopied}
+          />
+        </div>
+
+        <!-- Ko-fi -->
+        <a
+          href={kofiUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="kofi-button"
+        >
+          <svg class="kofi-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z"/>
+          </svg>
+          {supportTranslations.kofi}
+        </a>
+      </div>
     </div>
 
     <!-- Footer -->
@@ -708,11 +756,79 @@ const counter = await Counter.start();`;
     height: 18px;
   }
 
+  /* Support Section */
+  .support-section {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease-out 0.55s, transform 0.5s ease-out 0.55s;
+    margin-bottom: 48px;
+    text-align: center;
+  }
+
+  .support-section.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .support-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 8px;
+  }
+
+  .support-description {
+    font-size: 1rem;
+    color: var(--color-text-secondary);
+    margin-bottom: 24px;
+  }
+
+  .support-options {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    max-width: 400px;
+    margin: 0 auto;
+  }
+
+  .support-card {
+    width: 100%;
+  }
+
+  .kofi-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 28px;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    background: rgba(255, 95, 95, 0.1);
+    color: #ff5f5f;
+    border: 1px solid rgba(255, 95, 95, 0.3);
+  }
+
+  .kofi-button:hover {
+    background: rgba(255, 95, 95, 0.2);
+    border-color: rgba(255, 95, 95, 0.5);
+    box-shadow: 0 0 20px rgba(255, 95, 95, 0.2);
+    transform: translateY(-2px);
+  }
+
+  .kofi-icon {
+    width: 24px;
+    height: 24px;
+  }
+
   /* Footer */
   .footer {
     opacity: 0;
     transform: translateY(20px);
-    transition: opacity 0.5s ease-out 0.6s, transform 0.5s ease-out 0.6s;
+    transition: opacity 0.5s ease-out 0.65s, transform 0.5s ease-out 0.65s;
     padding-top: 24px;
     border-top: 1px solid var(--color-border);
   }
@@ -776,6 +892,14 @@ const counter = await Counter.start();`;
     .gradient-blob-2 {
       opacity: 0.05;
     }
+
+    .support-title {
+      font-size: 1.25rem;
+    }
+
+    .support-description {
+      font-size: 0.9rem;
+    }
   }
 
   /* Reduced motion */
@@ -786,6 +910,7 @@ const counter = await Counter.start();`;
     .quick-start-grid,
     .action-buttons,
     .resource-links,
+    .support-section,
     .footer {
       transition: none;
       opacity: 1;
