@@ -7,6 +7,7 @@ import CoreFeatures from '../../components/sections/CoreFeatures.svelte';
 import BuiltInServices from '../../components/sections/BuiltInServices.svelte';
 import Observability from '../../components/sections/Observability.svelte';
 import Distribution from '../../components/sections/Distribution.svelte';
+import CodePlayground from '../../components/sections/CodePlayground.svelte';
 
 const locale = 'en';
 const t = useTranslations(locale);
@@ -32,26 +33,8 @@ const translations = getTranslations(locale);
   <!-- Section 6: Distribution -->
   <Distribution translations={translations.distribution} client:visible />
 
-  <!-- Section 7: Code Playground (placeholder) -->
-  <section id="playground" class="snap-section bg-bg-primary">
-    <div class="max-w-5xl mx-auto text-center">
-      <h2 class="text-3xl md:text-5xl font-bold mb-12 text-text-primary">
-        Try it out
-      </h2>
-      <div class="glass-card p-8">
-        <div class="text-text-secondary text-6xl mb-4">💻</div>
-        <p class="text-text-secondary mb-4">Interactive code playground coming soon</p>
-        <pre class="bg-bg-primary p-4 rounded-lg text-left text-sm overflow-x-auto"><code class="text-accent-primary">import {'{ GenServer }'} from 'noex';
-
-class Counter extends GenServer {'{'}&lt;number&gt; {'{'}
-  init() {'{'} return 0; {'}'}
-
-  handleCall(msg: 'get') {'{'} return this.state; {'}'}
-  handleCast(msg: 'inc') {'{'} this.state++; {'}'}
-{'}'}</code></pre>
-      </div>
-    </div>
-  </section>
+  <!-- Section 7: Code Playground -->
+  <CodePlayground translations={translations.playground} client:visible />
 
   <!-- Section 8: Call to Action -->
   <section class="snap-section bg-bg-secondary">

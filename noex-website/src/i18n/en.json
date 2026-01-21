@@ -116,8 +116,32 @@
     "codeHint": "Same API for local and remote processes"
   },
   "playground": {
-    "title": "Try it out",
-    "comingSoon": "Interactive code playground coming soon"
+    "title": "Try It Out",
+    "subtitle": "Explore real-world examples and see noex in action",
+    "examples": {
+      "counter": {
+        "name": "Counter",
+        "description": "Basic stateful process"
+      },
+      "chat": {
+        "name": "Chat Server",
+        "description": "Pub/sub messaging"
+      },
+      "worker": {
+        "name": "Worker Pool",
+        "description": "Supervised workers"
+      }
+    },
+    "terminal": {
+      "title": "Terminal",
+      "running": "Running...",
+      "output": "Output"
+    },
+    "actions": {
+      "copy": "Copy",
+      "copied": "Copied!",
+      "run": "Run"
+    }
   },
   "cta": {
     "title": "Ready to build resilient systems?",

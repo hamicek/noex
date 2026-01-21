@@ -117,7 +117,31 @@
   },
   "playground": {
     "title": "Vyzkoušejte si to",
-    "comingSoon": "Interaktivní hřiště již brzy"
+    "subtitle": "Prozkoumejte reálné příklady a uvidíte noex v akci",
+    "examples": {
+      "counter": {
+        "name": "Počítadlo",
+        "description": "Základní stavový proces"
+      },
+      "chat": {
+        "name": "Chat Server",
+        "description": "Pub/sub messaging"
+      },
+      "worker": {
+        "name": "Worker Pool",
+        "description": "Supervisované workery"
+      }
+    },
+    "terminal": {
+      "title": "Terminál",
+      "running": "Běží...",
+      "output": "Výstup"
+    },
+    "actions": {
+      "copy": "Kopírovat",
+      "copied": "Zkopírováno!",
+      "run": "Spustit"
+    }
   },
   "cta": {
     "title": "Připraveni budovat odolné systémy?",
