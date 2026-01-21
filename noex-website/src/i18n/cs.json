@@ -20,6 +20,8 @@
   },
   "problem": {
     "title": "Node.js je skvělý, ale...",
+    "subtitle": "Běžné problémy, které zpomalují vývoj a způsobují produkční incidenty",
+    "solvesThese": "tyto problémy řeší",
     "issues": {
       "raceConditions": {
         "title": "Race Conditions",

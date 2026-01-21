@@ -20,6 +20,8 @@
   },
   "problem": {
     "title": "Node.js is great, but...",
+    "subtitle": "Common challenges that slow down development and cause production issues",
+    "solvesThese": "solves these problems",
     "issues": {
       "raceConditions": {
         "title": "Race Conditions",
