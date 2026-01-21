@@ -1,0 +1,37 @@
+---
+import '../styles/global.css';
+import TestCounter from '../components/TestCounter.svelte';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="noex - Erlang/OTP patterns for Node.js" />
+    <title>noex - Erlang/OTP Patterns for Node.js</title>
+  </head>
+  <body class="min-h-screen flex flex-col items-center justify-center">
+    <main class="text-center space-y-8 p-8">
+      <h1 class="text-5xl font-bold">
+        <span class="text-accent-primary">noex</span>
+      </h1>
+      <p class="text-xl text-text-secondary max-w-lg">
+        Erlang/OTP Patterns for Node.js
+      </p>
+      <p class="text-text-secondary">
+        Build fault-tolerant, scalable systems with TypeScript
+      </p>
+
+      <div class="pt-8">
+        <TestCounter client:load />
+      </div>
+
+      <div class="pt-4 text-sm text-text-secondary">
+        <p>✓ Astro + Svelte + Tailwind CSS initialized</p>
+        <p>✓ Dark theme configured</p>
+        <p>✓ TypeScript enabled</p>
+      </div>
+    </main>
+  </body>
+</html>
