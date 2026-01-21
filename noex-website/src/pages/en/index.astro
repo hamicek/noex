@@ -6,6 +6,7 @@ import ProblemStatement from '../../components/sections/ProblemStatement.svelte'
 import CoreFeatures from '../../components/sections/CoreFeatures.svelte';
 import BuiltInServices from '../../components/sections/BuiltInServices.svelte';
 import Observability from '../../components/sections/Observability.svelte';
+import Distribution from '../../components/sections/Distribution.svelte';
 
 const locale = 'en';
 const t = useTranslations(locale);
@@ -29,29 +30,7 @@ const translations = getTranslations(locale);
   <Observability translations={translations.observability} client:visible />
 
   <!-- Section 6: Distribution -->
-  <section class="snap-section bg-bg-secondary">
-    <div class="max-w-4xl mx-auto text-center">
-      <h2 class="text-3xl md:text-5xl font-bold mb-4 text-text-primary">
-        {t('distribution.title')}
-      </h2>
-      <p class="text-xl text-text-secondary mb-12">{t('distribution.subtitle')}</p>
-      <div class="glass-card p-8 mb-8">
-        <div class="text-text-secondary text-6xl mb-4">🌐</div>
-        <p class="text-text-secondary">Cluster visualization placeholder</p>
-      </div>
-      <div class="flex flex-wrap justify-center gap-4">
-        <span class="px-4 py-2 bg-bg-card rounded-full text-accent-primary border border-accent-primary/30">
-          {t('distribution.features.cluster')}
-        </span>
-        <span class="px-4 py-2 bg-bg-card rounded-full text-accent-secondary border border-accent-secondary/30">
-          {t('distribution.features.global')}
-        </span>
-        <span class="px-4 py-2 bg-bg-card rounded-full text-accent-primary border border-accent-primary/30">
-          {t('distribution.features.transparent')}
-        </span>
-      </div>
-    </div>
-  </section>
+  <Distribution translations={translations.distribution} client:visible />
 
   <!-- Section 7: Code Playground (placeholder) -->
   <section id="playground" class="snap-section bg-bg-primary">

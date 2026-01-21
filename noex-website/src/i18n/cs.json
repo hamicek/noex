@@ -93,12 +93,27 @@
   },
   "distribution": {
     "title": "Distribuovaný od návrhu",
-    "subtitle": "Škálujte napříč stroji s transparentní lokací",
+    "subtitle": "Škálujte napříč stroji s transparentní lokací. Vaše procesy fungují stejně na jednom stroji i na stovkách.",
     "features": {
       "cluster": "P2P Clustering",
       "global": "Globální registr",
       "transparent": "Transparentní lokace"
-    }
+    },
+    "descriptions": {
+      "cluster": "Uzly se automaticky objevují pomocí mDNS nebo seed nodů. Žádný centrální koordinátor není potřeba.",
+      "global": "Registrujte a vyhledávejte procesy napříč všemi uzly podle jména. Jedno API pro lokální i vzdálené procesy.",
+      "transparent": "Posílejte zprávy procesům bez ohledu na jejich fyzické umístění. Runtime se postará o routování."
+    },
+    "nodeLabels": {
+      "local": "Lokální uzel",
+      "remote": "Vzdálené uzly"
+    },
+    "badges": {
+      "autoDiscovery": "Auto-discovery",
+      "noSinglePoint": "Bez single point of failure",
+      "seamless": "Bezešvý failover"
+    },
+    "codeHint": "Stejné API pro lokální i vzdálené procesy"
   },
   "playground": {
     "title": "Vyzkoušejte si to",

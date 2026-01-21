@@ -93,12 +93,27 @@
   },
   "distribution": {
     "title": "Distributed by Design",
-    "subtitle": "Scale across machines with location transparency",
+    "subtitle": "Scale across machines with location transparency. Your processes work the same whether on one machine or hundreds.",
     "features": {
       "cluster": "P2P Clustering",
       "global": "Global Registry",
       "transparent": "Location Transparency"
-    }
+    },
+    "descriptions": {
+      "cluster": "Nodes automatically discover each other using mDNS or seed nodes. No central coordinator required.",
+      "global": "Register and find processes across all nodes by name. One API for local and remote processes.",
+      "transparent": "Send messages to processes regardless of their physical location. The runtime handles routing."
+    },
+    "nodeLabels": {
+      "local": "Local Node",
+      "remote": "Remote Nodes"
+    },
+    "badges": {
+      "autoDiscovery": "Auto-discovery",
+      "noSinglePoint": "No single point of failure",
+      "seamless": "Seamless failover"
+    },
+    "codeHint": "Same API for local and remote processes"
   },
   "playground": {
     "title": "Try it out",
