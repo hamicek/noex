@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import { type Locale, useTranslations, localeNames, locales, getLocalizedPath } from '../i18n/utils';
+import ScrollIndicator from '../components/ui/ScrollIndicator.svelte';
 
 interface Props {
   locale: Locale;
@@ -9,6 +10,7 @@ interface Props {
 
 const { locale, currentPath = '/' } = Astro.props;
 const t = useTranslations(locale);
+const scrollIndicatorLabel = locale === 'cs' ? 'Sekce stránky' : 'Page sections';
 ---
 
 <!DOCTYPE html>
@@ -81,82 +83,11 @@ const t = useTranslations(locale);
       <slot />
     </main>
 
-    <!-- Scroll Indicator (dots) -->
-    <div class="scroll-indicator">
-      <div class="dot active" data-section="0"></div>
-      <div class="dot" data-section="1"></div>
-      <div class="dot" data-section="2"></div>
-      <div class="dot" data-section="3"></div>
-      <div class="dot" data-section="4"></div>
-      <div class="dot" data-section="5"></div>
-      <div class="dot" data-section="6"></div>
-      <div class="dot" data-section="7"></div>
-    </div>
-
-    <!-- Keyboard navigation script -->
-    <script>
-      const sections = document.querySelectorAll('.snap-section');
-      const dots = document.querySelectorAll('.scroll-indicator .dot');
-      const container = document.querySelector('.snap-container');
-
-      // Update active dot on scroll
-      if (container) {
-        const observer = new IntersectionObserver(
-          (entries) => {
-            entries.forEach((entry) => {
-              if (entry.isIntersecting) {
-                const index = Array.from(sections).indexOf(entry.target as Element);
-                dots.forEach((dot, i) => {
-                  dot.classList.toggle('active', i === index);
-                });
-              }
-            });
-          },
-          { root: container, threshold: 0.5 }
-        );
-
-        sections.forEach((section) => observer.observe(section));
-      }
-
-      // Keyboard navigation
-      document.addEventListener('keydown', (e) => {
-        if (!container) return;
-
-        const currentSection = Array.from(sections).findIndex(
-          (section) => section.getBoundingClientRect().top >= -100
-        );
-
-        if (e.key === 'ArrowDown' || e.key === 'PageDown') {
-          e.preventDefault();
-          const nextSection = sections[Math.min(currentSection + 1, sections.length - 1)];
-          nextSection?.scrollIntoView({ behavior: 'smooth' });
-        }
-
-        if (e.key === 'ArrowUp' || e.key === 'PageUp') {
-          e.preventDefault();
-          const prevSection = sections[Math.max(currentSection - 1, 0)];
-          prevSection?.scrollIntoView({ behavior: 'smooth' });
-        }
-      });
-
-      // Click on dots to navigate
-      dots.forEach((dot, index) => {
-        dot.addEventListener('click', () => {
-          sections[index]?.scrollIntoView({ behavior: 'smooth' });
-        });
-      });
-    </script>
+    <!-- Scroll Indicator with keyboard navigation -->
+    <ScrollIndicator client:only="svelte" ariaLabel={scrollIndicatorLabel} />
 
     <style>
       @reference "../styles/global.css";
-
-      /* Full-page scroll snap */
-      .snap-container {
-        height: 100vh;
-        overflow-y: scroll;
-        scroll-snap-type: y mandatory;
-        scroll-behavior: smooth;
-      }
 
       /* Navigation blur effect */
       .nav-blur {
@@ -172,43 +103,6 @@ const t = useTranslations(locale);
 
       .nav-link:hover {
         color: var(--color-text-primary);
-      }
-
-      /* Scroll indicator dots */
-      .scroll-indicator {
-        position: fixed;
-        right: 2rem;
-        top: 50%;
-        transform: translateY(-50%);
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        z-index: 40;
-      }
-
-      .scroll-indicator .dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: var(--color-border);
-        cursor: pointer;
-        transition: all 0.3s ease;
-      }
-
-      .scroll-indicator .dot:hover {
-        background: var(--color-text-secondary);
-      }
-
-      .scroll-indicator .dot.active {
-        background: var(--color-accent-primary);
-        box-shadow: 0 0 10px var(--color-accent-primary);
-      }
-
-      /* Hide scroll indicator on mobile */
-      @media (max-width: 768px) {
-        .scroll-indicator {
-          display: none;
-        }
       }
     </style>
   </body>

@@ -60,6 +60,15 @@ code, pre {
   background: var(--color-text-secondary);
 }
 
+/* Scroll container */
+.snap-container {
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  scroll-padding-top: 4rem; /* Account for fixed navigation */
+}
+
 /* Full-page snap sections */
 .snap-section {
   min-height: 100vh;
@@ -69,8 +78,13 @@ code, pre {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 4rem 2rem;
+  padding: 6rem 2rem 4rem; /* Extra top padding for fixed nav */
   position: relative;
+}
+
+/* First section doesn't need extra padding as hero is full-bleed */
+.snap-section:first-child {
+  padding-top: 4rem;
 }
 
 /* Utility: Glow effect */
