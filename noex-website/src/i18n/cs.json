@@ -1,0 +1,97 @@
+{
+  "meta": {
+    "title": "noex - Erlang/OTP vzory pro Node.js",
+    "description": "Vytvářejte odolné a škálovatelné systémy v TypeScriptu pomocí osvědčených Erlang/OTP vzorů"
+  },
+  "nav": {
+    "features": "Funkce",
+    "docs": "Dokumentace",
+    "playground": "Hřiště",
+    "github": "GitHub"
+  },
+  "hero": {
+    "headline": "Erlang/OTP vzory pro Node.js",
+    "subheadline": "Vytvářejte odolné, škálovatelné systémy v TypeScriptu",
+    "cta": {
+      "getStarted": "Začít",
+      "viewGithub": "Zobrazit na GitHubu"
+    },
+    "scrollDown": "Scrollujte pro více"
+  },
+  "problem": {
+    "title": "Node.js je skvělý, ale...",
+    "issues": {
+      "raceConditions": {
+        "title": "Race Conditions",
+        "description": "Sdílený měnitelný stav vede k nepředvídatelným chybám"
+      },
+      "errorHandling": {
+        "title": "Kaskádové chyby",
+        "description": "Jedna chyba může shodit celou aplikaci"
+      },
+      "scaling": {
+        "title": "Složitost škálování",
+        "description": "Distribuované systémy jsou obtížné na správné nastavení"
+      }
+    }
+  },
+  "features": {
+    "title": "Základní koncepty",
+    "genserver": {
+      "title": "GenServer",
+      "description": "Stavové procesy bez race conditions. Sekvenční zpracování zpráv garantuje konzistenci."
+    },
+    "supervisor": {
+      "title": "Supervisor",
+      "description": "Automatický restart při selhání. Filozofie 'nech to spadnout' s chytrými strategiemi obnovy."
+    },
+    "registry": {
+      "title": "Registry",
+      "description": "Vyhledávání procesů podle jména. Najděte procesy pomocí názvu místo správy referencí."
+    }
+  },
+  "services": {
+    "title": "Vestavěné služby",
+    "cache": {
+      "title": "Cache",
+      "description": "In-memory cache s TTL a automatickým čištěním"
+    },
+    "eventbus": {
+      "title": "EventBus",
+      "description": "Publish/subscribe messaging mezi procesy"
+    },
+    "ratelimiter": {
+      "title": "RateLimiter",
+      "description": "Token bucket rate limiting pro API a zdroje"
+    }
+  },
+  "observability": {
+    "title": "Observabilita v základu",
+    "subtitle": "Monitorujte své procesy v reálném čase",
+    "features": {
+      "dashboard": "Webový dashboard",
+      "tui": "Terminálové UI",
+      "metrics": "Metriky procesů",
+      "logs": "Strukturované logy"
+    }
+  },
+  "distribution": {
+    "title": "Distribuovaný od návrhu",
+    "subtitle": "Škálujte napříč stroji s transparentní lokací",
+    "features": {
+      "cluster": "P2P Clustering",
+      "global": "Globální registr",
+      "transparent": "Transparentní lokace"
+    }
+  },
+  "cta": {
+    "title": "Začněte",
+    "install": "Instalujte přes npm",
+    "docs": "Přečtěte dokumentaci",
+    "github": "Dejte hvězdu na GitHubu"
+  },
+  "footer": {
+    "copyright": "MIT Licence",
+    "madeWith": "Vytvořeno s"
+  }
+}

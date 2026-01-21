@@ -1,0 +1,97 @@
+{
+  "meta": {
+    "title": "noex - Erlang/OTP Patterns for Node.js",
+    "description": "Build fault-tolerant, scalable systems with TypeScript using battle-tested Erlang/OTP patterns"
+  },
+  "nav": {
+    "features": "Features",
+    "docs": "Docs",
+    "playground": "Playground",
+    "github": "GitHub"
+  },
+  "hero": {
+    "headline": "Erlang/OTP Patterns for Node.js",
+    "subheadline": "Build fault-tolerant, scalable systems with TypeScript",
+    "cta": {
+      "getStarted": "Get Started",
+      "viewGithub": "View on GitHub"
+    },
+    "scrollDown": "Scroll to explore"
+  },
+  "problem": {
+    "title": "Node.js is great, but...",
+    "issues": {
+      "raceConditions": {
+        "title": "Race Conditions",
+        "description": "Shared mutable state leads to unpredictable bugs"
+      },
+      "errorHandling": {
+        "title": "Error Cascades",
+        "description": "One failure can crash your entire application"
+      },
+      "scaling": {
+        "title": "Scaling Complexity",
+        "description": "Distributed systems are hard to get right"
+      }
+    }
+  },
+  "features": {
+    "title": "Core Concepts",
+    "genserver": {
+      "title": "GenServer",
+      "description": "Stateful processes without race conditions. Sequential message processing guarantees consistency."
+    },
+    "supervisor": {
+      "title": "Supervisor",
+      "description": "Automatic restart on failures. Let it crash philosophy with smart recovery strategies."
+    },
+    "registry": {
+      "title": "Registry",
+      "description": "Named process lookup. Find processes by name instead of managing references."
+    }
+  },
+  "services": {
+    "title": "Built-in Services",
+    "cache": {
+      "title": "Cache",
+      "description": "In-memory caching with TTL and automatic cleanup"
+    },
+    "eventbus": {
+      "title": "EventBus",
+      "description": "Publish/subscribe messaging between processes"
+    },
+    "ratelimiter": {
+      "title": "RateLimiter",
+      "description": "Token bucket rate limiting for APIs and resources"
+    }
+  },
+  "observability": {
+    "title": "Observability Built-in",
+    "subtitle": "Monitor your processes in real-time",
+    "features": {
+      "dashboard": "Web Dashboard",
+      "tui": "Terminal UI",
+      "metrics": "Process Metrics",
+      "logs": "Structured Logs"
+    }
+  },
+  "distribution": {
+    "title": "Distributed by Design",
+    "subtitle": "Scale across machines with location transparency",
+    "features": {
+      "cluster": "P2P Clustering",
+      "global": "Global Registry",
+      "transparent": "Location Transparency"
+    }
+  },
+  "cta": {
+    "title": "Get Started",
+    "install": "Install with npm",
+    "docs": "Read the Docs",
+    "github": "Star on GitHub"
+  },
+  "footer": {
+    "copyright": "MIT License",
+    "madeWith": "Made with"
+  }
+}

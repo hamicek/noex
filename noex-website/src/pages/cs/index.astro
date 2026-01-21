@@ -1,0 +1,246 @@
+---
+import FullPageLayout from '../../layouts/FullPageLayout.astro';
+import { useTranslations } from '../../i18n/utils';
+
+const locale = 'cs';
+const t = useTranslations(locale);
+---
+
+<FullPageLayout locale={locale} currentPath="/cs/">
+  <!-- Section 1: Hero -->
+  <section class="snap-section bg-bg-primary">
+    <div class="max-w-4xl mx-auto text-center">
+      <h1 class="text-5xl md:text-7xl font-bold mb-6">
+        <span class="text-accent-primary">noex</span>
+      </h1>
+      <p class="text-2xl md:text-4xl font-semibold mb-4 text-text-primary">
+        {t('hero.headline')}
+      </p>
+      <p class="text-lg md:text-xl text-text-secondary mb-8 max-w-2xl mx-auto">
+        {t('hero.subheadline')}
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="#features"
+          class="px-8 py-3 bg-accent-primary text-bg-primary font-semibold rounded-lg glow-primary hover:bg-accent-primary/90 transition-all"
+        >
+          {t('hero.cta.getStarted')}
+        </a>
+        <a
+          href="https://github.com/your-org/noex"
+          target="_blank"
+          rel="noopener"
+          class="px-8 py-3 border border-border text-text-primary rounded-lg hover:border-accent-secondary hover:text-accent-secondary transition-all"
+        >
+          {t('hero.cta.viewGithub')}
+        </a>
+      </div>
+
+      <!-- Scroll down indicator -->
+      <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+        <svg
+          class="w-6 h-6 text-text-secondary"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M19 14l-7 7m0 0l-7-7m7 7V3"
+          />
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: Problem Statement -->
+  <section class="snap-section bg-bg-secondary">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2 class="text-3xl md:text-5xl font-bold mb-12 text-text-primary">
+        {t('problem.title')}
+      </h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="glass-card p-6">
+          <div class="text-accent-tertiary text-4xl mb-4">⚡</div>
+          <h3 class="text-xl font-semibold mb-2">{t('problem.issues.raceConditions.title')}</h3>
+          <p class="text-text-secondary">{t('problem.issues.raceConditions.description')}</p>
+        </div>
+        <div class="glass-card p-6">
+          <div class="text-accent-tertiary text-4xl mb-4">💥</div>
+          <h3 class="text-xl font-semibold mb-2">{t('problem.issues.errorHandling.title')}</h3>
+          <p class="text-text-secondary">{t('problem.issues.errorHandling.description')}</p>
+        </div>
+        <div class="glass-card p-6">
+          <div class="text-accent-tertiary text-4xl mb-4">🌐</div>
+          <h3 class="text-xl font-semibold mb-2">{t('problem.issues.scaling.title')}</h3>
+          <p class="text-text-secondary">{t('problem.issues.scaling.description')}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Core Features -->
+  <section id="features" class="snap-section bg-bg-primary">
+    <div class="max-w-5xl mx-auto text-center">
+      <h2 class="text-3xl md:text-5xl font-bold mb-12 text-text-primary">
+        {t('features.title')}
+      </h2>
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="gradient-border p-6 text-left">
+          <div class="text-accent-primary text-3xl mb-4">📦</div>
+          <h3 class="text-xl font-semibold mb-2 text-accent-primary">
+            {t('features.genserver.title')}
+          </h3>
+          <p class="text-text-secondary">{t('features.genserver.description')}</p>
+        </div>
+        <div class="gradient-border p-6 text-left">
+          <div class="text-accent-secondary text-3xl mb-4">🛡️</div>
+          <h3 class="text-xl font-semibold mb-2 text-accent-secondary">
+            {t('features.supervisor.title')}
+          </h3>
+          <p class="text-text-secondary">{t('features.supervisor.description')}</p>
+        </div>
+        <div class="gradient-border p-6 text-left">
+          <div class="text-accent-primary text-3xl mb-4">📇</div>
+          <h3 class="text-xl font-semibold mb-2 text-accent-primary">
+            {t('features.registry.title')}
+          </h3>
+          <p class="text-text-secondary">{t('features.registry.description')}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Built-in Services -->
+  <section class="snap-section bg-bg-secondary">
+    <div class="max-w-5xl mx-auto text-center">
+      <h2 class="text-3xl md:text-5xl font-bold mb-12 text-text-primary">
+        {t('services.title')}
+      </h2>
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="glass-card p-6 text-left">
+          <div class="text-accent-secondary text-3xl mb-4">💾</div>
+          <h3 class="text-xl font-semibold mb-2">{t('services.cache.title')}</h3>
+          <p class="text-text-secondary">{t('services.cache.description')}</p>
+        </div>
+        <div class="glass-card p-6 text-left">
+          <div class="text-accent-secondary text-3xl mb-4">📡</div>
+          <h3 class="text-xl font-semibold mb-2">{t('services.eventbus.title')}</h3>
+          <p class="text-text-secondary">{t('services.eventbus.description')}</p>
+        </div>
+        <div class="glass-card p-6 text-left">
+          <div class="text-accent-secondary text-3xl mb-4">⏱️</div>
+          <h3 class="text-xl font-semibold mb-2">{t('services.ratelimiter.title')}</h3>
+          <p class="text-text-secondary">{t('services.ratelimiter.description')}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 5: Observability -->
+  <section class="snap-section bg-bg-primary">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2 class="text-3xl md:text-5xl font-bold mb-4 text-text-primary">
+        {t('observability.title')}
+      </h2>
+      <p class="text-xl text-text-secondary mb-12">{t('observability.subtitle')}</p>
+      <div class="glass-card p-8 mb-8">
+        <div class="text-text-secondary text-6xl mb-4">📊</div>
+        <p class="text-text-secondary">Náhled dashboardu</p>
+      </div>
+      <div class="flex flex-wrap justify-center gap-4">
+        <span class="px-4 py-2 bg-bg-card rounded-full text-accent-primary border border-accent-primary/30">
+          {t('observability.features.dashboard')}
+        </span>
+        <span class="px-4 py-2 bg-bg-card rounded-full text-accent-secondary border border-accent-secondary/30">
+          {t('observability.features.tui')}
+        </span>
+        <span class="px-4 py-2 bg-bg-card rounded-full text-accent-primary border border-accent-primary/30">
+          {t('observability.features.metrics')}
+        </span>
+        <span class="px-4 py-2 bg-bg-card rounded-full text-accent-secondary border border-accent-secondary/30">
+          {t('observability.features.logs')}
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 6: Distribution -->
+  <section class="snap-section bg-bg-secondary">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2 class="text-3xl md:text-5xl font-bold mb-4 text-text-primary">
+        {t('distribution.title')}
+      </h2>
+      <p class="text-xl text-text-secondary mb-12">{t('distribution.subtitle')}</p>
+      <div class="glass-card p-8 mb-8">
+        <div class="text-text-secondary text-6xl mb-4">🌐</div>
+        <p class="text-text-secondary">Vizualizace clusteru</p>
+      </div>
+      <div class="flex flex-wrap justify-center gap-4">
+        <span class="px-4 py-2 bg-bg-card rounded-full text-accent-primary border border-accent-primary/30">
+          {t('distribution.features.cluster')}
+        </span>
+        <span class="px-4 py-2 bg-bg-card rounded-full text-accent-secondary border border-accent-secondary/30">
+          {t('distribution.features.global')}
+        </span>
+        <span class="px-4 py-2 bg-bg-card rounded-full text-accent-primary border border-accent-primary/30">
+          {t('distribution.features.transparent')}
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 7: Code Playground (placeholder) -->
+  <section id="playground" class="snap-section bg-bg-primary">
+    <div class="max-w-5xl mx-auto text-center">
+      <h2 class="text-3xl md:text-5xl font-bold mb-12 text-text-primary">
+        Vyzkoušejte si to
+      </h2>
+      <div class="glass-card p-8">
+        <div class="text-text-secondary text-6xl mb-4">💻</div>
+        <p class="text-text-secondary mb-4">Interaktivní hřiště brzy</p>
+        <pre class="bg-bg-primary p-4 rounded-lg text-left text-sm overflow-x-auto"><code class="text-accent-primary">import {'{ GenServer }'} from 'noex';
+
+class Counter extends GenServer {'{'}&lt;number&gt; {'{'}
+  init() {'{'} return 0; {'}'}
+
+  handleCall(msg: 'get') {'{'} return this.state; {'}'}
+  handleCast(msg: 'inc') {'{'} this.state++; {'}'}
+{'}'}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 8: Call to Action -->
+  <section class="snap-section bg-bg-secondary">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2 class="text-3xl md:text-5xl font-bold mb-8 text-text-primary">
+        {t('cta.title')}
+      </h2>
+      <div class="glass-card p-6 mb-8 inline-block">
+        <code class="text-accent-primary text-lg">npm install noex</code>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="#"
+          class="px-8 py-3 bg-accent-primary text-bg-primary font-semibold rounded-lg glow-primary hover:bg-accent-primary/90 transition-all"
+        >
+          {t('cta.docs')}
+        </a>
+        <a
+          href="https://github.com/your-org/noex"
+          target="_blank"
+          rel="noopener"
+          class="px-8 py-3 border border-border text-text-primary rounded-lg hover:border-accent-secondary hover:text-accent-secondary transition-all"
+        >
+          {t('cta.github')}
+        </a>
+      </div>
+      <footer class="mt-16 text-text-secondary text-sm">
+        <p>{t('footer.copyright')} · {t('footer.madeWith')} ❤️</p>
+      </footer>
+    </div>
+  </section>
+</FullPageLayout>
