@@ -8,6 +8,10 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   integrations: [svelte()],
 
+  server: {
+    port: 7240,
+  },
+
   vite: {
     plugins: [tailwindcss()],
   },
