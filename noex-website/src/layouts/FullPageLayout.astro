@@ -1,7 +1,8 @@
 ---
 import '../styles/global.css';
-import { type Locale, useTranslations, localeNames, locales, getLocalizedPath } from '../i18n/utils';
+import { type Locale, useTranslations, locales, getLocalizedPath } from '../i18n/utils';
 import ScrollIndicator from '../components/ui/ScrollIndicator.svelte';
+import LanguageSwitcher from '../components/ui/LanguageSwitcher.svelte';
 
 interface Props {
   locale: Locale;
@@ -11,6 +12,10 @@ interface Props {
 const { locale, currentPath = '/' } = Astro.props;
 const t = useTranslations(locale);
 const scrollIndicatorLabel = locale === 'cs' ? 'Sekce stránky' : 'Page sections';
+const langSwitcherTranslations = {
+  label: t('languageSwitcher.label'),
+  currentLang: t('languageSwitcher.currentLang'),
+};
 ---
 
 <!DOCTYPE html>
@@ -59,21 +64,11 @@ const scrollIndicatorLabel = locale === 'cs' ? 'Sekce stránky' : 'Page sections
           </div>
 
           <!-- Language Switcher -->
-          <div class="flex items-center space-x-2">
-            {locales.map((l) => (
-              <a
-                href={getLocalizedPath(currentPath, l)}
-                class:list={[
-                  'px-2 py-1 text-sm rounded transition-colors',
-                  l === locale
-                    ? 'bg-accent-primary/20 text-accent-primary'
-                    : 'text-text-secondary hover:text-text-primary'
-                ]}
-              >
-                {l.toUpperCase()}
-              </a>
-            ))}
-          </div>
+          <LanguageSwitcher
+            currentLocale={locale}
+            currentPath={currentPath}
+            translations={langSwitcherTranslations}
+          />
         </div>
       </div>
     </nav>

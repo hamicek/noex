@@ -84,14 +84,22 @@
       "transparent": "Location Transparency"
     }
   },
+  "playground": {
+    "title": "Try it out",
+    "comingSoon": "Interactive code playground coming soon"
+  },
   "cta": {
-    "title": "Get Started",
+    "title": "Ready to build resilient systems?",
     "install": "Install with npm",
-    "docs": "Read the Docs",
-    "github": "Star on GitHub"
+    "docs": "Documentation",
+    "github": "GitHub"
   },
   "footer": {
-    "copyright": "MIT License",
+    "copyright": "2024 noex",
     "madeWith": "Made with"
+  },
+  "languageSwitcher": {
+    "label": "Language",
+    "currentLang": "Current language"
   }
 }

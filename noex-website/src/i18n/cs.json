@@ -84,14 +84,22 @@
       "transparent": "Transparentní lokace"
     }
   },
+  "playground": {
+    "title": "Vyzkoušejte si to",
+    "comingSoon": "Interaktivní hřiště již brzy"
+  },
   "cta": {
-    "title": "Začněte",
+    "title": "Připraveni budovat odolné systémy?",
     "install": "Instalujte přes npm",
-    "docs": "Přečtěte dokumentaci",
-    "github": "Dejte hvězdu na GitHubu"
+    "docs": "Dokumentace",
+    "github": "GitHub"
   },
   "footer": {
-    "copyright": "MIT Licence",
+    "copyright": "2024 noex",
     "madeWith": "Vytvořeno s"
+  },
+  "languageSwitcher": {
+    "label": "Jazyk",
+    "currentLang": "Aktuální jazyk"
   }
 }
