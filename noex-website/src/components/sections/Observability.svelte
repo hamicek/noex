@@ -244,21 +244,21 @@
 <script context="module" lang="ts">
   function highlightTuiLine(content: string): string {
     return content
-      // Status indicators
-      .replace(/●/g, '<span class="tui-status-running">●</span>')
-      .replace(/○/g, '<span class="tui-status-stopped">○</span>')
-      .replace(/▼/g, '<span class="tui-supervisor">▼</span>')
-      // Status text
+      // Status text - MUST be first, before symbols that create class names with "running"
       .replace(/running/g, '<span class="tui-running">running</span>')
       .replace(/stopped/g, '<span class="tui-stopped">stopped</span>')
+      // Status indicators (after text so we don't match "running" in class names)
+      .replace(/●/g, '<span class="tui-dot-on">●</span>')
+      .replace(/○/g, '<span class="tui-dot-off">○</span>')
+      .replace(/▼/g, '<span class="tui-supervisor">▼</span>')
       // Success indicators
       .replace(/✓/g, '<span class="tui-success">✓</span>')
       .replace(/ℹ/g, '<span class="tui-info">ℹ</span>')
       // Keyboard shortcuts
       .replace(/\[([a-z?])\]/g, '<span class="tui-key">[$1]</span>')
       .replace(/\[(\d-\d)\]/g, '<span class="tui-key">[$1]</span>')
-      // Numbers and memory
-      .replace(/(\d+(?:\.\d+)?)\s*(MB|k|KB)/g, '<span class="tui-number">$1</span> <span class="tui-unit">$2</span>')
+      // Numbers and memory - preserve original spacing
+      .replace(/(\d+(?:\.\d+)?)(\s?)(MB|k|KB)/g, '<span class="tui-number">$1</span>$2<span class="tui-unit">$3</span>')
       .replace(/(\d{2}:\d{2}:\d{2})/g, '<span class="tui-time">$1</span>')
       // Percentages
       .replace(/(\d+)%/g, '<span class="tui-percent">$1%</span>')
@@ -475,11 +475,11 @@
   }
 
   /* TUI Syntax highlighting */
-  .tui-content :global(.tui-status-running) {
+  .tui-content :global(.tui-dot-on) {
     color: var(--color-accent-primary);
   }
 
-  .tui-content :global(.tui-status-stopped) {
+  .tui-content :global(.tui-dot-off) {
     color: var(--color-accent-tertiary);
   }
 

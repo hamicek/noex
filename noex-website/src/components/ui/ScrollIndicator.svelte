@@ -8,26 +8,28 @@
   /** ARIA label for accessibility */
   export let ariaLabel = 'Page sections';
 
-  let sections: Element[] = [];
+  // Store actual DOM elements
+  let sectionElements: Element[] = [];
   let container: Element | null = null;
-  let activeIndex = 0;
   let observer: IntersectionObserver | null = null;
 
+  // Reactive state for UI
+  let sectionCount = 0;
+  let activeIndex = 0;
+
   function scrollToSection(index: number) {
-    const section = sections[index];
+    const section = sectionElements[index];
     if (section) {
       section.scrollIntoView({ behavior: 'smooth' });
     }
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    // Skip if user is typing in an input or textarea
     const target = event.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
       return;
     }
 
-    const sectionCount = sections.length;
     if (sectionCount === 0) return;
 
     switch (event.key) {
@@ -53,11 +55,9 @@
         scrollToSection(sectionCount - 1);
         break;
 
-      case ' ': // Space
-        // Only handle space if not focused on interactive elements
+      case ' ':
         if (target.tagName !== 'BUTTON' && target.tagName !== 'A') {
           event.preventDefault();
-          // Space scrolls down, Shift+Space scrolls up
           if (event.shiftKey) {
             scrollToSection(Math.max(activeIndex - 1, 0));
           } else {
@@ -69,31 +69,57 @@
   }
 
   function setupObserver() {
-    if (!container || sections.length === 0) return;
+    if (sectionElements.length === 0) return;
+
+    const elementIndexMap = new Map<Element, number>();
+    sectionElements.forEach((el, idx) => elementIndexMap.set(el, idx));
 
     observer = new IntersectionObserver(
       (entries) => {
+        let maxRatio = 0;
+        let maxIndex = activeIndex;
+
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = sections.indexOf(entry.target);
-            if (index !== -1) {
-              activeIndex = index;
+          if (entry.intersectionRatio > maxRatio) {
+            const index = elementIndexMap.get(entry.target);
+            if (index !== undefined) {
+              maxRatio = entry.intersectionRatio;
+              maxIndex = index;
             }
           }
         });
+
+        if (maxRatio > 0) {
+          activeIndex = maxIndex;
+        }
       },
       {
-        root: container,
-        threshold: 0.5,
+        root: null,
+        threshold: [0, 0.25, 0.5, 0.75, 1],
       }
     );
 
-    sections.forEach((section) => observer?.observe(section));
+    sectionElements.forEach((section) => observer?.observe(section));
   }
 
   onMount(() => {
     container = document.querySelector(containerSelector);
-    sections = Array.from(document.querySelectorAll(sectionSelector));
+    sectionElements = Array.from(document.querySelectorAll(sectionSelector));
+    sectionCount = sectionElements.length;
+
+    // Set initial active section
+    if (sectionElements.length > 0) {
+      const viewportHeight = window.innerHeight;
+      const viewportCenter = viewportHeight / 2;
+
+      for (let i = 0; i < sectionElements.length; i++) {
+        const rect = sectionElements[i].getBoundingClientRect();
+        if (rect.top <= viewportCenter && rect.bottom >= viewportCenter) {
+          activeIndex = i;
+          break;
+        }
+      }
+    }
 
     setupObserver();
     document.addEventListener('keydown', handleKeyDown);
@@ -107,10 +133,9 @@
 
 <nav
   class="scroll-indicator"
-  role="navigation"
   aria-label={ariaLabel}
 >
-  {#each sections as _, index}
+  {#each Array(sectionCount) as _, index}
     <button
       class="dot"
       class:active={index === activeIndex}
@@ -162,7 +187,6 @@
     box-shadow: 0 0 12px var(--color-accent-primary);
   }
 
-  /* Screen reader only text */
   .sr-only {
     position: absolute;
     width: 1px;
@@ -175,7 +199,6 @@
     border: 0;
   }
 
-  /* Hide on mobile - touch scroll is natural */
   @media (max-width: 768px) {
     .scroll-indicator {
       display: none;
