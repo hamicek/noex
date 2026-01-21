@@ -55,6 +55,7 @@
   },
   "services": {
     "title": "Built-in Services",
+    "subtitle": "Production-ready utilities that work seamlessly with your processes",
     "cache": {
       "title": "Cache",
       "description": "In-memory caching with TTL and automatic cleanup"

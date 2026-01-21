@@ -55,6 +55,7 @@
   },
   "services": {
     "title": "Vestavěné služby",
+    "subtitle": "Produkčně připravené utility, které bezproblémově spolupracují s vašimi procesy",
     "cache": {
       "title": "Cache",
       "description": "In-memory cache s TTL a automatickým čištěním"

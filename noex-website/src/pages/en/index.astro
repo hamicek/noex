@@ -4,6 +4,7 @@ import { useTranslations, getTranslations } from '../../i18n/utils';
 import Hero from '../../components/sections/Hero.svelte';
 import ProblemStatement from '../../components/sections/ProblemStatement.svelte';
 import CoreFeatures from '../../components/sections/CoreFeatures.svelte';
+import BuiltInServices from '../../components/sections/BuiltInServices.svelte';
 
 const locale = 'en';
 const t = useTranslations(locale);
@@ -21,30 +22,7 @@ const translations = getTranslations(locale);
   <CoreFeatures translations={translations.features} client:visible />
 
   <!-- Section 4: Built-in Services -->
-  <section class="snap-section bg-bg-secondary">
-    <div class="max-w-5xl mx-auto text-center">
-      <h2 class="text-3xl md:text-5xl font-bold mb-12 text-text-primary">
-        {t('services.title')}
-      </h2>
-      <div class="grid md:grid-cols-3 gap-8">
-        <div class="glass-card p-6 text-left">
-          <div class="text-accent-secondary text-3xl mb-4">💾</div>
-          <h3 class="text-xl font-semibold mb-2">{t('services.cache.title')}</h3>
-          <p class="text-text-secondary">{t('services.cache.description')}</p>
-        </div>
-        <div class="glass-card p-6 text-left">
-          <div class="text-accent-secondary text-3xl mb-4">📡</div>
-          <h3 class="text-xl font-semibold mb-2">{t('services.eventbus.title')}</h3>
-          <p class="text-text-secondary">{t('services.eventbus.description')}</p>
-        </div>
-        <div class="glass-card p-6 text-left">
-          <div class="text-accent-secondary text-3xl mb-4">⏱️</div>
-          <h3 class="text-xl font-semibold mb-2">{t('services.ratelimiter.title')}</h3>
-          <p class="text-text-secondary">{t('services.ratelimiter.description')}</p>
-        </div>
-      </div>
-    </div>
-  </section>
+  <BuiltInServices translations={translations.services} client:visible />
 
   <!-- Section 5: Observability -->
   <section class="snap-section bg-bg-primary">
