@@ -6,7 +6,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "generate-icons": "node scripts/generate-icons.js"
   },
   "dependencies": {
     "@astrojs/svelte": "^7.2.5",
@@ -15,5 +16,9 @@
     "svelte": "^5.47.1",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@astrojs/sitemap": "^3.7.0",
+    "sharp": "^0.34.5"
   }
 }

@@ -1,0 +1,12 @@
+# https://www.robotstxt.org/robotstxt.html
+
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://noex.dev/sitemap-index.xml
+
+# Disallow specific paths (if needed)
+# Disallow: /admin/
+# Disallow: /private/

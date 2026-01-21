@@ -3,10 +3,24 @@ import { defineConfig } from 'astro/config';
 
 import svelte from '@astrojs/svelte';
 import tailwindcss from '@tailwindcss/vite';
+import sitemap from '@astrojs/sitemap';
 
 // https://astro.build/config
 export default defineConfig({
-  integrations: [svelte()],
+  site: 'https://noex.dev',
+
+  integrations: [
+    svelte(),
+    sitemap({
+      i18n: {
+        defaultLocale: 'en',
+        locales: {
+          en: 'en-US',
+          cs: 'cs-CZ',
+        },
+      },
+    }),
+  ],
 
   server: {
     port: 7240,
