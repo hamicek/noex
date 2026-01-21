@@ -39,6 +39,7 @@
   },
   "features": {
     "title": "Základní koncepty",
+    "subtitle": "Osvědčené vzory z Erlang/OTP, přepracované pro TypeScript",
     "genserver": {
       "title": "GenServer",
       "description": "Stavové procesy bez race conditions. Sekvenční zpracování zpráv garantuje konzistenci."

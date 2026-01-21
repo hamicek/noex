@@ -3,6 +3,7 @@ import FullPageLayout from '../../layouts/FullPageLayout.astro';
 import { useTranslations, getTranslations } from '../../i18n/utils';
 import Hero from '../../components/sections/Hero.svelte';
 import ProblemStatement from '../../components/sections/ProblemStatement.svelte';
+import CoreFeatures from '../../components/sections/CoreFeatures.svelte';
 
 const locale = 'cs';
 const t = useTranslations(locale);
@@ -17,36 +18,7 @@ const translations = getTranslations(locale);
   <ProblemStatement translations={translations.problem} client:visible />
 
   <!-- Section 3: Core Features -->
-  <section id="features" class="snap-section bg-bg-primary">
-    <div class="max-w-5xl mx-auto text-center">
-      <h2 class="text-3xl md:text-5xl font-bold mb-12 text-text-primary">
-        {t('features.title')}
-      </h2>
-      <div class="grid md:grid-cols-3 gap-8">
-        <div class="gradient-border p-6 text-left">
-          <div class="text-accent-primary text-3xl mb-4">📦</div>
-          <h3 class="text-xl font-semibold mb-2 text-accent-primary">
-            {t('features.genserver.title')}
-          </h3>
-          <p class="text-text-secondary">{t('features.genserver.description')}</p>
-        </div>
-        <div class="gradient-border p-6 text-left">
-          <div class="text-accent-secondary text-3xl mb-4">🛡️</div>
-          <h3 class="text-xl font-semibold mb-2 text-accent-secondary">
-            {t('features.supervisor.title')}
-          </h3>
-          <p class="text-text-secondary">{t('features.supervisor.description')}</p>
-        </div>
-        <div class="gradient-border p-6 text-left">
-          <div class="text-accent-primary text-3xl mb-4">📇</div>
-          <h3 class="text-xl font-semibold mb-2 text-accent-primary">
-            {t('features.registry.title')}
-          </h3>
-          <p class="text-text-secondary">{t('features.registry.description')}</p>
-        </div>
-      </div>
-    </div>
-  </section>
+  <CoreFeatures translations={translations.features} client:visible />
 
   <!-- Section 4: Built-in Services -->
   <section class="snap-section bg-bg-secondary">

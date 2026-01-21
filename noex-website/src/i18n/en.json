@@ -39,6 +39,7 @@
   },
   "features": {
     "title": "Core Concepts",
+    "subtitle": "Battle-tested patterns from Erlang/OTP, reimagined for TypeScript",
     "genserver": {
       "title": "GenServer",
       "description": "Stateful processes without race conditions. Sequential message processing guarantees consistency."
