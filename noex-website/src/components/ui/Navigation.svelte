@@ -69,8 +69,28 @@
 
   function scrollToSection(sectionId: string) {
     const section = document.getElementById(sectionId);
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth' });
+    const container = document.querySelector('.snap-container') as HTMLElement | null;
+    if (section && container) {
+      // Temporarily disable scroll-snap to avoid snap-stop blocking
+      container.style.scrollSnapType = 'none';
+
+      container.scrollTo({
+        top: section.offsetTop - 64, // 4rem nav offset
+        behavior: 'smooth',
+      });
+
+      // Re-enable snap after scroll completes
+      const onScrollEnd = () => {
+        container.style.scrollSnapType = '';
+        container.removeEventListener('scrollend', onScrollEnd);
+        clearTimeout(fallback);
+      };
+      container.addEventListener('scrollend', onScrollEnd, { once: true });
+      const fallback = setTimeout(() => {
+        container.style.scrollSnapType = '';
+        container.removeEventListener('scrollend', onScrollEnd);
+      }, 1000);
+
       closeMenu();
     }
   }
@@ -82,16 +102,20 @@
   }
 
   onMount(() => {
+    const scrollContainer = document.querySelector('.snap-container');
+
     // Track scroll position for nav background opacity
     const handleScroll = () => {
-      isScrolled = window.scrollY > 50;
+      if (scrollContainer) {
+        isScrolled = scrollContainer.scrollTop > 50;
+      }
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    scrollContainer?.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('keydown', handleKeydown);
 
     return () => {
-      window.removeEventListener('scroll', handleScroll);
+      scrollContainer?.removeEventListener('scroll', handleScroll);
       window.removeEventListener('keydown', handleKeydown);
       // Cleanup body overflow on unmount
       if (typeof document !== 'undefined') {

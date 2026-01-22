@@ -1,7 +1,6 @@
 ---
 import '../styles/global.css';
 import { type Locale, useTranslations, locales, getLocalizedPath } from '../i18n/utils';
-import ScrollIndicator from '../components/ui/ScrollIndicator.svelte';
 import Navigation from '../components/ui/Navigation.svelte';
 
 interface Props {
@@ -11,7 +10,6 @@ interface Props {
 
 const { locale, currentPath = '/' } = Astro.props;
 const t = useTranslations(locale);
-const scrollIndicatorLabel = locale === 'cs' ? 'Sekce stránky' : 'Page sections';
 
 // Site configuration
 const siteUrl = 'https://noex.dev';
@@ -129,7 +127,7 @@ const structuredData = {
     <!-- Structured Data (JSON-LD) -->
     <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
   </head>
-  <body class="snap-container">
+  <body>
     <!-- Navigation -->
     <Navigation
       {locale}
@@ -139,12 +137,11 @@ const structuredData = {
       client:load
     />
 
-    <!-- Main Content with Scroll Snap -->
-    <main>
-      <slot />
-    </main>
-
-    <!-- Scroll Indicator with keyboard navigation -->
-    <ScrollIndicator client:only="svelte" ariaLabel={scrollIndicatorLabel} />
+    <!-- Scroll Snap Container -->
+    <div class="snap-container">
+      <main>
+        <slot />
+      </main>
+    </div>
   </body>
 </html>
