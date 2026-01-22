@@ -452,6 +452,13 @@ try {
 | `getNames()` | Get all registered names |
 | `count()` | Get registration count |
 
+## Support
+
+If you find noex useful, consider supporting its development:
+
+[![Sponsor](https://img.shields.io/github/sponsors/hamicek?label=Sponsor&logo=github)](https://github.com/sponsors/hamicek)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5f5f?logo=ko-fi)](https://ko-fi.com/noex)
+
 ## License
 
 MIT
