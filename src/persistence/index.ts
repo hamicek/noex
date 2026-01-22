@@ -16,6 +16,9 @@ export type {
   StorageAdapter,
   StateSerializer,
   PersistenceConfig,
+  EventEntry,
+  EventLogAdapter,
+  ReadOptions,
 } from './types.js';
 
 // Error classes
@@ -41,3 +44,6 @@ export type { SaveOptions, ManagerLoadResult, LoadSuccess, LoadFailure } from '.
 // Storage adapters
 export { MemoryAdapter, FileAdapter, SQLiteAdapter } from './adapters/index.js';
 export type { MemoryAdapterOptions, FileAdapterOptions, SQLiteAdapterOptions } from './adapters/index.js';
+
+// Event log adapters
+export { MemoryEventLogAdapter } from './adapters/index.js';

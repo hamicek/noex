@@ -113,6 +113,98 @@ export interface StateSerializer {
   deserialize<T>(data: string): T;
 }
 
+// --- Event Log Types ---
+
+/**
+ * A single entry in an append-only event log stream.
+ *
+ * Events are immutable once appended. The `seq` field provides
+ * total ordering within a stream.
+ */
+export interface EventEntry<T = unknown> {
+  /** Monotonically increasing sequence number within the stream */
+  readonly seq: number;
+  /** Unix timestamp (ms) when the event was created */
+  readonly timestamp: number;
+  /** Event type identifier for filtering and routing */
+  readonly type: string;
+  /** Event payload data */
+  readonly payload: T;
+  /** Optional metadata for tracing, correlation, etc. */
+  readonly metadata?: Record<string, unknown>;
+}
+
+/**
+ * Options for reading events from a stream.
+ */
+export interface ReadOptions {
+  /** Start reading from this sequence number (inclusive) */
+  readonly fromSeq?: number;
+  /** Stop reading at this sequence number (inclusive) */
+  readonly toSeq?: number;
+  /** Maximum number of events to return */
+  readonly limit?: number;
+  /** Filter events by type(s) */
+  readonly types?: readonly string[];
+}
+
+/**
+ * Interface for append-only event log storage backends.
+ *
+ * Event logs provide ordered, immutable event streams identified by streamId.
+ * Each stream maintains its own monotonically increasing sequence counter.
+ */
+export interface EventLogAdapter {
+  /**
+   * Appends events to a stream. Sequence numbers are assigned by the adapter.
+   * @param streamId - Unique identifier for the event stream
+   * @param events - Events to append (seq fields are ignored; adapter assigns them)
+   * @returns The sequence number of the last appended event
+   */
+  append(streamId: string, events: readonly EventEntry[]): Promise<number>;
+
+  /**
+   * Reads events from a stream with optional filtering.
+   * @param streamId - Unique identifier for the event stream
+   * @param options - Read options (fromSeq, toSeq, limit, types filter)
+   * @returns Ordered array of matching events
+   */
+  read(streamId: string, options?: ReadOptions): Promise<readonly EventEntry[]>;
+
+  /**
+   * Reads all events after a given sequence number.
+   * Convenience method equivalent to `read(streamId, { fromSeq: afterSeq + 1 })`.
+   * @param streamId - Unique identifier for the event stream
+   * @param afterSeq - Return events with seq > afterSeq
+   */
+  readAfter(streamId: string, afterSeq: number): Promise<readonly EventEntry[]>;
+
+  /**
+   * Returns the last sequence number in a stream, or 0 if empty.
+   * @param streamId - Unique identifier for the event stream
+   */
+  getLastSeq(streamId: string): Promise<number>;
+
+  /**
+   * Removes events with seq < beforeSeq (for compaction/retention).
+   * @param streamId - Unique identifier for the event stream
+   * @param beforeSeq - Remove all events with seq strictly less than this value
+   * @returns Number of events removed
+   */
+  truncateBefore(streamId: string, beforeSeq: number): Promise<number>;
+
+  /**
+   * Lists all stream IDs, optionally filtered by prefix.
+   * @param prefix - Optional prefix to filter stream IDs
+   */
+  listStreams(prefix?: string): Promise<readonly string[]>;
+
+  /**
+   * Optional cleanup when adapter is no longer needed.
+   */
+  close?(): Promise<void>;
+}
+
 /**
  * Configuration for GenServer state persistence.
  */

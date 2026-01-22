@@ -12,3 +12,5 @@ export type { FileAdapterOptions } from './file-adapter.js';
 
 export { SQLiteAdapter } from './sqlite-adapter.js';
 export type { SQLiteAdapterOptions } from './sqlite-adapter.js';
+
+export { MemoryEventLogAdapter } from './memory-event-log.js';
