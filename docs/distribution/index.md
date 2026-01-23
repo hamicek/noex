@@ -73,6 +73,7 @@ await Cluster.stop();
 |-----------|---------|
 | **[GlobalRegistry](./api/global-registry.md)** | Cluster-wide process naming |
 | **[RemoteMonitor](./api/remote-monitor.md)** | Cross-node process monitoring |
+| **[RemoteLink](./api/remote-link.md)** | Cross-node bidirectional process linking |
 | **[DistributedSupervisor](./api/distributed-supervisor.md)** | Multi-node supervision trees |
 
 ## Architecture Overview
@@ -81,7 +82,7 @@ await Cluster.stop();
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Application                               │
 ├─────────────────────────────────────────────────────────────────┤
-│  GlobalRegistry  │  DistributedSupervisor  │  RemoteMonitor     │
+│  GlobalRegistry  │  DistributedSupervisor  │  RemoteMonitor/Link│
 ├─────────────────────────────────────────────────────────────────┤
 │            RemoteCall / RemoteSpawn / BehaviorRegistry          │
 ├─────────────────────────────────────────────────────────────────┤
@@ -131,6 +132,13 @@ await GlobalRegistry.register('leader', processRef);
 const ref = GlobalRegistry.whereis('leader');
 ```
 See: [Global Registry](./concepts/global-registry.md)
+
+**...link processes across nodes**
+```typescript
+const linkRef = await RemoteLink.link(localRef, remoteRef);
+// If either process crashes, the other is terminated (or receives ExitSignal with trapExit)
+```
+See: [RemoteLink API](./api/remote-link.md)
 
 **...supervise processes across nodes**
 ```typescript

@@ -11,6 +11,7 @@ Distribuční modul rozšiřuje Actor model v noex o možnosti komunikace mezi u
 - **Vzdálené spouštění procesů** - Spouštění procesů na vzdálených uzlech
 - **Globální registr** - Cluster-wide pojmenování a vyhledávání procesů
 - **Vzdálené monitorování** - Sledování procesů na vzdálených uzlech
+- **Vzdálené linkování** - Obousměrné linky procesů napříč uzly
 - **Distribuovaná supervize** - Supervize procesů napříč uzly s automatickým failover
 
 ## Sekce dokumentace
@@ -44,6 +45,7 @@ Kompletní API dokumentace:
 - [RemoteSpawn](./api/remote-spawn.md) - Vzdálené spouštění procesů
 - [GlobalRegistry](./api/global-registry.md) - Globální pojmenování procesů
 - [RemoteMonitor](./api/remote-monitor.md) - Vzdálené monitorování procesů
+- [RemoteLink](./api/remote-link.md) - Vzdálené linkování procesů
 - [DistributedSupervisor](./api/distributed-supervisor.md) - Distribuovaná supervize
 - [Typy](./api/types.md) - Všechny typy, rozhraní a konstanty
 
@@ -132,6 +134,17 @@ GenServer.onLifecycleEvent((event) => {
 });
 ```
 
+### Linkování procesů
+
+```typescript
+// Obousměrný link - při pádu jednoho je terminován i druhý
+const linkRef = await RemoteLink.link(localRef, remoteRef);
+
+// S trapExit dostane ExitSignal místo terminace
+const ref = await GenServer.start(behavior, { trapExit: true });
+await RemoteLink.link(ref, remoteRef);
+```
+
 ## Architektura
 
 ```
@@ -143,8 +156,8 @@ GenServer.onLifecycleEvent((event) => {
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐    │
-│  │ RemoteCall   │  │ RemoteSpawn  │  │ RemoteMonitor │    │
-│  │ (call/cast)  │  │ (spawn)      │  │ (monitor)     │    │
+│  │ RemoteCall   │  │ RemoteSpawn  │  │RemoteMonitor/Link│  │
+│  │ (call/cast)  │  │ (spawn)      │  │(monitor/link)   │  │
 │  └──────────────┘  └──────────────┘  └───────────────┘    │
 │                            │                                │
 │  ┌─────────────────────────────────────────────────────┐   │

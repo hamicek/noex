@@ -16,6 +16,7 @@ import {
   type CallId,
   type SpawnId,
   type MonitorId,
+  type LinkId,
   type NodeDownReason,
   type RemoteErrorType,
   type SpawnErrorType,
@@ -36,6 +37,7 @@ import {
   GlobalNameConflictError,
   GlobalNameNotFoundError,
   RemoteMonitorTimeoutError,
+  RemoteLinkTimeoutError,
   NoAvailableNodeError,
   DistributedBehaviorNotFoundError,
   DistributedDuplicateChildError,
@@ -185,6 +187,14 @@ Branded typ pro korelaci process monitorů.
 
 ```typescript
 type MonitorId = string & { readonly __brand: 'MonitorId' };
+```
+
+### LinkId
+
+Branded typ pro korelaci process linků.
+
+```typescript
+type LinkId = string & { readonly __brand: 'LinkId' };
 ```
 
 ---
@@ -483,6 +493,18 @@ class RemoteMonitorTimeoutError extends Error {
 }
 ```
 
+### Link chyby
+
+#### RemoteLinkTimeoutError
+
+```typescript
+class RemoteLinkTimeoutError extends Error {
+  readonly name = 'RemoteLinkTimeoutError';
+  readonly remoteRef: SerializedRef;
+  readonly timeoutMs: number;
+}
+```
+
 ### Supervisor chyby
 
 #### NoAvailableNodeError
@@ -610,6 +632,7 @@ const DISTRIBUTED_SUPERVISOR_DEFAULTS = {
 - [RemoteSpawn API](./remote-spawn.md)
 - [GlobalRegistry API](./global-registry.md)
 - [RemoteMonitor API](./remote-monitor.md)
+- [RemoteLink API](./remote-link.md)
 - [DistributedSupervisor API](./distributed-supervisor.md)
 
 ---

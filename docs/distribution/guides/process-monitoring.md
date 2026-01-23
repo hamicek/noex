@@ -641,12 +641,78 @@ console.log({
 
 ---
 
+## Process Linking
+
+While monitors provide one-way observation, **links** provide bidirectional failure propagation. When a linked process crashes, the peer is also terminated (unless it traps exits).
+
+### Monitors vs Links
+
+| | Monitor | Link |
+|--|---------|------|
+| Direction | One-way | Bidirectional |
+| On crash | Notification (lifecycle event) | Termination (or ExitSignal with trapExit) |
+| Use case | Observe independently | Coupled processes that should fail together |
+
+### Setting Up a Remote Link
+
+```typescript
+import { RemoteLink } from 'noex/distribution';
+
+// Link a local process to a remote process
+const linkRef = await RemoteLink.link(localRef, remoteRef);
+
+// If either process crashes, the other is affected
+```
+
+### Handling Exit Signals with trapExit
+
+```typescript
+import { GenServer, type ExitSignal } from 'noex';
+
+const behavior = {
+  init: () => ({ linkedWorkers: [] as string[] }),
+  handleCast: (_msg: never, state) => state,
+  handleInfo: (info: ExitSignal, state: { linkedWorkers: string[] }) => {
+    if (info.type === 'EXIT') {
+      console.log(`Linked process ${info.from.id} terminated: ${info.reason.type}`);
+      return {
+        linkedWorkers: state.linkedWorkers.filter(id => id !== info.from.id),
+      };
+    }
+    return state;
+  },
+};
+
+// Start with trapExit to receive signals instead of being terminated
+const ref = await GenServer.start(behavior, { trapExit: true });
+
+// Now link to remote processes
+const linkRef = await RemoteLink.link(ref, remoteWorkerRef);
+```
+
+### Removing a Link
+
+```typescript
+// Unlink before the process terminates to prevent propagation
+await RemoteLink.unlink(linkRef);
+```
+
+### When to Use Links vs Monitors
+
+- **Use links** when processes are tightly coupled (e.g., worker and its connection, coordinator and its tasks)
+- **Use monitors** when you need independent observation (e.g., dashboard watching services)
+
+See [RemoteLink API](../api/remote-link.md) for complete reference.
+
+---
+
 ## Related
 
 - [Remote Processes Guide](./remote-processes.md) - Spawn and manage remote processes
 - [Cluster Formation Guide](./cluster-formation.md) - Node discovery and membership
 - [Distributed Supervisor Concepts](../concepts/distributed-supervisor.md) - Automatic supervision
 - [RemoteMonitor API](../api/remote-monitor.md) - Complete API reference
+- [RemoteLink API](../api/remote-link.md) - Process linking reference
 
 ---
 

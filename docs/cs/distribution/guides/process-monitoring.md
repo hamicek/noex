@@ -471,9 +471,66 @@ console.log(`Celkem nastaveno: ${stats.totalEstablished}`);
 console.log(`Process down events: ${stats.totalProcessDownReceived}`);
 ```
 
+## Linkování procesů
+
+Zatímco monitory poskytují jednosměrné pozorování, **linky** poskytují obousměrnou propagaci selhání. Když linkovaný proces crashne, peer je také terminován (pokud netrapuje exity).
+
+### Monitory vs Linky
+
+| | Monitor | Link |
+|--|---------|------|
+| Směr | Jednosměrný | Obousměrný |
+| Při pádu | Notifikace (lifecycle event) | Terminace (nebo ExitSignal s trapExit) |
+| Použití | Nezávislé pozorování | Provázané procesy, které by měly selhat společně |
+
+### Nastavení vzdáleného linku
+
+```typescript
+import { RemoteLink } from 'noex/distribution';
+
+// Link lokálního procesu ke vzdálenému
+const linkRef = await RemoteLink.link(localRef, remoteRef);
+
+// Pokud jeden proces crashne, druhý je ovlivněn
+```
+
+### Zpracování exit signálů s trapExit
+
+```typescript
+import { GenServer, type ExitSignal } from 'noex';
+
+const behavior = {
+  init: () => ({ linkedWorkers: [] as string[] }),
+  handleCast: (_msg: never, state) => state,
+  handleInfo: (info: ExitSignal, state: { linkedWorkers: string[] }) => {
+    if (info.type === 'EXIT') {
+      console.log(`Linkovaný proces ${info.from.id} terminoval: ${info.reason.type}`);
+      return {
+        linkedWorkers: state.linkedWorkers.filter(id => id !== info.from.id),
+      };
+    }
+    return state;
+  },
+};
+
+// Start s trapExit - dostane signály místo terminace
+const ref = await GenServer.start(behavior, { trapExit: true });
+await RemoteLink.link(ref, remoteWorkerRef);
+```
+
+### Kdy použít linky vs monitory
+
+- **Linky** - těsně provázané procesy (worker a jeho connection handler)
+- **Monitory** - nezávislé pozorování (dashboard sledující služby)
+
+Viz [RemoteLink API](../api/remote-link.md) pro kompletní referenci.
+
+---
+
 ## Související
 
-- [RemoteMonitor API Reference](../api/remote-monitor.md) - Kompletní API
+- [RemoteMonitor API Reference](../api/remote-monitor.md) - Kompletní API monitorů
+- [RemoteLink API Reference](../api/remote-link.md) - Kompletní API linků
 - [Vzdálené procesy](./remote-processes.md) - Spawn a správa procesů
 - [Distribuovaná supervize](../concepts/distributed-supervisor.md) - Automatická supervize
 
