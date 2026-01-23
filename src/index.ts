@@ -10,6 +10,8 @@ export const VERSION = '0.1.0' as const;
 export type {
   GenServerRef,
   MonitorRef,
+  LinkRef,
+  ExitSignal,
   TerminateReason,
   CallResult,
   StartOptions,

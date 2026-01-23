@@ -88,6 +88,52 @@ export interface MonitorRef {
 }
 
 /**
+ * Reference to an established bidirectional link between two processes.
+ *
+ * Returned by GenServer.link() and used with GenServer.unlink().
+ * When one linked process terminates abnormally, the other is also terminated
+ * (unless it has trapExit enabled, in which case it receives an ExitSignal).
+ *
+ * @example
+ * ```typescript
+ * const linkRef = await GenServer.link(serverA, serverB);
+ *
+ * // If serverB crashes, serverA will also be terminated.
+ * // To prevent propagation:
+ * await GenServer.unlink(linkRef);
+ * ```
+ */
+export interface LinkRef {
+  /** Unique identifier for this link instance */
+  readonly linkId: string;
+
+  /** Reference to the first linked process */
+  readonly ref1: SerializedRef;
+
+  /** Reference to the second linked process */
+  readonly ref2: SerializedRef;
+}
+
+/**
+ * Exit signal delivered to a process with trapExit enabled
+ * when a linked process terminates abnormally.
+ *
+ * Instead of propagating the crash (which would terminate the process),
+ * the signal is delivered via handleInfo, allowing the process to handle
+ * the linked process's termination gracefully.
+ */
+export interface ExitSignal {
+  /** Discriminator for info message type */
+  readonly type: 'EXIT';
+
+  /** Reference to the linked process that terminated */
+  readonly from: SerializedRef;
+
+  /** Reason for the linked process's termination */
+  readonly reason: ProcessDownReason;
+}
+
+/**
  * Reason for GenServer termination.
  *
  * - 'normal': Graceful shutdown initiated by stop()
@@ -155,6 +201,31 @@ export interface StartOptions<State = unknown> {
    * ```
    */
   readonly persistence?: PersistenceConfig<State>;
+
+  /**
+   * When true, exit signals from linked processes are delivered as
+   * info messages via handleInfo instead of terminating this process.
+   *
+   * This follows Erlang's process_flag(trap_exit, true) semantics.
+   *
+   * @default false
+   *
+   * @example
+   * ```typescript
+   * const ref = await GenServer.start({
+   *   init: () => ({ linkedPids: [] }),
+   *   handleCall: (msg, state) => [state, state],
+   *   handleCast: (msg, state) => state,
+   *   handleInfo: (info, state) => {
+   *     if (info.type === 'EXIT') {
+   *       console.log(`Linked process ${info.from.id} exited: ${info.reason.type}`);
+   *     }
+   *     return state;
+   *   },
+   * }, { trapExit: true });
+   * ```
+   */
+  readonly trapExit?: boolean;
 }
 
 /**
@@ -260,6 +331,19 @@ export interface GenServerBehavior<
    * @returns New state or Promise thereof
    */
   handleCast(msg: CastMsg, state: State): State | Promise<State>;
+
+  /**
+   * Handle an info message (system signal).
+   *
+   * Currently used for receiving exit signals from linked processes
+   * when trapExit is enabled. When a linked process terminates abnormally,
+   * the ExitSignal is delivered here instead of terminating this process.
+   *
+   * @param info - The info message (ExitSignal)
+   * @param state - Current server state
+   * @returns New state or Promise thereof
+   */
+  handleInfo?(info: ExitSignal, state: State): State | Promise<State>;
 
   /**
    * Called when the server is about to terminate.

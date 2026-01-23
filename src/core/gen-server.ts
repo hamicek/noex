@@ -22,6 +22,8 @@ import {
   type GenServerStats,
   type MonitorId,
   type MonitorRef,
+  type LinkRef,
+  type ExitSignal,
   type ProcessDownReason,
   type SerializedRef,
   CallTimeoutError,
@@ -34,6 +36,15 @@ import { estimateObjectSize } from '../observer/memory-utils.js';
 import { Registry } from './registry.js';
 import { PersistenceManager, type ManagerLoadResult } from '../persistence/manager.js';
 import type { PersistenceConfig, StateMetadata } from '../persistence/types.js';
+import {
+  generateLinkId,
+  addLink,
+  removeLink,
+  getLinksByServer,
+  removeLinksByServer,
+  getLinkCount,
+  clearLinks,
+} from './link-registry.js';
 
 /**
  * Internal message type for the processing queue.
@@ -49,6 +60,10 @@ type QueuedMessage<CallMsg, CastMsg, CallReply> =
   | {
       readonly kind: 'cast';
       readonly msg: CastMsg;
+    }
+  | {
+      readonly kind: 'info';
+      readonly info: ExitSignal;
     }
   | {
       readonly kind: 'stop';
@@ -74,16 +89,18 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
   private cleanupTimer: ReturnType<typeof setInterval> | undefined;
   private persistenceConfig: PersistenceConfig<State> | undefined;
   private readonly serverName: string | undefined;
+  readonly trapExit: boolean;
 
   constructor(
     readonly id: string,
     private readonly behavior: GenServerBehavior<State, CallMsg, CastMsg, CallReply>,
     initialState: State,
-    options?: { name?: string | undefined; persistence?: PersistenceConfig<State> | undefined },
+    options?: { name?: string | undefined; persistence?: PersistenceConfig<State> | undefined; trapExit?: boolean | undefined },
   ) {
     this.state = initialState;
     this.serverName = options?.name;
     this.persistenceConfig = options?.persistence;
+    this.trapExit = options?.trapExit ?? false;
 
     if (this.persistenceConfig) {
       const key = this.persistenceConfig.key ?? this.serverName ?? this.id;
@@ -176,6 +193,14 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
    */
   enqueueCast(msg: CastMsg): void {
     this.queue.push({ kind: 'cast', msg });
+    this.processQueue();
+  }
+
+  /**
+   * Enqueues an info message (exit signal) for processing.
+   */
+  enqueueInfo(info: ExitSignal): void {
+    this.queue.push({ kind: 'info', info });
     this.processQueue();
   }
 
@@ -277,6 +302,9 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
       case 'cast':
         await this.handleCastMessage(message);
         break;
+      case 'info':
+        await this.handleInfoMessage(message);
+        break;
       case 'stop':
         await this.handleStopMessage(message);
         break;
@@ -337,6 +365,35 @@ class ServerInstance<State, CallMsg, CastMsg, CallReply> {
     } catch {
       // Cast errors are silently ignored as there's no caller to notify.
       // In production, errors should be captured via lifecycle events.
+    } finally {
+      currentlyProcessingServerId = null;
+    }
+  }
+
+  /**
+   * Handles an info message (exit signal from linked process).
+   */
+  private async handleInfoMessage(message: {
+    readonly kind: 'info';
+    readonly info: ExitSignal;
+  }): Promise<void> {
+    if (this.status !== 'running') {
+      return;
+    }
+
+    if (!this.behavior.handleInfo) {
+      // No handler defined - silently ignore (trapExit was set but no handler)
+      return;
+    }
+
+    try {
+      currentlyProcessingServerId = this.id;
+      const newState = await Promise.resolve(
+        this.behavior.handleInfo(message.info, this.state),
+      );
+      this.state = newState;
+    } catch {
+      // Info handler errors are silently ignored (same as cast)
     } finally {
       currentlyProcessingServerId = null;
     }
@@ -776,6 +833,66 @@ async function notifyLocalMonitorsOfTermination(
 }
 
 /**
+ * Propagates exit signals to all processes linked to the terminated process.
+ *
+ * Follows Erlang semantics:
+ * - Normal exits ('normal') do NOT propagate - links are simply removed.
+ * - Abnormal exits propagate to linked processes:
+ *   - If peer has trapExit: deliver ExitSignal via handleInfo
+ *   - If peer does not trap exits: force terminate the peer
+ */
+function propagateExitToLinkedProcesses(
+  terminatedServerId: string,
+  reason: TerminateReason,
+): void {
+  const linkedPeers = removeLinksByServer(terminatedServerId);
+  if (linkedPeers.length === 0) {
+    return;
+  }
+
+  // Normal exit does not propagate - links are already removed above
+  if (reason === 'normal') {
+    return;
+  }
+
+  const processDownReason = mapTerminateReason(reason);
+
+  // Get local node ID for the serialized ref
+  let localNodeId = 'local';
+  // Note: We use synchronous approach here as this is called from
+  // synchronous forceTerminate path. For the async stop path,
+  // the node ID is determined beforehand.
+
+  const fromRef: SerializedRef = {
+    id: terminatedServerId,
+    nodeId: localNodeId as SerializedRef['nodeId'],
+  };
+
+  for (const { peerServerId } of linkedPeers) {
+    const peerInstance = serverRegistry.get(peerServerId);
+    if (!peerInstance || peerInstance.getStatus() !== 'running') {
+      continue;
+    }
+
+    if (peerInstance.trapExit) {
+      // Deliver exit signal as info message
+      const exitSignal: ExitSignal = {
+        type: 'EXIT',
+        from: fromRef,
+        reason: processDownReason,
+      };
+      peerInstance.enqueueInfo(exitSignal);
+    } else {
+      // Force terminate the peer (cascading link propagation)
+      const peerRef = createRef(peerServerId);
+      GenServer._forceTerminate(peerRef, {
+        error: new Error(`Linked process '${terminatedServerId}' exited`),
+      });
+    }
+  }
+}
+
+/**
  * Counter for generating unique server IDs.
  */
 let serverIdCounter = 0;
@@ -982,6 +1099,7 @@ export const GenServer = {
     const instance = new ServerInstance(id, behavior, initialState, {
       name: options.name,
       persistence: options.persistence,
+      trapExit: options.trapExit,
     });
     serverRegistry.set(id, instance as ServerInstance<unknown, unknown, unknown, unknown>);
 
@@ -1240,6 +1358,9 @@ export const GenServer = {
     } finally {
       serverRegistry.delete(ref.id);
 
+      // Propagate exit to linked processes (before monitors, as propagation may cause further terminations)
+      propagateExitToLinkedProcesses(ref.id, reason);
+
       // Notify all processes monitoring this server
       notifyLocalMonitorsOfTermination(ref.id, reason);
 
@@ -1426,6 +1547,100 @@ export const GenServer = {
   },
 
   /**
+   * Creates a bidirectional link between two processes.
+   *
+   * When one linked process terminates abnormally, the other is also
+   * terminated - unless it has trapExit enabled, in which case it
+   * receives an ExitSignal via handleInfo.
+   *
+   * Normal exits ('normal' reason) do NOT propagate through links.
+   * Links are simply removed when a process exits normally.
+   *
+   * @param ref1 - Reference to the first process
+   * @param ref2 - Reference to the second process
+   * @returns A LinkRef for later unlinking
+   * @throws {ServerNotRunningError} If either process is not running
+   *
+   * @example
+   * ```typescript
+   * const linkRef = await GenServer.link(serverA, serverB);
+   * // If serverB crashes, serverA is also terminated.
+   * // Unless serverA was started with { trapExit: true }
+   * ```
+   */
+  async link(
+    ref1: GenServerRef,
+    ref2: GenServerRef,
+  ): Promise<LinkRef> {
+    // Verify both processes exist and are running
+    const instance1 = serverRegistry.get(ref1.id);
+    if (!instance1 || instance1.getStatus() !== 'running') {
+      throw new ServerNotRunningError(ref1.id);
+    }
+
+    const instance2 = serverRegistry.get(ref2.id);
+    if (!instance2 || instance2.getStatus() !== 'running') {
+      throw new ServerNotRunningError(ref2.id);
+    }
+
+    const linkId = generateLinkId();
+
+    // Get local node ID
+    let localNodeId = 'local';
+    try {
+      const { Cluster } = await import('../distribution/cluster/cluster.js');
+      if (Cluster.getStatus() === 'running') {
+        localNodeId = Cluster.getLocalNodeId() as string;
+      }
+    } catch {
+      // Cluster not available
+    }
+
+    const serializedRef1: SerializedRef = {
+      id: ref1.id,
+      nodeId: localNodeId as SerializedRef['nodeId'],
+    };
+
+    const serializedRef2: SerializedRef = {
+      id: ref2.id,
+      nodeId: localNodeId as SerializedRef['nodeId'],
+    };
+
+    // Register the link
+    addLink({
+      linkId,
+      serverId1: ref1.id,
+      serverId2: ref2.id,
+      createdAt: Date.now(),
+    });
+
+    return {
+      linkId,
+      ref1: serializedRef1,
+      ref2: serializedRef2,
+    };
+  },
+
+  /**
+   * Removes a bidirectional link between two processes.
+   *
+   * After unlinking, termination of one process will no longer
+   * affect the other.
+   *
+   * @param linkRef - Reference to the link to remove
+   *
+   * @example
+   * ```typescript
+   * const linkRef = await GenServer.link(serverA, serverB);
+   * // Later, to prevent propagation:
+   * await GenServer.unlink(linkRef);
+   * ```
+   */
+  async unlink(linkRef: LinkRef): Promise<void> {
+    removeLink(linkRef.linkId);
+  },
+
+  /**
    * Manually triggers a state checkpoint (persistence snapshot).
    *
    * This is useful for creating savepoints at critical moments,
@@ -1544,6 +1759,9 @@ export const GenServer = {
     if (instance) {
       (instance as ServerInstance<State, CallMsg, CastMsg, CallReply>).forceTerminate(reason);
       serverRegistry.delete(ref.id);
+
+      // Propagate exit to linked processes
+      propagateExitToLinkedProcesses(ref.id, reason);
 
       // Notify local monitors synchronously (fire and forget async operation)
       void notifyLocalMonitorsOfTermination(ref.id, reason);
@@ -1709,5 +1927,25 @@ export const GenServer = {
    */
   _getCurrentProcessId(): string | null {
     return currentlyProcessingServerId;
+  },
+
+  /**
+   * Returns the number of active local links.
+   * Useful for testing.
+   *
+   * @internal
+   */
+  _getLocalLinkCount(): number {
+    return getLinkCount();
+  },
+
+  /**
+   * Clears all local links.
+   * Useful for testing cleanup.
+   *
+   * @internal
+   */
+  _clearLocalLinks(): void {
+    clearLinks();
   },
 } as const;
