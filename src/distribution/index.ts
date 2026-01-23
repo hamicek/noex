@@ -203,11 +203,16 @@ export {
   RemoteMonitor,
   RemoteMonitorTimeoutError,
   _resetRemoteMonitorState,
+  RemoteLink,
+  RemoteLinkTimeoutError,
+  _resetRemoteLinkState,
   type OutgoingMonitor,
   type IncomingMonitor,
   type MonitorRegistryStats,
   type RemoteMonitorOptions,
   type RemoteMonitorStats,
+  type RemoteLinkOptions,
+  type RemoteLinkStats,
 } from './monitor/index.js';
 
 // =============================================================================

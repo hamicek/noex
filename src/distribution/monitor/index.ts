@@ -30,3 +30,11 @@ export {
   type RemoteMonitorOptions,
   type RemoteMonitorStats,
 } from './remote-monitor.js';
+
+export {
+  RemoteLink,
+  RemoteLinkTimeoutError,
+  _resetRemoteLinkState,
+  type RemoteLinkOptions,
+  type RemoteLinkStats,
+} from './remote-link.js';

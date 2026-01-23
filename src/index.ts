@@ -223,6 +223,10 @@ export {
   RemoteMonitor,
   _resetRemoteMonitorState,
   RemoteMonitorTimeoutError,
+  // Remote Link
+  RemoteLink,
+  _resetRemoteLinkState,
+  RemoteLinkTimeoutError,
   // Global Registry
   GlobalRegistry,
   // Distributed Supervisor
@@ -313,6 +317,9 @@ export type {
   // Remote monitor types
   RemoteMonitorOptions,
   RemoteMonitorStats,
+  // Remote link types
+  RemoteLinkOptions,
+  RemoteLinkStats,
   // Global registry types
   GlobalRegistryEvents,
   GlobalRegistryStats,

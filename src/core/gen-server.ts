@@ -1948,4 +1948,44 @@ export const GenServer = {
   _clearLocalLinks(): void {
     clearLinks();
   },
+
+  /**
+   * Delivers an exit signal from a remote linked process to a local process.
+   *
+   * If the local process has trapExit enabled, the signal is delivered
+   * as an info message. Otherwise, the process is force-terminated.
+   *
+   * @param serverId - ID of the local process to deliver the signal to
+   * @param fromRef - Reference to the remote process that exited
+   * @param reason - Reason for the remote process's termination
+   * @returns true if the signal was delivered, false if process not found
+   *
+   * @internal
+   */
+  _deliverRemoteExitSignal(
+    serverId: string,
+    fromRef: SerializedRef,
+    reason: ProcessDownReason,
+  ): boolean {
+    const instance = serverRegistry.get(serverId);
+    if (!instance || instance.getStatus() !== 'running') {
+      return false;
+    }
+
+    if (instance.trapExit) {
+      const exitSignal: ExitSignal = {
+        type: 'EXIT',
+        from: fromRef,
+        reason,
+      };
+      instance.enqueueInfo(exitSignal);
+    } else {
+      const ref = createRef(serverId);
+      GenServer._forceTerminate(ref, {
+        error: new Error(`Linked process '${fromRef.id}' on node '${fromRef.nodeId}' exited`),
+      });
+    }
+
+    return true;
+  },
 } as const;
