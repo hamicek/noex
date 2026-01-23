@@ -85,6 +85,13 @@ export {
   type RateLimiterOptions,
   type RateLimitResult,
 } from './services/rate-limiter.js';
+export {
+  TimerService,
+  type TimerServiceRef,
+  type DurableTimerOptions,
+  type TimerEntry,
+  type ScheduleOptions,
+} from './services/timer-service.js';
 
 // Observer
 export { Observer, AlertManager, ClusterObserver } from './observer/index.js';
