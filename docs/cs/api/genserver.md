@@ -191,6 +191,61 @@ GenServer.cast(logger, { type: 'log', level: 'info', message: 'Hello' });
 
 ---
 
+### sendAfter()
+
+Naplánuje cast zprávu k doručení po zadané prodlevě. Non-durable: timer nepřežije restart procesu. Pro odolné timery viz [TimerService](./timer-service.md).
+
+```typescript
+sendAfter<State, CallMsg, CastMsg, CallReply>(
+  ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
+  msg: CastMsg,
+  delayMs: number,
+): TimerRef
+```
+
+**Parametry:**
+- `ref` - Reference na cílový server
+- `msg` - Cast zpráva k odeslání
+- `delayMs` - Prodleva v milisekundách před odesláním
+
+**Vrací:** `TimerRef` použitelný s `cancelTimer()`
+
+**Příklad:**
+```typescript
+// Odeslat zprávu po 5 sekundách
+const timerRef = GenServer.sendAfter(worker, { type: 'timeout' }, 5000);
+
+// Implementace periodického ticku přeplánováním v handleCast
+GenServer.sendAfter(ref, 'tick', 1000);
+```
+
+---
+
+### cancelTimer()
+
+Zruší dříve naplánovaný timer.
+
+```typescript
+cancelTimer(timerRef: TimerRef): boolean
+```
+
+**Parametry:**
+- `timerRef` - Reference na timer ke zrušení (vrácená z `sendAfter()`)
+
+**Vrací:** `true` pokud timer stále čekal a byl zrušen, `false` pokud již vystřelil nebo byl dříve zrušen
+
+**Příklad:**
+```typescript
+const timerRef = GenServer.sendAfter(server, 'timeout', 10000);
+
+// Zrušit před vystřelením
+if (GenServer.cancelTimer(timerRef)) {
+  console.log('Timer zrušen');
+}
+```
+
+---
+
 ### stop()
 
 Gracefully zastaví server.
@@ -524,6 +579,7 @@ async function main() {
 ## Související
 
 - [Koncepty GenServeru](../concepts/genserver.md) - Pochopení GenServeru
+- [TimerService API](./timer-service.md) - Odolné timery s persistencí
 - [Supervisor API](./supervisor.md) - Odolnost proti chybám
 - [Registry API](./registry.md) - Vyhledávání pojmenovaných procesů
 - [Reference typů](./types.md) - Všechny definice typů

@@ -21,6 +21,7 @@ Předpřipravené služby pro běžné případy použití.
 | [EventBus](./event-bus.md) | Pub/sub distribuce událostí |
 | [Cache](./cache.md) | In-memory cache s TTL |
 | [RateLimiter](./rate-limiter.md) | Rate limiting s klouzavým oknem |
+| [TimerService](./timer-service.md) | Odolné timery s persistencí |
 
 ## Observabilita
 

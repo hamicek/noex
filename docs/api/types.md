@@ -7,6 +7,7 @@ This document provides a comprehensive reference for all types exported by noex.
 ```typescript
 import type {
   GenServerRef,
+  TimerRef,
   GenServerBehavior,
   CallResult,
   TerminateReason,
@@ -64,6 +65,27 @@ type MyRef = GenServerRef<
   { type: 'increment' },       // CastMsg
   number                       // CallReply
 >;
+```
+
+---
+
+### TimerRef
+
+Reference to a scheduled timer created by `GenServer.sendAfter()`.
+
+```typescript
+interface TimerRef {
+  /** Unique identifier for this timer instance */
+  readonly timerId: string;
+}
+```
+
+Used with `GenServer.cancelTimer()` to cancel a pending timer before it fires.
+
+**Example:**
+```typescript
+const timerRef = GenServer.sendAfter(ref, 'tick', 5000);
+GenServer.cancelTimer(timerRef); // returns true
 ```
 
 ---

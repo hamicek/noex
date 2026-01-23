@@ -191,6 +191,61 @@ GenServer.cast(logger, { type: 'log', level: 'info', message: 'Hello' });
 
 ---
 
+### sendAfter()
+
+Schedules a cast message to be delivered after a delay. Non-durable: the timer does not survive process restarts. For durable timers, see [TimerService](./timer-service.md).
+
+```typescript
+sendAfter<State, CallMsg, CastMsg, CallReply>(
+  ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
+  msg: CastMsg,
+  delayMs: number,
+): TimerRef
+```
+
+**Parameters:**
+- `ref` - Reference to the target server
+- `msg` - The cast message to send
+- `delayMs` - Delay in milliseconds before sending
+
+**Returns:** A `TimerRef` that can be used with `cancelTimer()`
+
+**Example:**
+```typescript
+// Send a message after 5 seconds
+const timerRef = GenServer.sendAfter(worker, { type: 'timeout' }, 5000);
+
+// Implement periodic tick by re-scheduling in handleCast
+GenServer.sendAfter(ref, 'tick', 1000);
+```
+
+---
+
+### cancelTimer()
+
+Cancels a previously scheduled timer.
+
+```typescript
+cancelTimer(timerRef: TimerRef): boolean
+```
+
+**Parameters:**
+- `timerRef` - Reference to the timer to cancel (returned by `sendAfter()`)
+
+**Returns:** `true` if the timer was still pending and was cancelled, `false` if it had already fired or was previously cancelled
+
+**Example:**
+```typescript
+const timerRef = GenServer.sendAfter(server, 'timeout', 10000);
+
+// Cancel before it fires
+if (GenServer.cancelTimer(timerRef)) {
+  console.log('Timer cancelled');
+}
+```
+
+---
+
 ### stop()
 
 Gracefully stops the server.
@@ -524,6 +579,7 @@ async function main() {
 ## Related
 
 - [GenServer Concepts](../concepts/genserver.md) - Understanding GenServer
+- [TimerService API](./timer-service.md) - Durable timers with persistence
 - [Supervisor API](./supervisor.md) - Fault tolerance
 - [Registry API](./registry.md) - Named process lookup
 - [Types Reference](./types.md) - All type definitions

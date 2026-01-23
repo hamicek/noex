@@ -21,6 +21,7 @@ Pre-built services for common use cases.
 | [EventBus](./event-bus.md) | Pub/sub event distribution |
 | [Cache](./cache.md) | In-memory cache with TTL |
 | [RateLimiter](./rate-limiter.md) | Rate limiting with sliding window |
+| [TimerService](./timer-service.md) | Durable timers with persistence |
 
 ## Observability
 

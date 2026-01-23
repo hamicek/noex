@@ -7,6 +7,7 @@ Tento dokument poskytuje kompletní referenci pro všechny typy exportované kni
 ```typescript
 import type {
   GenServerRef,
+  TimerRef,
   GenServerBehavior,
   CallResult,
   TerminateReason,
@@ -64,6 +65,27 @@ type MyRef = GenServerRef<
   { type: 'increment' },       // CastMsg
   number                       // CallReply
 >;
+```
+
+---
+
+### TimerRef
+
+Reference na naplánovaný timer vytvořený pomocí `GenServer.sendAfter()`.
+
+```typescript
+interface TimerRef {
+  /** Unikátní identifikátor této instance timeru */
+  readonly timerId: string;
+}
+```
+
+Používá se s `GenServer.cancelTimer()` pro zrušení čekajícího timeru před vystřelením.
+
+**Příklad:**
+```typescript
+const timerRef = GenServer.sendAfter(ref, 'tick', 5000);
+GenServer.cancelTimer(timerRef); // vrací true
 ```
 
 ---
