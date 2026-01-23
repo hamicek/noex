@@ -6,10 +6,13 @@ The persistence module provides a pluggable state persistence layer for GenServe
 
 ```typescript
 import {
-  // Adapters
+  // Storage Adapters
   MemoryAdapter,
   FileAdapter,
   SQLiteAdapter,
+  // Event Log Adapters
+  MemoryEventLogAdapter,
+  SQLiteEventLogAdapter,
   // Manager
   PersistenceManager,
   // Serializers
@@ -32,7 +35,8 @@ import {
 
 The persistence system consists of:
 
-- **Storage Adapters** - Pluggable backends for storing state (Memory, File, SQLite)
+- **Storage Adapters** - Pluggable backends for storing state snapshots (Memory, File, SQLite)
+- **Event Log Adapters** - Append-only event stream storage (Memory, SQLite)
 - **PersistenceManager** - High-level API for save/load operations
 - **GenServer Integration** - Automatic state persistence via configuration
 
@@ -348,6 +352,210 @@ const ref = await GenServer.start(behavior, {
 
 // Close adapter when done
 await adapter.close();
+```
+
+---
+
+## Event Log
+
+The event log provides append-only, ordered event streams for deterministic replay. Each stream maintains an independent, monotonically increasing sequence counter.
+
+### Types
+
+#### EventEntry
+
+A single entry in an append-only event log stream.
+
+```typescript
+interface EventEntry<T = unknown> {
+  /** Monotonically increasing sequence number within the stream */
+  readonly seq: number;
+  /** Unix timestamp (ms) when the event was created */
+  readonly timestamp: number;
+  /** Event type identifier for filtering and routing */
+  readonly type: string;
+  /** Event payload data */
+  readonly payload: T;
+  /** Optional metadata for tracing, correlation, etc. */
+  readonly metadata?: Record<string, unknown>;
+}
+```
+
+#### ReadOptions
+
+Options for reading events from a stream.
+
+```typescript
+interface ReadOptions {
+  /** Start reading from this sequence number (inclusive) */
+  readonly fromSeq?: number;
+  /** Stop reading at this sequence number (inclusive) */
+  readonly toSeq?: number;
+  /** Maximum number of events to return */
+  readonly limit?: number;
+  /** Filter events by type(s) */
+  readonly types?: readonly string[];
+}
+```
+
+#### EventLogAdapter
+
+Interface for append-only event log storage backends.
+
+```typescript
+interface EventLogAdapter {
+  append(streamId: string, events: readonly EventEntry[]): Promise<number>;
+  read(streamId: string, options?: ReadOptions): Promise<readonly EventEntry[]>;
+  readAfter(streamId: string, afterSeq: number): Promise<readonly EventEntry[]>;
+  getLastSeq(streamId: string): Promise<number>;
+  truncateBefore(streamId: string, beforeSeq: number): Promise<number>;
+  listStreams(prefix?: string): Promise<readonly string[]>;
+  close?(): Promise<void>;
+}
+```
+
+---
+
+### MemoryEventLogAdapter
+
+In-memory event log for testing and development. Data is not persisted across restarts.
+
+```typescript
+import { MemoryEventLogAdapter } from 'noex';
+
+const log = new MemoryEventLogAdapter();
+```
+
+**Additional Methods:**
+
+- `streamCount: number` - Current number of active streams
+- `clear(): void` - Clears all streams and resets sequence counters
+
+**Example:**
+
+```typescript
+const log = new MemoryEventLogAdapter();
+
+await log.append('orders', [
+  { seq: 0, timestamp: Date.now(), type: 'OrderCreated', payload: { id: '123' } },
+  { seq: 0, timestamp: Date.now(), type: 'OrderPaid', payload: { id: '123', amount: 99 } },
+]);
+
+// Read all events
+const events = await log.read('orders');
+
+// Read events after seq 1
+const newEvents = await log.readAfter('orders', 1);
+
+// Filter by type
+const payments = await log.read('orders', { types: ['OrderPaid'] });
+
+// Compaction: remove old events
+await log.truncateBefore('orders', 2);
+```
+
+---
+
+### SQLiteEventLogAdapter
+
+SQLite-based event log with WAL mode support. Provides durable, append-only event storage. Requires `better-sqlite3` as a peer dependency.
+
+```bash
+npm install better-sqlite3
+```
+
+```typescript
+import { SQLiteEventLogAdapter } from 'noex';
+
+const log = new SQLiteEventLogAdapter({
+  filename: './data/events.db',
+});
+```
+
+**Options:**
+
+```typescript
+interface SQLiteEventLogAdapterOptions {
+  /**
+   * Path to the SQLite database file.
+   * Use ':memory:' for an in-memory database.
+   */
+  readonly filename: string;
+
+  /**
+   * Name of the table to store event log entries.
+   * @default 'event_log'
+   */
+  readonly tableName?: string;
+
+  /**
+   * Whether to enable WAL (Write-Ahead Logging) mode.
+   * @default true
+   */
+  readonly walMode?: boolean;
+}
+```
+
+**Features:**
+
+- WAL mode for better read/write concurrency
+- Lazy initialization (database created on first operation)
+- Prepared statements for optimal performance
+- Composite primary key `(stream_id, seq)` for efficient lookups
+- Index on `(stream_id, type)` for type-filtered reads
+- Events persist across process restarts
+
+**Additional Methods:**
+
+- `getFilename(): string` - Returns the configured database filename
+- `getTableName(): string` - Returns the configured table name
+
+**SQLite Schema:**
+
+```sql
+CREATE TABLE event_log (
+  stream_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  timestamp INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  payload TEXT NOT NULL,  -- JSON
+  metadata TEXT,          -- JSON, nullable
+  PRIMARY KEY (stream_id, seq)
+);
+
+CREATE INDEX idx_event_log_type ON event_log(stream_id, type);
+```
+
+**Example:**
+
+```typescript
+const log = new SQLiteEventLogAdapter({
+  filename: './data/workflow-events.db',
+});
+
+// Append events to a stream
+const lastSeq = await log.append('workflow:abc', [
+  { seq: 0, timestamp: Date.now(), type: 'StepStarted', payload: { step: 'validate' } },
+  { seq: 0, timestamp: Date.now(), type: 'StepCompleted', payload: { step: 'validate', result: 'ok' } },
+]);
+console.log(`Last seq: ${lastSeq}`); // 2
+
+// Read with filtering
+const completions = await log.read('workflow:abc', {
+  types: ['StepCompleted'],
+});
+
+// Replay from a specific point
+const fromSeq3 = await log.readAfter('workflow:abc', 2);
+
+// List all workflow streams
+const streams = await log.listStreams('workflow:');
+
+// Compaction: remove events before seq 10
+const removed = await log.truncateBefore('workflow:abc', 10);
+
+// Close when done
+await log.close();
 ```
 
 ---

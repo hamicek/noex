@@ -6,10 +6,13 @@ Modul persistence poskytuje zásuvnou vrstvu pro ukládání stavu GenServeru. U
 
 ```typescript
 import {
-  // Adaptéry
+  // Storage adaptéry
   MemoryAdapter,
   FileAdapter,
   SQLiteAdapter,
+  // Event Log adaptéry
+  MemoryEventLogAdapter,
+  SQLiteEventLogAdapter,
   // Manager
   PersistenceManager,
   // Serializery
@@ -32,7 +35,8 @@ import {
 
 Systém persistence se skládá z:
 
-- **Storage Adaptéry** - Zásuvné backendy pro ukládání stavu (Memory, File, SQLite)
+- **Storage Adaptéry** - Zásuvné backendy pro ukládání snapshotů stavu (Memory, File, SQLite)
+- **Event Log Adaptéry** - Append-only ukládání proudů událostí (Memory, SQLite)
 - **PersistenceManager** - Vysokoúrovňové API pro save/load operace
 - **Integrace s GenServerem** - Automatická persistence stavu přes konfiguraci
 
@@ -348,6 +352,210 @@ const ref = await GenServer.start(behavior, {
 
 // Zavření adaptéru po dokončení
 await adapter.close();
+```
+
+---
+
+## Event Log
+
+Event log poskytuje append-only, uspořádané proudy událostí pro deterministický replay. Každý stream udržuje nezávislý, monotónně rostoucí čítač sekvencí.
+
+### Typy
+
+#### EventEntry
+
+Jednotlivý záznam v append-only event log streamu.
+
+```typescript
+interface EventEntry<T = unknown> {
+  /** Monotónně rostoucí sekvenční číslo v rámci streamu */
+  readonly seq: number;
+  /** Unix timestamp (ms) kdy byla událost vytvořena */
+  readonly timestamp: number;
+  /** Identifikátor typu události pro filtrování a routing */
+  readonly type: string;
+  /** Payload data události */
+  readonly payload: T;
+  /** Volitelná metadata pro tracing, korelaci, atd. */
+  readonly metadata?: Record<string, unknown>;
+}
+```
+
+#### ReadOptions
+
+Volby pro čtení událostí ze streamu.
+
+```typescript
+interface ReadOptions {
+  /** Začít čtení od tohoto sekvenčního čísla (inkluzivní) */
+  readonly fromSeq?: number;
+  /** Ukončit čtení na tomto sekvenčním čísle (inkluzivní) */
+  readonly toSeq?: number;
+  /** Maximální počet událostí k vrácení */
+  readonly limit?: number;
+  /** Filtrovat události podle typu/typů */
+  readonly types?: readonly string[];
+}
+```
+
+#### EventLogAdapter
+
+Rozhraní pro append-only event log storage backendy.
+
+```typescript
+interface EventLogAdapter {
+  append(streamId: string, events: readonly EventEntry[]): Promise<number>;
+  read(streamId: string, options?: ReadOptions): Promise<readonly EventEntry[]>;
+  readAfter(streamId: string, afterSeq: number): Promise<readonly EventEntry[]>;
+  getLastSeq(streamId: string): Promise<number>;
+  truncateBefore(streamId: string, beforeSeq: number): Promise<number>;
+  listStreams(prefix?: string): Promise<readonly string[]>;
+  close?(): Promise<void>;
+}
+```
+
+---
+
+### MemoryEventLogAdapter
+
+In-memory event log pro testování a vývoj. Data nejsou persistována přes restarty.
+
+```typescript
+import { MemoryEventLogAdapter } from 'noex';
+
+const log = new MemoryEventLogAdapter();
+```
+
+**Další metody:**
+
+- `streamCount: number` - Aktuální počet aktivních streamů
+- `clear(): void` - Vymaže všechny streamy a resetuje čítače sekvencí
+
+**Příklad:**
+
+```typescript
+const log = new MemoryEventLogAdapter();
+
+await log.append('orders', [
+  { seq: 0, timestamp: Date.now(), type: 'OrderCreated', payload: { id: '123' } },
+  { seq: 0, timestamp: Date.now(), type: 'OrderPaid', payload: { id: '123', amount: 99 } },
+]);
+
+// Přečíst všechny události
+const events = await log.read('orders');
+
+// Přečíst události po seq 1
+const newEvents = await log.readAfter('orders', 1);
+
+// Filtrovat podle typu
+const payments = await log.read('orders', { types: ['OrderPaid'] });
+
+// Kompakce: odstranit staré události
+await log.truncateBefore('orders', 2);
+```
+
+---
+
+### SQLiteEventLogAdapter
+
+SQLite event log s podporou WAL módu. Poskytuje trvalé, append-only ukládání událostí. Vyžaduje `better-sqlite3` jako peer dependency.
+
+```bash
+npm install better-sqlite3
+```
+
+```typescript
+import { SQLiteEventLogAdapter } from 'noex';
+
+const log = new SQLiteEventLogAdapter({
+  filename: './data/events.db',
+});
+```
+
+**Volby:**
+
+```typescript
+interface SQLiteEventLogAdapterOptions {
+  /**
+   * Cesta k SQLite databázovému souboru.
+   * Použijte ':memory:' pro in-memory databázi.
+   */
+  readonly filename: string;
+
+  /**
+   * Název tabulky pro ukládání event log záznamů.
+   * @default 'event_log'
+   */
+  readonly tableName?: string;
+
+  /**
+   * Zda povolit WAL (Write-Ahead Logging) mód.
+   * @default true
+   */
+  readonly walMode?: boolean;
+}
+```
+
+**Vlastnosti:**
+
+- WAL mód pro lepší konkurenci čtení/zápisu
+- Líná inicializace (databáze vytvořena při první operaci)
+- Připravené příkazy pro optimální výkon
+- Kompozitní primární klíč `(stream_id, seq)` pro efektivní vyhledávání
+- Index na `(stream_id, type)` pro čtení filtrované podle typu
+- Události přetrvávají přes restarty procesu
+
+**Další metody:**
+
+- `getFilename(): string` - Vrací nakonfigurovaný název databázového souboru
+- `getTableName(): string` - Vrací nakonfigurovaný název tabulky
+
+**SQLite schéma:**
+
+```sql
+CREATE TABLE event_log (
+  stream_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  timestamp INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  payload TEXT NOT NULL,  -- JSON
+  metadata TEXT,          -- JSON, nullable
+  PRIMARY KEY (stream_id, seq)
+);
+
+CREATE INDEX idx_event_log_type ON event_log(stream_id, type);
+```
+
+**Příklad:**
+
+```typescript
+const log = new SQLiteEventLogAdapter({
+  filename: './data/workflow-events.db',
+});
+
+// Přidat události do streamu
+const lastSeq = await log.append('workflow:abc', [
+  { seq: 0, timestamp: Date.now(), type: 'StepStarted', payload: { step: 'validate' } },
+  { seq: 0, timestamp: Date.now(), type: 'StepCompleted', payload: { step: 'validate', result: 'ok' } },
+]);
+console.log(`Poslední seq: ${lastSeq}`); // 2
+
+// Čtení s filtrováním
+const completions = await log.read('workflow:abc', {
+  types: ['StepCompleted'],
+});
+
+// Replay od konkrétního bodu
+const fromSeq3 = await log.readAfter('workflow:abc', 2);
+
+// Výpis všech workflow streamů
+const streams = await log.listStreams('workflow:');
+
+// Kompakce: odstranit události před seq 10
+const removed = await log.truncateBefore('workflow:abc', 10);
+
+// Zavřít po dokončení
+await log.close();
 ```
 
 ---
