@@ -46,4 +46,5 @@ export { MemoryAdapter, FileAdapter, SQLiteAdapter } from './adapters/index.js';
 export type { MemoryAdapterOptions, FileAdapterOptions, SQLiteAdapterOptions } from './adapters/index.js';
 
 // Event log adapters
-export { MemoryEventLogAdapter } from './adapters/index.js';
+export { MemoryEventLogAdapter, SQLiteEventLogAdapter } from './adapters/index.js';
+export type { SQLiteEventLogAdapterOptions } from './adapters/index.js';

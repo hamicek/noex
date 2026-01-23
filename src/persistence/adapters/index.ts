@@ -14,3 +14,6 @@ export { SQLiteAdapter } from './sqlite-adapter.js';
 export type { SQLiteAdapterOptions } from './sqlite-adapter.js';
 
 export { MemoryEventLogAdapter } from './memory-event-log.js';
+
+export { SQLiteEventLogAdapter } from './sqlite-event-log.js';
+export type { SQLiteEventLogAdapterOptions } from './sqlite-event-log.js';

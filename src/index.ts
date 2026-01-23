@@ -154,7 +154,7 @@ export type {
 
 // Persistence
 export { MemoryAdapter, FileAdapter, SQLiteAdapter } from './persistence/adapters/index.js';
-export { MemoryEventLogAdapter } from './persistence/adapters/index.js';
+export { MemoryEventLogAdapter, SQLiteEventLogAdapter } from './persistence/adapters/index.js';
 export type {
   StorageAdapter,
   PersistenceConfig,
@@ -168,6 +168,7 @@ export type {
   EventEntry,
   EventLogAdapter,
   ReadOptions,
+  SQLiteEventLogAdapterOptions,
 } from './persistence/index.js';
 export {
   PersistenceError,
