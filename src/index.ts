@@ -200,6 +200,8 @@ export {
   isValidSpawnId,
   generateMonitorId,
   isValidMonitorId,
+  generateLinkId,
+  isValidLinkId,
   // Transport
   Connection,
   Transport,
@@ -261,6 +263,12 @@ export type {
   NodeDownMessage,
   RemoteErrorType,
   NodeDownReason,
+  // Process linking messages
+  LinkId,
+  LinkRequestMessage,
+  LinkAckMessage,
+  UnlinkRequestMessage,
+  ExitSignalMessage,
   // Remote spawn messages
   SpawnRequestMessage,
   SpawnReplyMessage,

@@ -14,6 +14,7 @@ import {
   CLUSTER_DEFAULTS,
   MessageSerializationError,
   type CallId,
+  type LinkId,
   type MonitorId,
   type SpawnId,
   type ClusterMessage,
@@ -610,5 +611,36 @@ export function generateMonitorId(): MonitorId {
 export function isValidMonitorId(value: string): value is MonitorId {
   // Format: m + timestamp(base36) + - + random(16 hex chars)
   const pattern = /^m[0-9a-z]+-[0-9a-f]{16}$/;
+  return pattern.test(value);
+}
+
+// =============================================================================
+// LinkId Generation
+// =============================================================================
+
+/**
+ * Generates a unique LinkId for bidirectional process link correlation.
+ *
+ * Uses a combination of timestamp and random bytes to ensure
+ * uniqueness across nodes. Prefixed with 'l' to distinguish from
+ * CallId, SpawnId, and MonitorId.
+ *
+ * @returns Unique LinkId
+ */
+export function generateLinkId(): LinkId {
+  const timestamp = Date.now().toString(36);
+  const random = crypto.randomBytes(8).toString('hex');
+  return `l${timestamp}-${random}` as LinkId;
+}
+
+/**
+ * Validates that a string is a valid LinkId format.
+ *
+ * @param value - String to validate
+ * @returns true if valid LinkId format
+ */
+export function isValidLinkId(value: string): value is LinkId {
+  // Format: l + timestamp(base36) + - + random(16 hex chars)
+  const pattern = /^l[0-9a-z]+-[0-9a-f]{16}$/;
   return pattern.test(value);
 }

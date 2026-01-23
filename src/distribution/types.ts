@@ -178,6 +178,14 @@ export type SpawnId = string & { readonly __brand: 'SpawnId' };
 export type MonitorId = string & { readonly __brand: 'MonitorId' };
 
 /**
+ * Unique identifier for bidirectional process links.
+ *
+ * Used to correlate link setup, acknowledgement, unlink, and exit signal
+ * propagation across distributed nodes.
+ */
+export type LinkId = string & { readonly __brand: 'LinkId' };
+
+/**
  * Registry synchronization entry for distributed registry.
  */
 export interface RegistrySyncEntry {
@@ -234,7 +242,11 @@ export type ClusterMessage =
   | MonitorRequestMessage
   | MonitorAckMessage
   | DemonitorRequestMessage
-  | ProcessDownMessage;
+  | ProcessDownMessage
+  | LinkRequestMessage
+  | LinkAckMessage
+  | UnlinkRequestMessage
+  | ExitSignalMessage;
 
 /**
  * Heartbeat message for health monitoring.
@@ -538,6 +550,90 @@ export interface ProcessDownMessage {
   readonly monitoredRef: SerializedRef;
 
   /** Reason for termination */
+  readonly reason: ProcessDownReason;
+}
+
+// =============================================================================
+// Process Linking Messages
+// =============================================================================
+
+/**
+ * Request to establish a bidirectional link between two processes across nodes.
+ *
+ * Unlike monitors (unidirectional observation), links are symmetric:
+ * when either linked process terminates abnormally, the other is also terminated
+ * (unless it has trapExit enabled, in which case it receives an ExitSignal info message).
+ *
+ * Sent from the requesting node to the node hosting the target process.
+ * The target node should respond with LinkAckMessage.
+ */
+export interface LinkRequestMessage {
+  readonly type: 'link_request';
+
+  /** Unique identifier for this link */
+  readonly linkId: LinkId;
+
+  /** Reference to the process initiating the link */
+  readonly fromRef: SerializedRef;
+
+  /** Reference to the target process to link with */
+  readonly toRef: SerializedRef;
+}
+
+/**
+ * Acknowledgement of a link request.
+ *
+ * Sent from the target node back to the requesting node.
+ * If the target process doesn't exist, success will be false and reason will indicate why.
+ */
+export interface LinkAckMessage {
+  readonly type: 'link_ack';
+
+  /** Link identifier matching the request */
+  readonly linkId: LinkId;
+
+  /** Whether the link was successfully established */
+  readonly success: boolean;
+
+  /** Reason for failure (when success is false) */
+  readonly reason?: string;
+}
+
+/**
+ * Request to remove an existing link.
+ *
+ * Sent from either node when unlink() is called or when a linked process
+ * terminates normally (normal exit does not propagate through links).
+ * No acknowledgement is expected (fire-and-forget).
+ */
+export interface UnlinkRequestMessage {
+  readonly type: 'unlink_request';
+
+  /** Link identifier to remove */
+  readonly linkId: LinkId;
+}
+
+/**
+ * Exit signal propagation through a link.
+ *
+ * Sent from the node where a linked process terminated abnormally
+ * to the node hosting the other linked process.
+ * The receiving node should either terminate the target process
+ * or deliver an ExitSignal info message if trapExit is enabled.
+ */
+export interface ExitSignalMessage {
+  readonly type: 'exit_signal';
+
+  /** Link identifier for correlation */
+  readonly linkId: LinkId;
+
+  /** Reference to the process that terminated */
+  readonly fromRef: SerializedRef;
+
+  /** Reference to the process that should receive the exit signal */
+  readonly toRef: SerializedRef;
+
+  /** Reason for termination of the source process */
   readonly reason: ProcessDownReason;
 }
 

@@ -6,6 +6,8 @@ import {
   isValidCallId,
   generateMonitorId,
   isValidMonitorId,
+  generateLinkId,
+  isValidLinkId,
   MessageSerializationError,
   CLUSTER_DEFAULTS,
 } from '../../src/index.js';
@@ -519,6 +521,81 @@ describe('isValidMonitorId', () => {
     expect(isValidMonitorId('sabc123-0123456789abcdef')).toBe(false);
     // Invalid: wrong hex length
     expect(isValidMonitorId('mabc123-0123456789')).toBe(false);
+  });
+});
+
+describe('generateLinkId', () => {
+  it('generates unique LinkIds', () => {
+    const ids = new Set<string>();
+
+    for (let i = 0; i < 100; i++) {
+      ids.add(generateLinkId());
+    }
+
+    expect(ids.size).toBe(100);
+  });
+
+  it('generates valid LinkId format', () => {
+    const linkId = generateLinkId();
+    expect(isValidLinkId(linkId)).toBe(true);
+  });
+
+  it('generates LinkId with l prefix', () => {
+    const linkId = generateLinkId();
+    expect(linkId.startsWith('l')).toBe(true);
+  });
+
+  it('does not validate as MonitorId or SpawnId', () => {
+    const linkId = generateLinkId();
+
+    // LinkId should not pass validation for other prefixed ID types
+    expect(isValidLinkId(linkId)).toBe(true);
+    expect(isValidMonitorId(linkId)).toBe(false);
+  });
+});
+
+describe('isValidLinkId', () => {
+  it('returns true for valid LinkId', () => {
+    const linkId = generateLinkId();
+    expect(isValidLinkId(linkId)).toBe(true);
+  });
+
+  it('returns false for invalid formats', () => {
+    expect(isValidLinkId('')).toBe(false);
+    expect(isValidLinkId('invalid')).toBe(false);
+    expect(isValidLinkId('abc-123')).toBe(false);
+    // Missing 'l' prefix
+    expect(isValidLinkId('abc-' + 'a'.repeat(16))).toBe(false);
+  });
+
+  it('has l prefix for LinkId', () => {
+    for (let i = 0; i < 10; i++) {
+      const linkId = generateLinkId();
+      expect(linkId.startsWith('l')).toBe(true);
+    }
+  });
+
+  it('validates format correctly', () => {
+    // Valid LinkId format: l[timestamp]-[16 hex chars]
+    expect(isValidLinkId('labc123-0123456789abcdef')).toBe(true);
+    expect(isValidLinkId('l12345-fedcba9876543210')).toBe(true);
+
+    // Invalid: missing l prefix
+    expect(isValidLinkId('abc123-0123456789abcdef')).toBe(false);
+    // Invalid: m prefix (MonitorId)
+    expect(isValidLinkId('mabc123-0123456789abcdef')).toBe(false);
+    // Invalid: s prefix (SpawnId)
+    expect(isValidLinkId('sabc123-0123456789abcdef')).toBe(false);
+    // Invalid: wrong hex length
+    expect(isValidLinkId('labc123-0123456789')).toBe(false);
+  });
+
+  it('rejects other ID types', () => {
+    const monitorId = generateMonitorId();
+    const callId = generateCallId();
+
+    expect(isValidLinkId(monitorId)).toBe(false);
+    expect(isValidLinkId(callId)).toBe(false);
   });
 });
 

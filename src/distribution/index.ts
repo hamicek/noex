@@ -59,6 +59,13 @@ export type {
   DemonitorRequestMessage,
   ProcessDownMessage,
 
+  // Process linking messages
+  LinkId,
+  LinkRequestMessage,
+  LinkAckMessage,
+  UnlinkRequestMessage,
+  ExitSignalMessage,
+
   // Wire protocol
   MessageEnvelope,
   SerializedRef,
@@ -115,6 +122,8 @@ export {
   isValidSpawnId,
   generateMonitorId,
   isValidMonitorId,
+  generateLinkId,
+  isValidLinkId,
   type SerializeOptions,
   type DeserializeOptions,
 } from './serialization.js';

@@ -15,6 +15,7 @@ import type {
   ClusterConfig,
   CallId,
   MonitorId,
+  LinkId,
   ClusterMessage,
   HeartbeatMessage,
   CallMessage,
@@ -30,6 +31,10 @@ import type {
   MonitorAckMessage,
   DemonitorRequestMessage,
   ProcessDownMessage,
+  LinkRequestMessage,
+  LinkAckMessage,
+  UnlinkRequestMessage,
+  ExitSignalMessage,
   MessageEnvelope,
   SerializedRef,
   RegistrySyncEntry,
@@ -496,6 +501,218 @@ describe('Process Monitoring Types', () => {
       };
 
       expect(msg.type).toBe('process_down');
+    });
+  });
+});
+
+describe('Process Linking Types', () => {
+  const testNodeId = NodeId.parse('app1@localhost:4369');
+  const testNodeId2 = NodeId.parse('app2@localhost:4370');
+  const testLinkId = 'labc123-0123456789abcdef' as LinkId;
+
+  describe('LinkRequestMessage', () => {
+    it('can be constructed with all fields', () => {
+      const msg: LinkRequestMessage = {
+        type: 'link_request',
+        linkId: testLinkId,
+        fromRef: { id: 'server-a', nodeId: testNodeId },
+        toRef: { id: 'server-b', nodeId: testNodeId2 },
+      };
+
+      expect(msg.type).toBe('link_request');
+      expect(msg.linkId).toBe(testLinkId);
+      expect(msg.fromRef.id).toBe('server-a');
+      expect(msg.fromRef.nodeId).toBe(testNodeId);
+      expect(msg.toRef.id).toBe('server-b');
+      expect(msg.toRef.nodeId).toBe(testNodeId2);
+    });
+  });
+
+  describe('LinkAckMessage', () => {
+    it('can be constructed for success', () => {
+      const msg: LinkAckMessage = {
+        type: 'link_ack',
+        linkId: testLinkId,
+        success: true,
+      };
+
+      expect(msg.type).toBe('link_ack');
+      expect(msg.linkId).toBe(testLinkId);
+      expect(msg.success).toBe(true);
+      expect(msg.reason).toBeUndefined();
+    });
+
+    it('can be constructed for failure with reason', () => {
+      const msg: LinkAckMessage = {
+        type: 'link_ack',
+        linkId: testLinkId,
+        success: false,
+        reason: 'Process does not exist',
+      };
+
+      expect(msg.success).toBe(false);
+      expect(msg.reason).toBe('Process does not exist');
+    });
+  });
+
+  describe('UnlinkRequestMessage', () => {
+    it('can be constructed', () => {
+      const msg: UnlinkRequestMessage = {
+        type: 'unlink_request',
+        linkId: testLinkId,
+      };
+
+      expect(msg.type).toBe('unlink_request');
+      expect(msg.linkId).toBe(testLinkId);
+    });
+  });
+
+  describe('ExitSignalMessage', () => {
+    it('can be constructed with error reason', () => {
+      const msg: ExitSignalMessage = {
+        type: 'exit_signal',
+        linkId: testLinkId,
+        fromRef: { id: 'crashed-server', nodeId: testNodeId },
+        toRef: { id: 'linked-server', nodeId: testNodeId2 },
+        reason: { type: 'error', message: 'Something went wrong' },
+      };
+
+      expect(msg.type).toBe('exit_signal');
+      expect(msg.linkId).toBe(testLinkId);
+      expect(msg.fromRef.id).toBe('crashed-server');
+      expect(msg.toRef.id).toBe('linked-server');
+      expect(msg.reason.type).toBe('error');
+      if (msg.reason.type === 'error') {
+        expect(msg.reason.message).toBe('Something went wrong');
+      }
+    });
+
+    it('can be constructed with shutdown reason', () => {
+      const msg: ExitSignalMessage = {
+        type: 'exit_signal',
+        linkId: testLinkId,
+        fromRef: { id: 'server-a', nodeId: testNodeId },
+        toRef: { id: 'server-b', nodeId: testNodeId2 },
+        reason: { type: 'shutdown' },
+      };
+
+      expect(msg.reason.type).toBe('shutdown');
+    });
+
+    it('can be constructed with noconnection reason', () => {
+      const msg: ExitSignalMessage = {
+        type: 'exit_signal',
+        linkId: testLinkId,
+        fromRef: { id: 'server-a', nodeId: testNodeId },
+        toRef: { id: 'server-b', nodeId: testNodeId2 },
+        reason: { type: 'noconnection' },
+      };
+
+      expect(msg.reason.type).toBe('noconnection');
+    });
+  });
+
+  describe('ClusterMessage includes link messages', () => {
+    it('handles LinkRequestMessage in union', () => {
+      const msg: ClusterMessage = {
+        type: 'link_request',
+        linkId: testLinkId,
+        fromRef: { id: 'local', nodeId: testNodeId },
+        toRef: { id: 'remote', nodeId: testNodeId2 },
+      };
+
+      expect(msg.type).toBe('link_request');
+    });
+
+    it('handles LinkAckMessage in union', () => {
+      const msg: ClusterMessage = {
+        type: 'link_ack',
+        linkId: testLinkId,
+        success: true,
+      };
+
+      expect(msg.type).toBe('link_ack');
+    });
+
+    it('handles UnlinkRequestMessage in union', () => {
+      const msg: ClusterMessage = {
+        type: 'unlink_request',
+        linkId: testLinkId,
+      };
+
+      expect(msg.type).toBe('unlink_request');
+    });
+
+    it('handles ExitSignalMessage in union', () => {
+      const msg: ClusterMessage = {
+        type: 'exit_signal',
+        linkId: testLinkId,
+        fromRef: { id: 'crashed', nodeId: testNodeId },
+        toRef: { id: 'target', nodeId: testNodeId2 },
+        reason: { type: 'error', message: 'crash' },
+      };
+
+      expect(msg.type).toBe('exit_signal');
+    });
+
+    it('enables exhaustive pattern matching with link messages', () => {
+      const handleMessage = (msg: ClusterMessage): string => {
+        switch (msg.type) {
+          case 'heartbeat':
+            return 'heartbeat';
+          case 'call':
+            return 'call';
+          case 'call_reply':
+            return 'call_reply';
+          case 'call_error':
+            return 'call_error';
+          case 'cast':
+            return 'cast';
+          case 'registry_sync':
+            return 'registry_sync';
+          case 'node_down':
+            return 'node_down';
+          case 'spawn_request':
+            return 'spawn_request';
+          case 'spawn_reply':
+            return 'spawn_reply';
+          case 'spawn_error':
+            return 'spawn_error';
+          case 'monitor_request':
+            return 'monitor_request';
+          case 'monitor_ack':
+            return 'monitor_ack';
+          case 'demonitor_request':
+            return 'demonitor_request';
+          case 'process_down':
+            return 'process_down';
+          case 'link_request':
+            return `link from ${msg.fromRef.id} to ${msg.toRef.id}`;
+          case 'link_ack':
+            return `link_ack ${msg.success}`;
+          case 'unlink_request':
+            return `unlink ${msg.linkId}`;
+          case 'exit_signal':
+            return `exit from ${msg.fromRef.id} reason ${msg.reason.type}`;
+        }
+      };
+
+      const linkMsg: ClusterMessage = {
+        type: 'link_request',
+        linkId: testLinkId,
+        fromRef: { id: 'a', nodeId: testNodeId },
+        toRef: { id: 'b', nodeId: testNodeId2 },
+      };
+      expect(handleMessage(linkMsg)).toBe('link from a to b');
+
+      const exitMsg: ClusterMessage = {
+        type: 'exit_signal',
+        linkId: testLinkId,
+        fromRef: { id: 'crashed', nodeId: testNodeId },
+        toRef: { id: 'target', nodeId: testNodeId2 },
+        reason: { type: 'error', message: 'oops' },
+      };
+      expect(handleMessage(exitMsg)).toBe('exit from crashed reason error');
     });
   });
 });
