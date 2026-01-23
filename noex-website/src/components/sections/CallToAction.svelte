@@ -54,7 +54,7 @@
     supportTranslations,
     githubUrl = 'https://github.com/wyattjoh/noex',
     docsUrl = 'https://github.com/wyattjoh/noex#readme',
-    btcAddress = 'bc1qXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+    btcAddress = 'bc1qqegxqjgnyypm984kqqajyvcwcrtrrgz3z9rvc8'
   }: Props = $props();
 
   let sectionRef: HTMLElement | null = $state(null);
