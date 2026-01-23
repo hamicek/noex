@@ -33,7 +33,7 @@
     currentPath,
     translations,
     langSwitcherTranslations,
-    githubUrl = 'https://github.com/anthropics/noex',
+    githubUrl = 'https://github.com/hamicek/noex',
   }: Props = $props();
 
   let isMenuOpen = $state(false);

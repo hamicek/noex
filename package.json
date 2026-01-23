@@ -1,5 +1,5 @@
 {
-  "name": "noex",
+  "name": "@hamicek/noex",
   "version": "0.1.0",
   "description": "Elixir-style GenServer and Supervisor patterns for TypeScript",
   "type": "module",

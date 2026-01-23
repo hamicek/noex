@@ -16,7 +16,7 @@
     githubUrl?: string;
   }
 
-  let { translations, githubUrl = 'https://github.com/your-org/noex' }: Props = $props();
+  let { translations, githubUrl = 'https://github.com/hamicek/noex' }: Props = $props();
 
   // TypeWriter effect state
   let displayedHeadline = $state('');

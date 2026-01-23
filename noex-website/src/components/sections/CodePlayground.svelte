@@ -44,7 +44,7 @@
   // Code examples
   const examples = {
     counter: {
-      code: `import { GenServer, Supervisor, Registry } from 'noex';
+      code: `import { GenServer, Supervisor, Registry } from '@hamicek/noex';
 
 class Counter extends GenServer<number> {
   init() {
@@ -86,7 +86,7 @@ console.log('Counter value:', value);`,
       ],
     },
     chat: {
-      code: `import { GenServer, Registry, EventBus } from 'noex';
+      code: `import { GenServer, Registry, EventBus } from '@hamicek/noex';
 
 interface ChatRoom {
   users: Set<string>;
@@ -135,7 +135,7 @@ await chat.cast({ type: 'message', user: 'Alice', text: 'Hello!' });`,
       ],
     },
     worker: {
-      code: `import { GenServer, Supervisor, DynamicSupervisor } from 'noex';
+      code: `import { GenServer, Supervisor, DynamicSupervisor } from '@hamicek/noex';
 
 class Worker extends GenServer<{ taskCount: number }> {
   init() {

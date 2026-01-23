@@ -97,7 +97,7 @@
       "zeroConfig": "Bez konfigurace",
       "cluster": "Podpora clusteru"
     },
-    "command": "npx noex dashboard"
+    "command": "npx @hamicek/noex dashboard"
   },
   "distribution": {
     "title": "Distribuovaný od návrhu",

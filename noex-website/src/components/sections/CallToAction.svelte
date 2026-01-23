@@ -52,8 +52,8 @@
     translations,
     footerTranslations,
     supportTranslations,
-    githubUrl = 'https://github.com/wyattjoh/noex',
-    docsUrl = 'https://github.com/wyattjoh/noex#readme',
+    githubUrl = 'https://github.com/hamicek/noex',
+    docsUrl = 'https://github.com/hamicek/noex#readme',
     btcAddress = 'bc1qqegxqjgnyypm984kqqajyvcwcrtrrgz3z9rvc8'
   }: Props = $props();
 
@@ -61,9 +61,9 @@
   let isVisible = $state(false);
   let copied = $state(false);
 
-  const installCommand = 'npm install noex';
+  const installCommand = 'npm install @hamicek/noex';
 
-  const quickStartCode = `import { GenServer } from 'noex';
+  const quickStartCode = `import { GenServer } from '@hamicek/noex';
 
 class Counter extends GenServer<number> {
   init() { return 0; }
@@ -207,14 +207,14 @@ const counter = await Counter.start();`;
             <span class="step-number">1</span>
             <div class="step-content">
               <span class="step-label">{translations.steps.install}</span>
-              <code class="step-code">npm install noex</code>
+              <code class="step-code">npm install @hamicek/noex</code>
             </div>
           </li>
           <li class="step-item">
             <span class="step-number">2</span>
             <div class="step-content">
               <span class="step-label">{translations.steps.import}</span>
-              <code class="step-code">import {'{'} GenServer {'}'} from 'noex'</code>
+              <code class="step-code">import {'{'} GenServer {'}'} from '@hamicek/noex'</code>
             </div>
           </li>
           <li class="step-item">
