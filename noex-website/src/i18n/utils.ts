@@ -63,13 +63,17 @@ export function getLocaleFromUrl(url: URL): Locale {
 export function getLocalizedPath(path: string, targetLocale: Locale): string {
   const segments = path.split('/').filter(Boolean);
 
+  // Remove existing locale prefix if present
   if (locales.includes(segments[0] as Locale)) {
-    segments[0] = targetLocale;
-  } else {
+    segments.shift();
+  }
+
+  // Only add prefix for non-default locale
+  if (targetLocale !== defaultLocale) {
     segments.unshift(targetLocale);
   }
 
-  return '/' + segments.join('/');
+  return '/' + segments.join('/') + (segments.length > 0 ? '/' : '');
 }
 
 /**

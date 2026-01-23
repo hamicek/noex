@@ -7,7 +7,7 @@ import sitemap from '@astrojs/sitemap';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://noex.dev',
+  site: 'https://noexjs.org',
 
   integrations: [
     svelte(),
@@ -34,8 +34,7 @@ export default defineConfig({
     defaultLocale: 'en',
     locales: ['en', 'cs'],
     routing: {
-      prefixDefaultLocale: true,
-      redirectToDefaultLocale: true,
+      prefixDefaultLocale: false,
     },
   },
 });

@@ -12,7 +12,7 @@ const { locale, currentPath = '/' } = Astro.props;
 const t = useTranslations(locale);
 
 // Site configuration
-const siteUrl = 'https://noex.dev';
+const siteUrl = 'https://noexjs.org';
 const currentUrl = new URL(getLocalizedPath(currentPath, locale), siteUrl).href;
 const ogImageUrl = `${siteUrl}/og-image.png`;
 
@@ -85,7 +85,7 @@ const structuredData = {
         href={new URL(getLocalizedPath(currentPath, l), siteUrl).href}
       />
     ))}
-    <link rel="alternate" hreflang="x-default" href={`${siteUrl}/en/`} />
+    <link rel="alternate" hreflang="x-default" href={`${siteUrl}/`} />
 
     <!-- OpenGraph Meta Tags -->
     <meta property="og:type" content="website" />
