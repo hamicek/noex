@@ -115,6 +115,25 @@ export interface LinkRef {
 }
 
 /**
+ * Reference to a scheduled timer created by GenServer.sendAfter().
+ *
+ * Used with GenServer.cancelTimer() to cancel a pending timer
+ * before it fires.
+ *
+ * @example
+ * ```typescript
+ * const timerRef = GenServer.sendAfter(ref, 'tick', 5000);
+ *
+ * // Cancel before it fires:
+ * const wasCancelled = GenServer.cancelTimer(timerRef);
+ * ```
+ */
+export interface TimerRef {
+  /** Unique identifier for this timer instance */
+  readonly timerId: string;
+}
+
+/**
  * Exit signal delivered to a process with trapExit enabled
  * when a linked process terminates abnormally.
  *

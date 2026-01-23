@@ -23,6 +23,7 @@ import {
   type MonitorId,
   type MonitorRef,
   type LinkRef,
+  type TimerRef,
   type ExitSignal,
   type ProcessDownReason,
   type SerializedRef,
@@ -904,6 +905,23 @@ let serverIdCounter = 0;
 let currentlyProcessingServerId: string | null = null;
 
 /**
+ * Counter for generating unique timer IDs.
+ */
+let timerIdCounter = 0;
+
+/**
+ * Registry of active timers. Maps timerId to the timeout handle.
+ */
+const activeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * Generates a unique timer ID.
+ */
+function generateTimerId(): string {
+  return `timer_${++timerIdCounter}_${Date.now().toString(36)}`;
+}
+
+/**
  * Generates a unique server ID.
  */
 function generateServerId(): string {
@@ -1335,6 +1353,64 @@ export const GenServer = {
     }
 
     instance.enqueueCast(msg);
+  },
+
+  /**
+   * Schedules a cast message to be delivered after a delay.
+   * Non-durable: the timer does not survive process restarts.
+   *
+   * If the target process is no longer running when the timer fires,
+   * the message is silently discarded.
+   *
+   * @param ref - Reference to the target server
+   * @param msg - The cast message to send
+   * @param delayMs - Delay in milliseconds before sending
+   * @returns A TimerRef that can be used with cancelTimer()
+   *
+   * @example
+   * ```typescript
+   * // Send a 'tick' message every second
+   * const timerRef = GenServer.sendAfter(ref, 'tick', 1000);
+   *
+   * // Cancel if needed
+   * GenServer.cancelTimer(timerRef);
+   * ```
+   */
+  sendAfter<State, CallMsg, CastMsg, CallReply>(
+    ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
+    msg: CastMsg,
+    delayMs: number,
+  ): TimerRef {
+    const timerId = generateTimerId();
+
+    const handle = setTimeout(() => {
+      activeTimers.delete(timerId);
+      const instance = serverRegistry.get(ref.id);
+      if (instance && instance.getStatus() === 'running') {
+        instance.enqueueCast(msg);
+      }
+    }, delayMs);
+
+    activeTimers.set(timerId, handle);
+
+    return { timerId } as TimerRef;
+  },
+
+  /**
+   * Cancels a previously scheduled timer.
+   *
+   * @param timerRef - Reference to the timer to cancel
+   * @returns true if the timer was still pending and was cancelled,
+   *          false if it had already fired or was previously cancelled
+   */
+  cancelTimer(timerRef: TimerRef): boolean {
+    const handle = activeTimers.get(timerRef.timerId);
+    if (handle === undefined) {
+      return false;
+    }
+    clearTimeout(handle);
+    activeTimers.delete(timerRef.timerId);
+    return true;
   },
 
   /**
@@ -1987,5 +2063,19 @@ export const GenServer = {
     }
 
     return true;
+  },
+
+  /**
+   * Cancels all active timers and resets the timer ID counter.
+   * Useful for testing cleanup.
+   *
+   * @internal
+   */
+  _clearTimers(): void {
+    for (const handle of activeTimers.values()) {
+      clearTimeout(handle);
+    }
+    activeTimers.clear();
+    timerIdCounter = 0;
   },
 } as const;

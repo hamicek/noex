@@ -11,6 +11,7 @@ export type {
   GenServerRef,
   MonitorRef,
   LinkRef,
+  TimerRef,
   ExitSignal,
   TerminateReason,
   CallResult,
