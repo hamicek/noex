@@ -10,8 +10,8 @@ By participating in this project, you agree to maintain a welcoming and inclusiv
 
 ### Prerequisites
 
-- Node.js 18+
-- npm or yarn
+- Node.js 20+
+- npm
 - Git
 
 ### Setup
@@ -41,13 +41,17 @@ By participating in this project, you agree to maintain a welcoming and inclusiv
 ```
 noex/
 ├── src/
-│   ├── core/           # GenServer, Supervisor, Registry
-│   ├── services/       # Cache, EventBus, RateLimiter
+│   ├── core/           # GenServer, Supervisor, Registry, process linking
+│   ├── services/       # Cache, EventBus, RateLimiter, TimerService
 │   ├── observer/       # Observer, AlertManager
-│   └── dashboard/      # Dashboard server
-├── tests/              # Test files
+│   ├── dashboard/      # Dashboard server
+│   ├── distribution/   # Cluster, RemoteCall, RemoteSpawn, RemoteLink
+│   ├── persistence/    # Storage adapters, EventLog, PersistenceManager
+│   └── bin/            # CLI tools (noex-init, noex-dashboard)
+├── tests/              # Test files (mirrors src/ structure)
 ├── examples/           # Example applications
-└── docs/               # Documentation
+├── docs/               # Documentation
+└── noex-website/       # Project website (Astro + Svelte)
 ```
 
 ### Running Tests
@@ -58,9 +62,6 @@ npm test
 
 # Run tests in watch mode
 npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
 ```
 
 ### Building
@@ -71,16 +72,9 @@ npm run build
 
 # Type check without building
 npm run typecheck
-```
 
-### Linting
-
-```bash
-# Run linter
-npm run lint
-
-# Fix linting issues
-npm run lint:fix
+# Clean build artifacts
+npm run clean
 ```
 
 ## Making Changes
@@ -89,12 +83,11 @@ npm run lint:fix
 
 - Use TypeScript for all source files
 - Follow existing code patterns
-- Add JSDoc comments for public APIs
 - Keep functions focused and small
 
 ### Commit Messages
 
-Use clear, descriptive commit messages:
+Use [Conventional Commits](https://www.conventionalcommits.org/) format:
 
 ```
 feat: add rate limiter sliding window algorithm
@@ -114,18 +107,28 @@ Prefixes:
 
 ### Writing Tests
 
-All new features should include tests:
+All new features should include tests. Tests use [Vitest](https://vitest.dev/) and follow the behavioral pattern:
 
 ```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { GenServer, type GenServerBehavior } from '../src';
+import { describe, it, expect, afterEach } from 'vitest';
+import { GenServer, type GenServerBehavior, type GenServerRef } from '../src/index.js';
 
-describe('MyFeature', () => {
+function createCounterBehavior(): GenServerBehavior<number, 'get', 'inc', number> {
+  return {
+    init: () => 0,
+    handleCall: (msg, state) => {
+      if (msg === 'get') return [state, state];
+      return [state, state];
+    },
+    handleCast: (msg, state) => {
+      if (msg === 'inc') return state + 1;
+      return state;
+    },
+  };
+}
+
+describe('Counter', () => {
   let ref: GenServerRef;
-
-  beforeEach(async () => {
-    ref = await GenServer.start(myBehavior);
-  });
 
   afterEach(async () => {
     if (GenServer.isRunning(ref)) {
@@ -133,9 +136,11 @@ describe('MyFeature', () => {
     }
   });
 
-  it('should do something', async () => {
-    const result = await GenServer.call(ref, 'test');
-    expect(result).toBe(expectedValue);
+  it('should increment', async () => {
+    ref = await GenServer.start(createCounterBehavior());
+    await GenServer.cast(ref, 'inc');
+    const value = await GenServer.call(ref, 'get');
+    expect(value).toBe(1);
   });
 });
 ```
@@ -144,17 +149,16 @@ describe('MyFeature', () => {
 
 For new features:
 
-1. Add JSDoc comments to the code
-2. Update relevant documentation files in `docs/`
-3. Add examples if appropriate
+1. Add relevant documentation in `docs/`
+2. Add examples if appropriate
+3. Update both EN and CS versions if applicable
 
 ## Pull Request Process
 
-1. **Update documentation** if you changed any APIs
-2. **Add tests** for new functionality
-3. **Run the test suite** and ensure all tests pass
-4. **Update the changelog** if applicable
-5. **Submit a pull request** with a clear description
+1. **Add tests** for new functionality
+2. **Run the test suite** and ensure all tests pass
+3. **Update documentation** if you changed any APIs
+4. **Submit a pull request** with a clear description
 
 ### PR Title Format
 
@@ -183,7 +187,6 @@ Describe how you tested these changes.
 - [ ] Tests pass locally
 - [ ] Code follows project style
 - [ ] Documentation updated
-- [ ] Changelog updated (if applicable)
 ```
 
 ## Issue Reporting

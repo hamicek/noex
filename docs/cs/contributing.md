@@ -10,8 +10,8 @@ Děkujeme za váš zájem přispět do noex! Tento průvodce vám pomůže zač�
 
 ### Předpoklady
 
-- Node.js 18+
-- npm nebo yarn
+- Node.js 20+
+- npm
 - Git
 
 ### Nastavení
@@ -41,13 +41,17 @@ Děkujeme za váš zájem přispět do noex! Tento průvodce vám pomůže zač�
 ```
 noex/
 ├── src/
-│   ├── core/           # GenServer, Supervisor, Registry
-│   ├── services/       # Cache, EventBus, RateLimiter
+│   ├── core/           # GenServer, Supervisor, Registry, linkování procesů
+│   ├── services/       # Cache, EventBus, RateLimiter, TimerService
 │   ├── observer/       # Observer, AlertManager
-│   └── dashboard/      # Dashboard server
-├── tests/              # Testovací soubory
+│   ├── dashboard/      # Dashboard server
+│   ├── distribution/   # Cluster, RemoteCall, RemoteSpawn, RemoteLink
+│   ├── persistence/    # Storage adaptery, EventLog, PersistenceManager
+│   └── bin/            # CLI nástroje (noex-init, noex-dashboard)
+├── tests/              # Testovací soubory (zrcadlí strukturu src/)
 ├── examples/           # Ukázkové aplikace
-└── docs/               # Dokumentace
+├── docs/               # Dokumentace
+└── noex-website/       # Webové stránky projektu (Astro + Svelte)
 ```
 
 ### Spouštění testů
@@ -58,9 +62,6 @@ npm test
 
 # Spustit testy ve watch módu
 npm run test:watch
-
-# Spustit testy s pokrytím
-npm run test:coverage
 ```
 
 ### Sestavení
@@ -71,16 +72,9 @@ npm run build
 
 # Kontrola typů bez sestavení
 npm run typecheck
-```
 
-### Linting
-
-```bash
-# Spustit linter
-npm run lint
-
-# Opravit problémy lintingu
-npm run lint:fix
+# Vyčistit build artefakty
+npm run clean
 ```
 
 ## Provádění změn
@@ -89,12 +83,11 @@ npm run lint:fix
 
 - Používejte TypeScript pro všechny zdrojové soubory
 - Dodržujte existující vzory kódu
-- Přidávejte JSDoc komentáře pro veřejná API
 - Udržujte funkce zaměřené a malé
 
 ### Zprávy commitů
 
-Používejte jasné, popisné zprávy commitů:
+Používejte formát [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
 feat: přidán algoritmus posuvného okna pro rate limiter
@@ -114,18 +107,28 @@ Prefixy:
 
 ### Psaní testů
 
-Všechny nové funkce by měly obsahovat testy:
+Všechny nové funkce by měly obsahovat testy. Testy používají [Vitest](https://vitest.dev/) a sledují behaviorální vzor:
 
 ```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { GenServer, type GenServerBehavior } from '../src';
+import { describe, it, expect, afterEach } from 'vitest';
+import { GenServer, type GenServerBehavior, type GenServerRef } from '../src/index.js';
 
-describe('MojeFunkce', () => {
+function createCounterBehavior(): GenServerBehavior<number, 'get', 'inc', number> {
+  return {
+    init: () => 0,
+    handleCall: (msg, state) => {
+      if (msg === 'get') return [state, state];
+      return [state, state];
+    },
+    handleCast: (msg, state) => {
+      if (msg === 'inc') return state + 1;
+      return state;
+    },
+  };
+}
+
+describe('Counter', () => {
   let ref: GenServerRef;
-
-  beforeEach(async () => {
-    ref = await GenServer.start(myBehavior);
-  });
 
   afterEach(async () => {
     if (GenServer.isRunning(ref)) {
@@ -133,9 +136,11 @@ describe('MojeFunkce', () => {
     }
   });
 
-  it('měla by dělat něco', async () => {
-    const result = await GenServer.call(ref, 'test');
-    expect(result).toBe(expectedValue);
+  it('měl by inkrementovat', async () => {
+    ref = await GenServer.start(createCounterBehavior());
+    await GenServer.cast(ref, 'inc');
+    const value = await GenServer.call(ref, 'get');
+    expect(value).toBe(1);
   });
 });
 ```
@@ -144,17 +149,16 @@ describe('MojeFunkce', () => {
 
 Pro nové funkce:
 
-1. Přidejte JSDoc komentáře do kódu
-2. Aktualizujte příslušné dokumentační soubory v `docs/`
-3. Přidejte příklady, pokud je to vhodné
+1. Přidejte příslušnou dokumentaci v `docs/`
+2. Přidejte příklady, pokud je to vhodné
+3. Aktualizujte EN i CS verze, pokud je to relevantní
 
 ## Proces Pull Requestu
 
-1. **Aktualizujte dokumentaci**, pokud jste změnili API
-2. **Přidejte testy** pro novou funkcionalitu
-3. **Spusťte testovací sadu** a ujistěte se, že všechny testy prochází
-4. **Aktualizujte changelog**, pokud je to relevantní
-5. **Odešlete pull request** s jasným popisem
+1. **Přidejte testy** pro novou funkcionalitu
+2. **Spusťte testovací sadu** a ujistěte se, že všechny testy prochází
+3. **Aktualizujte dokumentaci**, pokud jste změnili API
+4. **Odešlete pull request** s jasným popisem
 
 ### Formát názvu PR
 
@@ -183,7 +187,6 @@ Popište, jak jste tyto změny testovali.
 - [ ] Testy prochází lokálně
 - [ ] Kód dodržuje styl projektu
 - [ ] Dokumentace aktualizována
-- [ ] Changelog aktualizován (pokud relevantní)
 ```
 
 ## Hlášení problémů
