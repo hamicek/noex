@@ -1,14 +1,26 @@
 # Registry API Reference
 
-Objekt `Registry` poskytuje vyhledávání pojmenovaných procesů, umožňující objevování procesů podle známých jmen.
+Objekt `Registry` poskytuje vyhledávání pojmenovaných procesů a slouží zároveň jako factory pro vytváření izolovaných `RegistryInstance` instancí s vlastní konfigurací.
 
 ## Import
 
 ```typescript
-import { Registry } from 'noex';
+import { Registry, RegistryInstance } from 'noex';
+import type {
+  RegistryOptions,
+  RegistryKeyMode,
+  RegistryEntry,
+  RegistryMatch,
+  RegistryPredicate,
+  DispatchFn,
+} from 'noex';
 ```
 
-## Metody
+---
+
+## Registry (Globální fasáda)
+
+Statický objekt `Registry` deleguje na interní defaultní `RegistryInstance` v režimu unique. Poskytuje jednoduchý globální namespace pro registraci procesů.
 
 ### register()
 
@@ -25,26 +37,17 @@ register<State = unknown, CallMsg = unknown, CastMsg = unknown, CallReply = unkn
 - `name` - Jméno pro registraci
 - `ref` - Reference procesu k registraci
 
-**Vrací:** void
-
 **Vyhazuje:**
 - `AlreadyRegisteredError` - Pokud je jméno již registrováno
 
 **Poznámky:**
-- Registrace je automaticky odstraněna, když proces skončí
+- Registrace je automaticky odstraněna při terminaci procesu
 - Každé jméno může být registrováno pouze jednou
 
 **Příklad:**
 ```typescript
 const ref = await GenServer.start(behavior);
 Registry.register('my-service', ref);
-
-// Pokus o opětovnou registraci vyhodí výjimku
-try {
-  Registry.register('my-service', anotherRef);
-} catch (error) {
-  // AlreadyRegisteredError
-}
 ```
 
 ---
@@ -59,20 +62,11 @@ lookup<State = unknown, CallMsg = unknown, CastMsg = unknown, CallReply = unknow
 ): GenServerRef<State, CallMsg, CastMsg, CallReply>
 ```
 
-**Parametry:**
-- `name` - Jméno k vyhledání
-
-**Vrací:** Registrovanou GenServerRef
-
 **Vyhazuje:**
 - `NotRegisteredError` - Pokud není pod jménem registrován žádný proces
 
 **Příklad:**
 ```typescript
-// Základní vyhledání
-const ref = Registry.lookup('my-service');
-
-// Typované vyhledání
 const counter = Registry.lookup<number, 'get', 'inc', number>('counter');
 const value = await GenServer.call(counter, 'get');
 ```
@@ -89,18 +83,11 @@ whereis<State = unknown, CallMsg = unknown, CastMsg = unknown, CallReply = unkno
 ): GenServerRef<State, CallMsg, CastMsg, CallReply> | undefined
 ```
 
-**Parametry:**
-- `name` - Jméno k vyhledání
-
-**Vrací:** Registrovanou GenServerRef, nebo undefined, pokud nenalezeno
-
 **Příklad:**
 ```typescript
 const counter = Registry.whereis('counter');
 if (counter) {
   await GenServer.call(counter, 'get');
-} else {
-  console.log('Counter není dostupný');
 }
 ```
 
@@ -108,26 +95,10 @@ if (counter) {
 
 ### unregister()
 
-Odregistruje proces podle jména.
+Odregistruje proces podle jména. Idempotentní.
 
 ```typescript
 unregister(name: string): void
-```
-
-**Parametry:**
-- `name` - Jméno k odregistraci
-
-**Vrací:** void
-
-**Poznámky:**
-- Idempotentní - odregistrace neexistujícího jména nic nedělá
-- Proces pokračuje v běhu, pouze je odstraněno mapování jména
-
-**Příklad:**
-```typescript
-Registry.unregister('old-service');
-// Jméno je nyní dostupné pro opětovnou registraci
-Registry.register('old-service', newRef);
 ```
 
 ---
@@ -140,19 +111,6 @@ Zjistí, zda je jméno aktuálně registrováno.
 isRegistered(name: string): boolean
 ```
 
-**Parametry:**
-- `name` - Jméno ke kontrole
-
-**Vrací:** `true` pokud je jméno registrováno
-
-**Příklad:**
-```typescript
-if (Registry.isRegistered('counter')) {
-  const counter = Registry.lookup('counter');
-  // Bezpečné k použití
-}
-```
-
 ---
 
 ### getNames()
@@ -161,15 +119,6 @@ Vrací všechna aktuálně registrovaná jména.
 
 ```typescript
 getNames(): readonly string[]
-```
-
-**Vrací:** Pole registrovaných jmen
-
-**Příklad:**
-```typescript
-const names = Registry.getNames();
-console.log('Registrované služby:', names);
-// ['cache', 'auth', 'metrics']
 ```
 
 ---
@@ -182,114 +131,424 @@ Vrací počet registrovaných procesů.
 count(): number
 ```
 
-**Vrací:** Počet registrovaných procesů
+---
+
+### create()
+
+Vytvoří novou izolovanou `RegistryInstance` s vlastní konfigurací.
+
+```typescript
+create<Meta = unknown>(options?: RegistryOptions): RegistryInstance<Meta>
+```
+
+**Typové parametry:**
+- `Meta` - Typ metadat přiřazených ke každému záznamu
+
+**Parametry:**
+- `options` - Konfigurace registru (jméno, režim klíčů, persistence)
+
+**Vrací:** Novou `RegistryInstance`, kterou je třeba nastartovat pomocí `await instance.start()`
 
 **Příklad:**
 ```typescript
-console.log(`${Registry.count()} služeb registrováno`);
+const services = Registry.create<{ version: string }>({
+  name: 'services',
+  keys: 'unique',
+});
+await services.start();
+services.register('auth', authRef, { version: '2.0' });
+
+// Režim duplicate (pub/sub)
+const topics = Registry.create({ name: 'topics', keys: 'duplicate' });
+await topics.start();
+topics.register('user:created', handlerA);
+topics.register('user:created', handlerB);
+topics.dispatch('user:created', payload);
+```
+
+---
+
+## RegistryInstance
+
+`RegistryInstance` je hlavní třída registru podporující režimy unique a duplicate klíčů, metadata, pattern matching a dispatch.
+
+### Konstruktor
+
+```typescript
+new RegistryInstance<Meta = unknown>(options?: RegistryOptions)
+```
+
+**Volby:**
+
+| Volba | Typ | Výchozí | Popis |
+|-------|-----|---------|-------|
+| `name` | `string` | auto-generované | Lidsky čitelné jméno |
+| `keys` | `'unique' \| 'duplicate'` | `'unique'` | Režim klíčů |
+| `persistence` | `RegistryPersistenceConfig` | — | Volitelná persistence |
+
+---
+
+### start()
+
+Inicializuje registr a nastaví lifecycle handlery pro automatický úklid.
+
+```typescript
+async start(): Promise<void>
+```
+
+Idempotentní — volání na již nastartované instanci nic nedělá.
+
+---
+
+### close()
+
+Ukončí registr, odstraní lifecycle handlery a vyčistí všechny záznamy.
+
+```typescript
+async close(): Promise<void>
+```
+
+Idempotentní — bezpečné volat na zastavené instanci.
+
+---
+
+### register()
+
+Registruje referenci pod klíčem s volitelnými metadaty.
+
+```typescript
+register(key: string, ref: RegisterableRef, metadata?: Meta): void
+```
+
+**Režim unique:** Vyhodí `AlreadyRegisteredKeyError` pokud je klíč již obsazen.
+**Režim duplicate:** Vyhodí `DuplicateRegistrationError` pokud je stejný ref již registrován pod stejným klíčem.
+
+---
+
+### unregister()
+
+Odstraní všechny záznamy pro klíč. Idempotentní.
+
+```typescript
+unregister(key: string): void
+```
+
+---
+
+### unregisterMatch()
+
+Odstraní konkrétní ref z klíče. V režimu duplicate je odstraněn pouze odpovídající záznam.
+
+```typescript
+unregisterMatch(key: string, ref: RegisterableRef): void
+```
+
+---
+
+### lookup()
+
+Vrací záznam pro klíč (pouze režim unique).
+
+```typescript
+lookup(key: string): RegistryEntry<Meta>
+```
+
+**Vyhazuje:**
+- `DuplicateKeyLookupError` - Pokud voláno na registru v režimu duplicate
+- `KeyNotFoundError` - Pokud klíč není registrován
+
+---
+
+### whereis()
+
+Nevyhazující lookup. Vrací záznam nebo undefined.
+
+```typescript
+whereis(key: string): RegistryEntry<Meta> | undefined
+```
+
+V režimu duplicate vrací první záznam.
+
+---
+
+### lookupAll()
+
+Vrací všechny záznamy pro klíč. Funguje v obou režimech.
+
+```typescript
+lookupAll(key: string): ReadonlyArray<RegistryEntry<Meta>>
+```
+
+---
+
+### select()
+
+Filtruje záznamy pomocí predikátové funkce.
+
+```typescript
+select(predicate: RegistryPredicate<Meta>): RegistryMatch<Meta>[]
+```
+
+**Příklad:**
+```typescript
+const workers = registry.select(
+  (key, entry) => entry.metadata.type === 'worker',
+);
+```
+
+---
+
+### match()
+
+Vyhledá záznamy podle glob-like vzoru klíče s volitelným predikátem hodnoty.
+
+```typescript
+match(
+  keyPattern: string,
+  valuePredicate?: (entry: RegistryEntry<Meta>) => boolean,
+): RegistryMatch<Meta>[]
+```
+
+**Syntaxe vzoru:**
+- `*` odpovídá libovolným znakům kromě `/`
+- `**` odpovídá libovolným znakům včetně `/`
+- `?` odpovídá jednomu znaku
+
+**Příklad:**
+```typescript
+const userServices = registry.match('user:*');
+const active = registry.match('svc:*', (e) => e.metadata.active);
+```
+
+---
+
+### dispatch()
+
+Rozešle zprávu všem záznamům pod klíčem (pouze režim duplicate).
+
+```typescript
+dispatch(key: string, message: unknown, dispatchFn?: DispatchFn<Meta>): void
+```
+
+**Výchozí chování:** Odesílá zprávu přes `GenServer.cast` každému záznamu.
+**Vlastní dispatch:** Poskytněte `dispatchFn` pro vlastní routování (round-robin, filtrování apod.).
+
+**Vyhazuje:**
+- `DispatchNotSupportedError` - Pokud voláno na registru v režimu unique
+
+**Příklad:**
+```typescript
+// Výchozí broadcast
+topics.dispatch('user:created', { userId: '123' });
+
+// Vlastní dispatch
+topics.dispatch('events', payload, (entries, msg) => {
+  for (const entry of entries) {
+    if (entry.metadata.priority > 5) {
+      GenServer.cast(entry.ref, msg);
+    }
+  }
+});
+```
+
+---
+
+### getMetadata()
+
+Vrací metadata pro klíč. V režimu duplicate vrací metadata prvního záznamu.
+
+```typescript
+getMetadata(key: string): Meta | undefined
+```
+
+---
+
+### updateMetadata()
+
+Aktualizuje metadata pomocí updater funkce. V režimu duplicate aktualizuje všechny záznamy.
+
+```typescript
+updateMetadata(key: string, updater: (meta: Meta) => Meta): boolean
+```
+
+Vrací `true` pokud byly aktualizovány nějaké záznamy.
+
+---
+
+### isRegistered()
+
+```typescript
+isRegistered(key: string): boolean
+```
+
+---
+
+### getKeys()
+
+```typescript
+getKeys(): readonly string[]
+```
+
+---
+
+### count()
+
+Vrací celkový počet záznamů přes všechny klíče.
+
+```typescript
+count(): number
+```
+
+---
+
+### countForKey()
+
+Vrací počet záznamů pro konkrétní klíč.
+
+```typescript
+countForKey(key: string): number
+```
+
+---
+
+## Typy
+
+### RegistryOptions
+
+```typescript
+interface RegistryOptions {
+  readonly name?: string;
+  readonly keys?: RegistryKeyMode;
+  readonly persistence?: RegistryPersistenceConfig;
+}
+```
+
+### RegistryKeyMode
+
+```typescript
+type RegistryKeyMode = 'unique' | 'duplicate';
+```
+
+### RegistryEntry\<Meta\>
+
+```typescript
+interface RegistryEntry<Meta = unknown> {
+  readonly ref: RegisterableRef;
+  readonly metadata: Meta;
+  readonly registeredAt: number;
+}
+```
+
+### RegistryMatch\<Meta\>
+
+```typescript
+interface RegistryMatch<Meta = unknown> {
+  readonly key: string;
+  readonly ref: RegisterableRef;
+  readonly metadata: Meta;
+}
+```
+
+### RegistryPredicate\<Meta\>
+
+```typescript
+type RegistryPredicate<Meta> = (
+  key: string,
+  entry: RegistryEntry<Meta>,
+) => boolean;
+```
+
+### DispatchFn\<Meta\>
+
+```typescript
+type DispatchFn<Meta> = (
+  entries: ReadonlyArray<RegistryEntry<Meta>>,
+  message: unknown,
+) => void;
+```
+
+### RegistryPersistenceConfig
+
+```typescript
+interface RegistryPersistenceConfig {
+  readonly adapter: StorageAdapter;
+  readonly key?: string;
+  readonly restoreOnStart?: boolean;    // výchozí: true
+  readonly persistOnChange?: boolean;   // výchozí: true
+  readonly debounceMs?: number;         // výchozí: 100
+  readonly persistOnShutdown?: boolean; // výchozí: true
+  readonly onError?: (error: Error) => void;
+}
 ```
 
 ---
 
 ## Třídy chyb
 
-### NotRegisteredError
+### AlreadyRegisteredKeyError
+
+Vyhodí se, když je klíč již registrován v režimu unique.
 
 ```typescript
-class NotRegisteredError extends Error {
-  readonly name = 'NotRegisteredError';
-  readonly processName: string;
+class AlreadyRegisteredKeyError extends Error {
+  readonly name = 'AlreadyRegisteredKeyError';
+  readonly registryName: string;
+  readonly key: string;
 }
 ```
 
-### AlreadyRegisteredError
+### KeyNotFoundError
+
+Vyhodí se, když `lookup()` selže, protože klíč nebyl nalezen.
 
 ```typescript
-class AlreadyRegisteredError extends Error {
-  readonly name = 'AlreadyRegisteredError';
-  readonly registeredName: string;
+class KeyNotFoundError extends Error {
+  readonly name = 'KeyNotFoundError';
+  readonly registryName: string;
+  readonly key: string;
+}
+```
+
+### DuplicateKeyLookupError
+
+Vyhodí se, když je `lookup()` voláno na registru v režimu duplicate.
+
+```typescript
+class DuplicateKeyLookupError extends Error {
+  readonly name = 'DuplicateKeyLookupError';
+  readonly registryName: string;
+  readonly key: string;
+}
+```
+
+### DispatchNotSupportedError
+
+Vyhodí se, když je `dispatch()` voláno na registru v režimu unique.
+
+```typescript
+class DispatchNotSupportedError extends Error {
+  readonly name = 'DispatchNotSupportedError';
+  readonly registryName: string;
+}
+```
+
+### DuplicateRegistrationError
+
+Vyhodí se, když je stejný ref registrován pod stejným klíčem v režimu duplicate.
+
+```typescript
+class DuplicateRegistrationError extends Error {
+  readonly name = 'DuplicateRegistrationError';
+  readonly registryName: string;
+  readonly key: string;
+  readonly refId: string;
 }
 ```
 
 ---
 
-## Kompletní příklad
-
-```typescript
-import { Registry, GenServer, type GenServerBehavior } from 'noex';
-
-// Definice jmen služeb
-const SERVICES = {
-  CACHE: 'cache',
-  AUTH: 'auth',
-  METRICS: 'metrics',
-} as const;
-
-// Chování cache služby
-const cacheBehavior: GenServerBehavior<
-  Map<string, unknown>,
-  { type: 'get'; key: string },
-  { type: 'set'; key: string; value: unknown },
-  unknown
-> = {
-  init: () => new Map(),
-  handleCall: (msg, state) => [state.get(msg.key), state],
-  handleCast: (msg, state) => {
-    state.set(msg.key, msg.value);
-    return state;
-  },
-};
-
-// Spuštění a registrace služby
-async function startCacheService() {
-  const ref = await GenServer.start(cacheBehavior);
-  Registry.register(SERVICES.CACHE, ref);
-  return ref;
-}
-
-// Použití služby odkudkoliv
-async function cacheGet(key: string): Promise<unknown> {
-  const cache = Registry.lookup<
-    Map<string, unknown>,
-    { type: 'get'; key: string },
-    { type: 'set'; key: string; value: unknown },
-    unknown
-  >(SERVICES.CACHE);
-
-  return GenServer.call(cache, { type: 'get', key });
-}
-
-function cacheSet(key: string, value: unknown): void {
-  const cache = Registry.whereis(SERVICES.CACHE);
-  if (cache) {
-    GenServer.cast(cache, { type: 'set', key, value });
-  }
-}
-
-// Health check
-function getServiceStatus(): Record<string, boolean> {
-  return {
-    cache: Registry.isRegistered(SERVICES.CACHE),
-    auth: Registry.isRegistered(SERVICES.AUTH),
-    metrics: Registry.isRegistered(SERVICES.METRICS),
-  };
-}
-
-// Použití
-async function main() {
-  await startCacheService();
-
-  cacheSet('user:1', { name: 'Alice' });
-  const user = await cacheGet('user:1');
-  console.log(user);
-
-  console.log('Služby:', getServiceStatus());
-  console.log('Všechna jména:', Registry.getNames());
-}
-```
-
 ## Související
 
-- [Koncepty Registry](../concepts/registry.md) - Pochopení Registry
+- [Koncepty Registry](../concepts/registry.md) - Instance vs globální, režimy klíčů, vzory
 - [GenServer API](./genserver.md) - API procesů
 - [Reference chyb](./errors.md) - Všechny třídy chyb

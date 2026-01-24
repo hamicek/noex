@@ -4,357 +4,350 @@ Registr poskytuje vyhledávání procesů podle jména pro GenServery a Supervis
 
 ## Přehled
 
-Registr nabízí:
-- **Pojmenovaná registrace** - Asociace procesů s textovými jmény
-- **Globální namespace** - Jediný bod pro vyhledávání v celé aplikaci
-- **Automatický úklid** - Registrace jsou odstraněny při ukončení procesů
-- **Typově bezpečné vyhledávání** - Zachování TypeScript typů při vyhledávání
+Systém registrů nabízí:
+- **Globální registr** - Jednoduché mapování jméno→proces pro celou aplikaci
+- **Instance registrů** - Izolované registry s vlastními režimy klíčů a metadaty
+- **Unikátní klíče** - Jeden záznam na klíč (výchozí, service discovery)
+- **Duplicitní klíče** - Více záznamů na klíč (pub/sub, event routing)
+- **Metadata** - Typovaná data připojená ke každé registraci
+- **Pattern matching** - Dotazování záznamů pomocí glob vzorů nebo predikátů
+- **Dispatch** - Rozesílání zpráv všem záznamům pod klíčem
+- **Automatický úklid** - Záznamy jsou odstraněny při terminaci procesů
+- **Persistence** - Volitelné ukládání stavu registru přes restarty
 
 ```typescript
-import { Registry, GenServer } from 'noex';
+import { Registry, RegistryInstance } from 'noex';
 
-// Spuštění a registrace služby
+// Globální registr (jednoduchý, unikátní klíče)
 const counter = await GenServer.start(counterBehavior);
 Registry.register('counter', counter);
+const ref = Registry.lookup('counter');
 
-// Vyhledání odkudkoli v aplikaci
-const ref = Registry.lookup<number, 'get', 'inc', number>('counter');
-const value = await GenServer.call(ref, 'get');
+// Vlastní instance registru (typovaná metadata, duplicitní klíče)
+const topics = Registry.create({ name: 'topics', keys: 'duplicate' });
+await topics.start();
+topics.register('user:created', handlerA);
+topics.register('user:created', handlerB);
+topics.dispatch('user:created', { userId: '123' });
 ```
 
-## Registrace procesů
+## Globální registr vs Instance registrů
 
-### Automatická registrace (doporučeno)
+### Globální registr
 
-Nejjednodušší způsob registrace GenServeru je použití `name` option při spuštění:
+Objekt `Registry` je fasáda nad interní defaultní `RegistryInstance` v režimu unique. Poskytuje nejjednodušší API pro běžné service discovery:
 
 ```typescript
-// Server je automaticky registrován jako 'my-service'
-const ref = await GenServer.start(behavior, { name: 'my-service' });
+// Automatická registrace při spuštění
+const ref = await GenServer.start(behavior, { name: 'auth' });
 
 // Vyhledání odkudkoli
-const found = Registry.lookup('my-service');
+const auth = Registry.lookup('auth');
+await GenServer.call(auth, { type: 'validate', token });
 ```
 
-Tento přístup:
-- Registruje atomicky se spuštěním serveru
-- Automaticky vyčistí registraci při zastavení serveru
-- Vyhodí `AlreadyRegisteredError` pokud je jméno obsazeno (server se nespustí)
+### Instance registrů
 
-### Manuální registrace
-
-Pro větší kontrolu registrujte separátně po spuštění:
+Pro pokročilejší případy vytvořte izolované instance pomocí `Registry.create()`:
 
 ```typescript
-const ref = await GenServer.start(behavior);
-Registry.register('my-service', ref);
+const services = Registry.create<{ version: string }>({
+  name: 'services',
+  keys: 'unique',
+});
+await services.start();
+
+services.register('auth', authRef, { version: '2.1' });
+services.register('cache', cacheRef, { version: '1.0' });
+
+// Plně izolováno od globálního Registry
+Registry.isRegistered('auth'); // false (není v globálním)
+services.isRegistered('auth'); // true
 ```
 
-### Vzor pro více služeb
+Instance jsou nezávislé — uzavření jedné neovlivní ostatní.
+
+## Režimy klíčů
+
+### Režim Unique (výchozí)
+
+Každý klíč mapuje na právě jeden záznam. Pokus o registraci duplicitního klíče vyhodí chybu:
 
 ```typescript
-async function startServices() {
-  // Použití automatické registrace
-  await GenServer.start(cacheBehavior, { name: 'user-cache' });
-  await GenServer.start(sessionBehavior, { name: 'session-store' });
+const registry = Registry.create({ name: 'services', keys: 'unique' });
+await registry.start();
+
+registry.register('db', dbRef);
+registry.register('db', anotherRef); // vyhodí AlreadyRegisteredKeyError
+```
+
+Použijte režim unique pro:
+- Service discovery (jedna autoritativní instance na jméno)
+- Singleton procesy
+- Pojmenované workery
+
+### Režim Duplicate
+
+Každý klíč může mapovat na více záznamů, umožňující pub/sub vzory:
+
+```typescript
+const events = Registry.create({ name: 'events', keys: 'duplicate' });
+await events.start();
+
+// Více handlerů pro stejnou událost
+events.register('order:placed', emailHandler);
+events.register('order:placed', inventoryHandler);
+events.register('order:placed', analyticsHandler);
+
+// Broadcast všem handlerům
+events.dispatch('order:placed', orderData);
+```
+
+Použijte režim duplicate pro:
+- Event routing
+- Pub/sub messaging
+- Fan-out vzory
+- Topic subscriptions
+
+## Metadata
+
+Připojte typovaná metadata ke každé registraci pro bohatší dotazování:
+
+```typescript
+interface ServiceMeta {
+  version: string;
+  priority: number;
+  healthy: boolean;
 }
+
+const services = Registry.create<ServiceMeta>({
+  name: 'services',
+  keys: 'unique',
+});
+await services.start();
+
+services.register('auth', authRef, {
+  version: '2.1',
+  priority: 10,
+  healthy: true,
+});
+
+// Čtení metadat
+const meta = services.getMetadata('auth');
+// { version: '2.1', priority: 10, healthy: true }
+
+// Aktualizace metadat
+services.updateMetadata('auth', (m) => ({ ...m, healthy: false }));
 ```
 
-### Unikátní jména
+## Pattern Matching
 
-Každé jméno lze registrovat pouze jednou. Pokus o registraci duplikátu vyhodí chybu:
+### select()
+
+Filtrování záznamů pomocí libovolných predikátů:
 
 ```typescript
-import { AlreadyRegisteredError } from 'noex';
+// Nalezení všech služeb s vysokou prioritou
+const critical = services.select(
+  (key, entry) => entry.metadata.priority >= 8,
+);
 
-Registry.register('counter', ref1);
-
-try {
-  Registry.register('counter', ref2);  // Vyhodí výjimku!
-} catch (error) {
-  if (error instanceof AlreadyRegisteredError) {
-    console.error(`Jméno '${error.registeredName}' je již obsazeno`);
-  }
-}
+// Nalezení záznamů podle prefixu klíče
+const userServices = services.select(
+  (key) => key.startsWith('user:'),
+);
 ```
 
-## Vyhledávání procesů
+### match()
 
-### lookup() - Vyhazující varianta
-
-Použijte `lookup()`, když očekáváte, že proces existuje:
+Vyhledávání záznamů pomocí glob-like vzorů na klíčích:
 
 ```typescript
-import { NotRegisteredError } from 'noex';
+// * odpovídá libovolným znakům kromě /
+const userHandlers = events.match('user:*');
+// Odpovídá: 'user:created', 'user:deleted'
+// Přeskakuje: 'order:placed'
 
-try {
-  const counter = Registry.lookup('counter');
-  await GenServer.call(counter, 'get');
-} catch (error) {
-  if (error instanceof NotRegisteredError) {
-    console.error(`Proces '${error.processName}' nenalezen`);
-  }
-}
+// ** odpovídá libovolným znakům včetně /
+const allNested = registry.match('app/**');
+// Odpovídá: 'app/auth', 'app/cache/redis'
+
+// ? odpovídá jednomu znaku
+const versions = registry.match('v?');
+// Odpovídá: 'v1', 'v2'
+// Přeskakuje: 'v10'
+
+// S predikátem hodnoty
+const activeAuth = services.match('auth:*', (e) => e.metadata.healthy);
 ```
 
-### whereis() - Nevyhazující varianta
+## Dispatch
 
-Použijte `whereis()` pro volitelné vyhledávání:
+V režimu duplicate rozešlete zprávy všem záznamům pod klíčem:
 
 ```typescript
-const counter = Registry.whereis('counter');
-if (counter) {
-  await GenServer.call(counter, 'get');
-} else {
-  console.log('Counter není dostupný');
-}
+const topics = Registry.create({ name: 'topics', keys: 'duplicate' });
+await topics.start();
+
+topics.register('events', workerA);
+topics.register('events', workerB);
+topics.register('events', workerC);
+
+// Výchozí: GenServer.cast na každý záznam
+topics.dispatch('events', { type: 'process', data });
+
+// Vlastní dispatch funkce
+topics.dispatch('events', payload, (entries, msg) => {
+  // Round-robin: vyber jeden záznam
+  const idx = Math.floor(Math.random() * entries.length);
+  GenServer.cast(entries[idx].ref, msg);
+});
 ```
 
-### Typově bezpečné vyhledávání
+## Integrace s GenServerem
 
-Zachovejte typové informace pomocí typových parametrů:
+Použijte volbu `registry` v `GenServer.start()` pro registraci ve vlastním registru:
 
 ```typescript
-// Definice typů
-type CounterState = number;
-type CounterCall = 'get' | { type: 'add'; n: number };
-type CounterCast = 'increment' | 'reset';
-type CounterReply = number;
+const services = Registry.create({ name: 'app-services' });
+await services.start();
 
-// Typované vyhledávání
-const counter = Registry.lookup<
-  CounterState,
-  CounterCall,
-  CounterCast,
-  CounterReply
->('counter');
+// Registrace ve vlastním registru místo globálního
+const ref = await GenServer.start(behavior, {
+  name: 'auth',
+  registry: services,
+});
 
-// Nyní plně typováno
-const value = await GenServer.call(counter, 'get');  // Vrací number
-GenServer.cast(counter, 'increment');                 // Typově kontrolováno
+// Registrováno v services, NE v globálním Registry
+services.isRegistered('auth'); // true
+Registry.isRegistered('auth'); // false
+```
+
+V režimu duplicate mohou více serverů sdílet stejné jméno:
+
+```typescript
+const workers = Registry.create({ name: 'workers', keys: 'duplicate' });
+await workers.start();
+
+// Spuštění více workerů pod stejným klíčem
+const w1 = await GenServer.start(workerBehavior, { name: 'pool', registry: workers });
+const w2 = await GenServer.start(workerBehavior, { name: 'pool', registry: workers });
+
+workers.countForKey('pool'); // 2
+workers.dispatch('pool', job); // broadcast oběma
 ```
 
 ## Automatický úklid
 
-Registrace jsou automaticky odstraněny při ukončení procesů:
+Záznamy jsou automaticky odstraněny při terminaci registrovaného procesu:
 
 ```typescript
-const ref = await GenServer.start(behavior);
-Registry.register('temp-service', ref);
+const registry = Registry.create({ name: 'test' });
+await registry.start();
 
-console.log(Registry.isRegistered('temp-service'));  // true
+const ref = await GenServer.start(behavior);
+registry.register('ephemeral', ref);
+registry.isRegistered('ephemeral'); // true
 
 await GenServer.stop(ref);
-
-console.log(Registry.isRegistered('temp-service'));  // false
-Registry.lookup('temp-service');  // Vyhodí NotRegisteredError
+// Po propagaci lifecycle eventu:
+registry.isRegistered('ephemeral'); // false
 ```
 
-Toto zabraňuje zastaralým referencím a únikům paměti.
+Funguje napříč více registry — pokud je proces registrován v několika instancích, všechny registrace jsou vyčištěny při terminaci.
 
-## Manuální odregistrace
+## Persistence
 
-Odstranění registrace bez zastavení procesu:
+Instance registrů mohou persistovat svůj stav přes restarty pomocí `StorageAdapter`:
 
 ```typescript
-Registry.unregister('old-name');
+import { FileAdapter } from 'noex';
 
-// Proces pokračuje v běhu, ale jméno je uvolněno
-Registry.register('new-name', sameRef);
+const registry = Registry.create<{ role: string }>({
+  name: 'services',
+  keys: 'unique',
+  persistence: {
+    adapter: new FileAdapter({ directory: './data' }),
+    restoreOnStart: true,
+    persistOnChange: true,
+    debounceMs: 200,
+    persistOnShutdown: true,
+    onError: (err) => console.error('Persistence registru selhala:', err),
+  },
+});
+
+await registry.start(); // Obnoví záznamy ze storage (mrtvé refy jsou přeskočeny)
+
+registry.register('auth', authRef, { role: 'authentication' });
+// Stav je persistován po 200ms debounce
+
+await registry.close(); // Finální flush do storage
 ```
 
-Odregistrace je idempotentní - odregistrace neexistujícího jména nic nedělá:
-
-```typescript
-Registry.unregister('does-not-exist');  // Žádná chyba
-```
-
-## Dotazování registru
-
-### Kontrola registrace
-
-```typescript
-if (Registry.isRegistered('cache')) {
-  // Bezpečné vyhledat
-  const cache = Registry.lookup('cache');
-}
-```
-
-### Seznam všech jmen
-
-```typescript
-const names = Registry.getNames();
-console.log('Registrované služby:', names);
-// ['user-cache', 'session-store', 'metrics-collector']
-```
-
-### Počet registrací
-
-```typescript
-const count = Registry.count();
-console.log(`${count} služeb registrováno`);
-```
+**Klíčové chování:**
+- Změny jsou debounced pro zamezení nadměrným zápisům
+- Mrtvé refy jsou přeskočeny při obnově
+- Chyby persistence jsou nefatální (registr pokračuje in-memory)
 
 ## Běžné vzory
 
-### Vyhledávání služeb
+### Service Discovery s metadaty
 
 ```typescript
-// Definice služeb
-const SERVICES = {
-  CACHE: 'cache',
-  AUTH: 'auth',
-  METRICS: 'metrics',
-} as const;
-
-// Spuštění
-async function bootstrap() {
-  await startAndRegister(SERVICES.CACHE, cacheBehavior);
-  await startAndRegister(SERVICES.AUTH, authBehavior);
-  await startAndRegister(SERVICES.METRICS, metricsBehavior);
+interface ServiceInfo {
+  version: string;
+  port: number;
+  healthEndpoint: string;
 }
 
-// Použití kdekoli v aplikaci
-function getCache() {
-  return Registry.lookup(SERVICES.CACHE);
-}
-```
+const services = Registry.create<ServiceInfo>({ name: 'services' });
+await services.start();
 
-### Volitelné závislosti
-
-```typescript
-async function processRequest(data: Request) {
-  // Základní zpracování
-  const result = await handleRequest(data);
-
-  // Volitelné metriky (nemusí běžet)
-  const metrics = Registry.whereis('metrics');
-  if (metrics) {
-    GenServer.cast(metrics, { type: 'record', request: data });
-  }
-
-  return result;
-}
-```
-
-### Korektní výměna služby
-
-```typescript
-async function replaceService(name: string, newBehavior: GenServerBehavior) {
-  // Získat starou referenci pokud existuje
-  const old = Registry.whereis(name);
-
-  // Spustit novou službu
-  const newRef = await GenServer.start(newBehavior);
-
-  // Atomická výměna: odregistrovat starou, registrovat novou
-  if (old) {
-    Registry.unregister(name);
-  }
-  Registry.register(name, newRef);
-
-  // Zastavit starou službu po výměně
-  if (old) {
-    await GenServer.stop(old);
-  }
-
-  return newRef;
-}
-```
-
-### Registrace pod supervizorem
-
-Kombinace se Supervisorem pro odolné pojmenované služby. S automatickou registrací jsou restarty řešeny bezproblémově:
-
-```typescript
-const supervisor = await Supervisor.start({
-  strategy: 'one_for_one',
-  children: [
-    {
-      id: 'cache',
-      start: async () => {
-        // Automatická registrace řeší vyčištění při restartu
-        return await GenServer.start(cacheBehavior, { name: 'cache' });
-      },
-    },
-  ],
+services.register('api-gateway', gatewayRef, {
+  version: '3.2.0',
+  port: 8080,
+  healthEndpoint: '/health',
 });
+
+// Nalezení všech služeb v3.x
+const v3Services = services.select(
+  (_, entry) => entry.metadata.version.startsWith('3.'),
+);
 ```
 
-Protože stará registrace je automaticky vyčištěna při ukončení serveru, restartovaný server může znovu použít stejné jméno.
-
-## Osvědčené postupy
-
-### 1. Používejte konstanty pro jména
+### Event Bus s topicy
 
 ```typescript
-// Dobře: Centralizovaná jména
-export const PROCESS_NAMES = {
-  USER_CACHE: 'user-cache',
-  SESSION_STORE: 'session-store',
-  RATE_LIMITER: 'rate-limiter',
-} as const;
+const bus = Registry.create({ name: 'event-bus', keys: 'duplicate' });
+await bus.start();
 
-Registry.register(PROCESS_NAMES.USER_CACHE, ref);
-Registry.lookup(PROCESS_NAMES.USER_CACHE);
+// Přihlášení handlerů k topicům
+bus.register('order:*', orderLogger);
+bus.register('order:placed', inventoryUpdater);
+bus.register('order:placed', emailNotifier);
 
-// Vyhněte se: Stringové literály rozházené po kódu
-Registry.register('user-cache', ref);
-Registry.lookup('user-cache');  // Riziko překlepu!
+// Dispatch na konkrétní topic
+bus.dispatch('order:placed', { orderId: '456', items: [...] });
 ```
 
-### 2. Typujte vyhledávání
+### Monitoring zdraví
 
 ```typescript
-// Dobře: Typově bezpečná reference
-type CacheRef = GenServerRef<CacheState, CacheCall, CacheCast, CacheReply>;
-const cache = Registry.lookup<CacheState, CacheCall, CacheCast, CacheReply>('cache');
+const monitored = Registry.create<{ healthy: boolean; lastCheck: number }>({
+  name: 'monitored',
+});
+await monitored.start();
 
-// Vyhněte se: Netypovaná reference
-const cache = Registry.lookup('cache');  // Typy jsou neznámé
+// Periodická kontrola zdraví
+setInterval(() => {
+  const unhealthy = monitored.select(
+    (_, entry) => !entry.metadata.healthy,
+  );
+  if (unhealthy.length > 0) {
+    console.warn('Nezdravé služby:', unhealthy.map((m) => m.key));
+  }
+}, 10000);
 ```
-
-### 3. Ošetřete chybějící služby
-
-```typescript
-// Dobře: Elegantní ošetření
-const metrics = Registry.whereis('metrics');
-if (metrics) {
-  GenServer.cast(metrics, event);
-}
-
-// Nebo s ošetřením chyb
-try {
-  const required = Registry.lookup('required-service');
-} catch (error) {
-  // Ošetřit chybějící požadovanou službu
-  throw new Error('Aplikace špatně nakonfigurována: chybí required-service');
-}
-```
-
-### 4. Dokumentujte jména služeb
-
-```typescript
-/**
- * Známá jména služeb v aplikaci.
- *
- * - USER_CACHE: Cache uživatelských profilů, TTL 5 minut
- * - SESSION_STORE: Úložiště aktivních sessions
- * - RATE_LIMITER: Rate limiting API
- */
-export const SERVICES = {
-  USER_CACHE: 'user-cache',
-  SESSION_STORE: 'session-store',
-  RATE_LIMITER: 'rate-limiter',
-} as const;
-```
-
-## Typy chyb
-
-| Chyba | Příčina |
-|-------|---------|
-| `AlreadyRegisteredError` | Jméno je již používáno |
-| `NotRegisteredError` | Pod daným jménem není registrován žádný proces |
 
 ## Srovnání s Elixirem
 
@@ -362,11 +355,13 @@ export const SERVICES = {
 |------|--------|
 | `Registry.register(name, ref)` | `{:via, Registry, name}` při startu |
 | `Registry.lookup(name)` | `GenServer.call({:via, Registry, name}, msg)` |
-| `Registry.whereis(name)` | `Registry.lookup/2` |
-| `Registry.unregister(name)` | Automatické přes linkování procesů |
+| `Registry.create({ keys: 'duplicate' })` | `Registry.start_link(keys: :duplicate)` |
+| `registry.select(predicate)` | `Registry.select(registry, spec)` |
+| `registry.match(pattern)` | `Registry.match(registry, key, pattern)` |
+| `registry.dispatch(key, msg)` | `Registry.dispatch(registry, key, fn)` |
 
 ## Související
 
+- [API Reference: Registry](../api/registry.md) - Kompletní API dokumentace
 - [GenServer](./genserver.md) - Procesy, které lze registrovat
 - [Supervisor](./supervisor.md) - Supervize registrovaných procesů
-- [API Reference: Registry](../api/registry.md) - Kompletní API dokumentace

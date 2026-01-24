@@ -4,357 +4,350 @@ Registry provides named process lookup for GenServers and Supervisors. It enable
 
 ## Overview
 
-The Registry offers:
-- **Named registration** - Associate processes with string names
-- **Global namespace** - Single lookup point for the entire application
-- **Automatic cleanup** - Registrations are removed when processes terminate
-- **Type-safe lookups** - Preserve TypeScript types through lookups
+The Registry system offers:
+- **Global Registry** - Simple name-to-process mapping for the entire application
+- **Registry Instances** - Isolated registries with custom key modes and metadata
+- **Unique keys** - One entry per key (default, service discovery)
+- **Duplicate keys** - Multiple entries per key (pub/sub, event routing)
+- **Metadata** - Attach typed data to each registration
+- **Pattern matching** - Query entries by glob patterns or predicates
+- **Dispatch** - Send messages to all entries under a key
+- **Automatic cleanup** - Entries are removed when processes terminate
+- **Persistence** - Optionally persist registry state across restarts
 
 ```typescript
-import { Registry, GenServer } from 'noex';
+import { Registry, RegistryInstance } from 'noex';
 
-// Start and register a service
+// Global registry (simple, unique keys)
 const counter = await GenServer.start(counterBehavior);
 Registry.register('counter', counter);
+const ref = Registry.lookup('counter');
 
-// Look it up from anywhere in your application
-const ref = Registry.lookup<number, 'get', 'inc', number>('counter');
-const value = await GenServer.call(ref, 'get');
+// Custom registry instance (typed metadata, duplicate keys)
+const topics = Registry.create({ name: 'topics', keys: 'duplicate' });
+await topics.start();
+topics.register('user:created', handlerA);
+topics.register('user:created', handlerB);
+topics.dispatch('user:created', { userId: '123' });
 ```
 
-## Registering Processes
+## Global Registry vs Registry Instances
 
-### Automatic Registration (Recommended)
+### Global Registry
 
-The simplest way to register a GenServer is using the `name` option at start time:
+The `Registry` object is a facade over an internal default `RegistryInstance` in unique mode. It provides the simplest API for common service discovery:
 
 ```typescript
-// Server is automatically registered as 'my-service'
-const ref = await GenServer.start(behavior, { name: 'my-service' });
+// Automatic registration at start time
+const ref = await GenServer.start(behavior, { name: 'auth' });
 
-// Look it up from anywhere
-const found = Registry.lookup('my-service');
+// Lookup from anywhere
+const auth = Registry.lookup('auth');
+await GenServer.call(auth, { type: 'validate', token });
 ```
 
-This approach:
-- Registers atomically with server start
-- Automatically cleans up when server stops
-- Throws `AlreadyRegisteredError` if name is taken (server won't start)
+### Registry Instances
 
-### Manual Registration
-
-For more control, register separately after starting:
+For more advanced use cases, create isolated instances with `Registry.create()`:
 
 ```typescript
-const ref = await GenServer.start(behavior);
-Registry.register('my-service', ref);
+const services = Registry.create<{ version: string }>({
+  name: 'services',
+  keys: 'unique',
+});
+await services.start();
+
+services.register('auth', authRef, { version: '2.1' });
+services.register('cache', cacheRef, { version: '1.0' });
+
+// Completely isolated from the global Registry
+Registry.isRegistered('auth'); // false (not in global)
+services.isRegistered('auth'); // true
 ```
 
-### Registration Pattern for Multiple Services
+Instances are independent — closing one does not affect others.
+
+## Key Modes
+
+### Unique Mode (Default)
+
+Each key maps to exactly one entry. Attempting to register a duplicate key throws an error:
 
 ```typescript
-async function startServices() {
-  // Using automatic registration
-  await GenServer.start(cacheBehavior, { name: 'user-cache' });
-  await GenServer.start(sessionBehavior, { name: 'session-store' });
+const registry = Registry.create({ name: 'services', keys: 'unique' });
+await registry.start();
+
+registry.register('db', dbRef);
+registry.register('db', anotherRef); // throws AlreadyRegisteredKeyError
+```
+
+Use unique mode for:
+- Service discovery (one authoritative instance per name)
+- Singleton processes
+- Named workers
+
+### Duplicate Mode
+
+Each key can map to multiple entries, enabling pub/sub patterns:
+
+```typescript
+const events = Registry.create({ name: 'events', keys: 'duplicate' });
+await events.start();
+
+// Multiple handlers for the same event
+events.register('order:placed', emailHandler);
+events.register('order:placed', inventoryHandler);
+events.register('order:placed', analyticsHandler);
+
+// Broadcast to all handlers
+events.dispatch('order:placed', orderData);
+```
+
+Use duplicate mode for:
+- Event routing
+- Pub/sub messaging
+- Fan-out patterns
+- Topic subscriptions
+
+## Metadata
+
+Attach typed metadata to each registration for richer querying:
+
+```typescript
+interface ServiceMeta {
+  version: string;
+  priority: number;
+  healthy: boolean;
 }
+
+const services = Registry.create<ServiceMeta>({
+  name: 'services',
+  keys: 'unique',
+});
+await services.start();
+
+services.register('auth', authRef, {
+  version: '2.1',
+  priority: 10,
+  healthy: true,
+});
+
+// Read metadata
+const meta = services.getMetadata('auth');
+// { version: '2.1', priority: 10, healthy: true }
+
+// Update metadata
+services.updateMetadata('auth', (m) => ({ ...m, healthy: false }));
 ```
 
-### Unique Names
+## Pattern Matching
 
-Each name can only be registered once. Attempting to register a duplicate throws an error:
+### select()
+
+Filter entries using arbitrary predicates:
 
 ```typescript
-import { AlreadyRegisteredError } from 'noex';
+// Find all high-priority services
+const critical = services.select(
+  (key, entry) => entry.metadata.priority >= 8,
+);
 
-Registry.register('counter', ref1);
-
-try {
-  Registry.register('counter', ref2);  // Throws!
-} catch (error) {
-  if (error instanceof AlreadyRegisteredError) {
-    console.error(`Name '${error.registeredName}' is already taken`);
-  }
-}
+// Find entries by key prefix
+const userServices = services.select(
+  (key) => key.startsWith('user:'),
+);
 ```
 
-## Looking Up Processes
+### match()
 
-### lookup() - Throwing Variant
-
-Use `lookup()` when you expect the process to exist:
+Match entries using glob-like patterns on keys:
 
 ```typescript
-import { NotRegisteredError } from 'noex';
+// * matches any characters except /
+const userHandlers = events.match('user:*');
+// Matches: 'user:created', 'user:deleted'
+// Skips: 'order:placed'
 
-try {
-  const counter = Registry.lookup('counter');
-  await GenServer.call(counter, 'get');
-} catch (error) {
-  if (error instanceof NotRegisteredError) {
-    console.error(`Process '${error.processName}' not found`);
-  }
-}
+// ** matches any characters including /
+const allNested = registry.match('app/**');
+// Matches: 'app/auth', 'app/cache/redis'
+
+// ? matches a single character
+const versions = registry.match('v?');
+// Matches: 'v1', 'v2'
+// Skips: 'v10'
+
+// With value predicate
+const activeAuth = services.match('auth:*', (e) => e.metadata.healthy);
 ```
 
-### whereis() - Non-Throwing Variant
+## Dispatch
 
-Use `whereis()` for optional lookups:
+In duplicate mode, dispatch messages to all entries under a key:
 
 ```typescript
-const counter = Registry.whereis('counter');
-if (counter) {
-  await GenServer.call(counter, 'get');
-} else {
-  console.log('Counter not available');
-}
+const topics = Registry.create({ name: 'topics', keys: 'duplicate' });
+await topics.start();
+
+topics.register('events', workerA);
+topics.register('events', workerB);
+topics.register('events', workerC);
+
+// Default: GenServer.cast to each entry
+topics.dispatch('events', { type: 'process', data });
+
+// Custom dispatch function
+topics.dispatch('events', payload, (entries, msg) => {
+  // Round-robin: pick one entry
+  const idx = Math.floor(Math.random() * entries.length);
+  GenServer.cast(entries[idx].ref, msg);
+});
 ```
 
-### Type-Safe Lookups
+## GenServer Integration
 
-Preserve type information with type parameters:
+Use the `registry` option in `GenServer.start()` to register in a custom registry:
 
 ```typescript
-// Define your types
-type CounterState = number;
-type CounterCall = 'get' | { type: 'add'; n: number };
-type CounterCast = 'increment' | 'reset';
-type CounterReply = number;
+const services = Registry.create({ name: 'app-services' });
+await services.start();
 
-// Typed lookup
-const counter = Registry.lookup<
-  CounterState,
-  CounterCall,
-  CounterCast,
-  CounterReply
->('counter');
+// Register in custom registry instead of global
+const ref = await GenServer.start(behavior, {
+  name: 'auth',
+  registry: services,
+});
 
-// Now fully typed
-const value = await GenServer.call(counter, 'get');  // Returns number
-GenServer.cast(counter, 'increment');                 // Type-checked
+// Registered in services, NOT in global Registry
+services.isRegistered('auth'); // true
+Registry.isRegistered('auth'); // false
+```
+
+With duplicate mode, multiple servers can share the same name:
+
+```typescript
+const workers = Registry.create({ name: 'workers', keys: 'duplicate' });
+await workers.start();
+
+// Start multiple workers under the same key
+const w1 = await GenServer.start(workerBehavior, { name: 'pool', registry: workers });
+const w2 = await GenServer.start(workerBehavior, { name: 'pool', registry: workers });
+
+workers.countForKey('pool'); // 2
+workers.dispatch('pool', job); // broadcasts to both
 ```
 
 ## Automatic Cleanup
 
-Registrations are automatically removed when processes terminate:
+Entries are automatically removed when the registered process terminates:
 
 ```typescript
-const ref = await GenServer.start(behavior);
-Registry.register('temp-service', ref);
+const registry = Registry.create({ name: 'test' });
+await registry.start();
 
-console.log(Registry.isRegistered('temp-service'));  // true
+const ref = await GenServer.start(behavior);
+registry.register('ephemeral', ref);
+registry.isRegistered('ephemeral'); // true
 
 await GenServer.stop(ref);
-
-console.log(Registry.isRegistered('temp-service'));  // false
-Registry.lookup('temp-service');  // Throws NotRegisteredError
+// After lifecycle event propagates:
+registry.isRegistered('ephemeral'); // false
 ```
 
-This prevents stale references and memory leaks.
+This works across multiple registries — if a process is registered in several instances, all registrations are cleaned up on termination.
 
-## Manual Unregistration
+## Persistence
 
-Remove a registration without stopping the process:
+Registry instances can persist their state across restarts using a `StorageAdapter`:
 
 ```typescript
-Registry.unregister('old-name');
+import { FileAdapter } from 'noex';
 
-// The process continues running, but the name is freed
-Registry.register('new-name', sameRef);
+const registry = Registry.create<{ role: string }>({
+  name: 'services',
+  keys: 'unique',
+  persistence: {
+    adapter: new FileAdapter({ directory: './data' }),
+    restoreOnStart: true,
+    persistOnChange: true,
+    debounceMs: 200,
+    persistOnShutdown: true,
+    onError: (err) => console.error('Registry persist failed:', err),
+  },
+});
+
+await registry.start(); // Restores entries from storage (dead refs are skipped)
+
+registry.register('auth', authRef, { role: 'authentication' });
+// State is persisted after 200ms debounce
+
+await registry.close(); // Final flush to storage
 ```
 
-Unregistering is idempotent - unregistering a non-existent name does nothing:
-
-```typescript
-Registry.unregister('does-not-exist');  // No error
-```
-
-## Querying the Registry
-
-### Check Registration
-
-```typescript
-if (Registry.isRegistered('cache')) {
-  // Safe to lookup
-  const cache = Registry.lookup('cache');
-}
-```
-
-### List All Names
-
-```typescript
-const names = Registry.getNames();
-console.log('Registered services:', names);
-// ['user-cache', 'session-store', 'metrics-collector']
-```
-
-### Count Registrations
-
-```typescript
-const count = Registry.count();
-console.log(`${count} services registered`);
-```
+**Key behaviors:**
+- Changes are debounced to avoid excessive writes
+- Dead refs are skipped during restore
+- Persistence errors are non-fatal (registry continues in-memory)
 
 ## Common Patterns
 
-### Service Discovery
+### Service Discovery with Metadata
 
 ```typescript
-// Service definitions
-const SERVICES = {
-  CACHE: 'cache',
-  AUTH: 'auth',
-  METRICS: 'metrics',
-} as const;
-
-// Startup
-async function bootstrap() {
-  await startAndRegister(SERVICES.CACHE, cacheBehavior);
-  await startAndRegister(SERVICES.AUTH, authBehavior);
-  await startAndRegister(SERVICES.METRICS, metricsBehavior);
+interface ServiceInfo {
+  version: string;
+  port: number;
+  healthEndpoint: string;
 }
 
-// Usage anywhere in the app
-function getCache() {
-  return Registry.lookup(SERVICES.CACHE);
-}
-```
+const services = Registry.create<ServiceInfo>({ name: 'services' });
+await services.start();
 
-### Optional Dependencies
-
-```typescript
-async function processRequest(data: Request) {
-  // Core processing
-  const result = await handleRequest(data);
-
-  // Optional metrics (might not be running)
-  const metrics = Registry.whereis('metrics');
-  if (metrics) {
-    GenServer.cast(metrics, { type: 'record', request: data });
-  }
-
-  return result;
-}
-```
-
-### Graceful Service Replacement
-
-```typescript
-async function replaceService(name: string, newBehavior: GenServerBehavior) {
-  // Get old reference if exists
-  const old = Registry.whereis(name);
-
-  // Start new service
-  const newRef = await GenServer.start(newBehavior);
-
-  // Atomic swap: unregister old, register new
-  if (old) {
-    Registry.unregister(name);
-  }
-  Registry.register(name, newRef);
-
-  // Stop old service after swap
-  if (old) {
-    await GenServer.stop(old);
-  }
-
-  return newRef;
-}
-```
-
-### Supervised Registration
-
-Combine with Supervisor for resilient named services. With automatic registration, restarts are handled seamlessly:
-
-```typescript
-const supervisor = await Supervisor.start({
-  strategy: 'one_for_one',
-  children: [
-    {
-      id: 'cache',
-      start: async () => {
-        // Automatic registration handles cleanup on restart
-        return await GenServer.start(cacheBehavior, { name: 'cache' });
-      },
-    },
-  ],
+services.register('api-gateway', gatewayRef, {
+  version: '3.2.0',
+  port: 8080,
+  healthEndpoint: '/health',
 });
+
+// Find all v3.x services
+const v3Services = services.select(
+  (_, entry) => entry.metadata.version.startsWith('3.'),
+);
 ```
 
-Since the old registration is automatically cleaned up when the server terminates, the restarted server can reuse the same name.
-
-## Best Practices
-
-### 1. Use Constants for Names
+### Event Bus with Topics
 
 ```typescript
-// Good: Centralized names
-export const PROCESS_NAMES = {
-  USER_CACHE: 'user-cache',
-  SESSION_STORE: 'session-store',
-  RATE_LIMITER: 'rate-limiter',
-} as const;
+const bus = Registry.create({ name: 'event-bus', keys: 'duplicate' });
+await bus.start();
 
-Registry.register(PROCESS_NAMES.USER_CACHE, ref);
-Registry.lookup(PROCESS_NAMES.USER_CACHE);
+// Subscribe handlers to topics
+bus.register('order:*', orderLogger);
+bus.register('order:placed', inventoryUpdater);
+bus.register('order:placed', emailNotifier);
 
-// Avoid: String literals scattered throughout code
-Registry.register('user-cache', ref);
-Registry.lookup('user-cache');  // Typo risk!
+// Dispatch to a specific topic
+bus.dispatch('order:placed', { orderId: '456', items: [...] });
 ```
 
-### 2. Type Your Lookups
+### Health Monitoring
 
 ```typescript
-// Good: Type-safe reference
-type CacheRef = GenServerRef<CacheState, CacheCall, CacheCast, CacheReply>;
-const cache = Registry.lookup<CacheState, CacheCall, CacheCast, CacheReply>('cache');
+const monitored = Registry.create<{ healthy: boolean; lastCheck: number }>({
+  name: 'monitored',
+});
+await monitored.start();
 
-// Avoid: Untyped reference
-const cache = Registry.lookup('cache');  // Types are unknown
+// Periodic health check
+setInterval(() => {
+  const unhealthy = monitored.select(
+    (_, entry) => !entry.metadata.healthy,
+  );
+  if (unhealthy.length > 0) {
+    console.warn('Unhealthy services:', unhealthy.map((m) => m.key));
+  }
+}, 10000);
 ```
-
-### 3. Handle Missing Services
-
-```typescript
-// Good: Graceful handling
-const metrics = Registry.whereis('metrics');
-if (metrics) {
-  GenServer.cast(metrics, event);
-}
-
-// Or with error handling
-try {
-  const required = Registry.lookup('required-service');
-} catch (error) {
-  // Handle missing required service
-  throw new Error('Application misconfigured: missing required-service');
-}
-```
-
-### 4. Document Service Names
-
-```typescript
-/**
- * Well-known service names in the application.
- *
- * - USER_CACHE: Caches user profiles, TTL 5 minutes
- * - SESSION_STORE: Active session storage
- * - RATE_LIMITER: API rate limiting
- */
-export const SERVICES = {
-  USER_CACHE: 'user-cache',
-  SESSION_STORE: 'session-store',
-  RATE_LIMITER: 'rate-limiter',
-} as const;
-```
-
-## Error Types
-
-| Error | Cause |
-|-------|-------|
-| `AlreadyRegisteredError` | Name is already in use |
-| `NotRegisteredError` | No process registered under that name |
 
 ## Comparison with Elixir
 
@@ -362,11 +355,13 @@ export const SERVICES = {
 |------|--------|
 | `Registry.register(name, ref)` | `{:via, Registry, name}` in start |
 | `Registry.lookup(name)` | `GenServer.call({:via, Registry, name}, msg)` |
-| `Registry.whereis(name)` | `Registry.lookup/2` |
-| `Registry.unregister(name)` | Automatic via process linking |
+| `Registry.create({ keys: 'duplicate' })` | `Registry.start_link(keys: :duplicate)` |
+| `registry.select(predicate)` | `Registry.select(registry, spec)` |
+| `registry.match(pattern)` | `Registry.match(registry, key, pattern)` |
+| `registry.dispatch(key, msg)` | `Registry.dispatch(registry, key, fn)` |
 
 ## Related
 
+- [API Reference: Registry](../api/registry.md) - Complete API documentation
 - [GenServer](./genserver.md) - Processes that can be registered
 - [Supervisor](./supervisor.md) - Supervising registered processes
-- [API Reference: Registry](../api/registry.md) - Complete API documentation
