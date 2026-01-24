@@ -67,6 +67,24 @@ export { Supervisor } from './core/supervisor.js';
 
 // Registry
 export { Registry } from './core/registry.js';
+export {
+  RegistryInstance,
+  AlreadyRegisteredKeyError,
+  KeyNotFoundError,
+  DuplicateKeyLookupError,
+  DispatchNotSupportedError,
+  DuplicateRegistrationError,
+} from './core/registry-instance.js';
+export type {
+  RegisterableRef,
+  RegistryOptions,
+  RegistryKeyMode,
+  RegistryPersistenceConfig,
+  RegistryEntry,
+  RegistryPredicate,
+  RegistryMatch,
+  DispatchFn,
+} from './core/registry-types.js';
 
 // Services
 export { EventBus, type EventBusRef, type EventBusOptions } from './services/event-bus.js';

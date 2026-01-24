@@ -545,6 +545,23 @@ export class RegistryInstance<Meta = unknown> {
     return this.duplicateEntries.get(key)?.length ?? 0;
   }
 
+  /**
+   * Returns the key associated with a given ref ID (unique mode only).
+   * In duplicate mode, returns the first key found for the ref.
+   *
+   * @internal Used by Observer for process tree display.
+   */
+  getKeyByRefId(refId: string): string | undefined {
+    if (this.keyMode === 'unique') {
+      return this.uniqueRefToKey.get(refId);
+    }
+    const keys = this.duplicateRefToKeys.get(refId);
+    if (keys !== undefined && keys.size > 0) {
+      return keys.values().next().value as string;
+    }
+    return undefined;
+  }
+
   // ===========================================================================
   // Internal
   // ===========================================================================

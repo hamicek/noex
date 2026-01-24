@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   GenServer,
   Registry,
+  RegistryInstance,
   type GenServerBehavior,
   type GenServerRef,
   NotRegisteredError,
@@ -427,6 +428,95 @@ describe('Registry', () => {
       const val2 = await GenServer.call(typed, 'get');
       expect(val2).toBe(1);
 
+      await GenServer.stop(ref);
+    });
+  });
+
+  describe('create() factory', () => {
+    it('returns a RegistryInstance', () => {
+      const instance = Registry.create({ name: 'test-factory' });
+      expect(instance).toBeInstanceOf(RegistryInstance);
+    });
+
+    it('creates instances with custom options', () => {
+      const unique = Registry.create({ name: 'unique-reg', keys: 'unique' });
+      expect(unique.name).toBe('unique-reg');
+      expect(unique.keyMode).toBe('unique');
+
+      const dup = Registry.create({ name: 'dup-reg', keys: 'duplicate' });
+      expect(dup.name).toBe('dup-reg');
+      expect(dup.keyMode).toBe('duplicate');
+    });
+
+    it('creates isolated instances that do not share state with global', async () => {
+      const ref = await GenServer.start(createCounterBehavior());
+      const instance = Registry.create<{ tag: string }>({ name: 'isolated' });
+      await instance.start();
+
+      Registry.register('shared-name', ref);
+      instance.register('shared-name', ref, { tag: 'custom' });
+
+      // Both registries have the same key but are isolated
+      expect(Registry.isRegistered('shared-name')).toBe(true);
+      expect(instance.isRegistered('shared-name')).toBe(true);
+
+      Registry.unregister('shared-name');
+      expect(Registry.isRegistered('shared-name')).toBe(false);
+      expect(instance.isRegistered('shared-name')).toBe(true);
+
+      await instance.close();
+      await GenServer.stop(ref);
+    });
+
+    it('supports typed metadata via generic parameter', async () => {
+      interface ServiceMeta { version: string; priority: number }
+      const services = Registry.create<ServiceMeta>({ name: 'services' });
+      await services.start();
+
+      const ref = await GenServer.start(createCounterBehavior());
+      services.register('auth', ref, { version: '2.0', priority: 1 });
+
+      const entry = services.lookup('auth');
+      expect(entry.metadata.version).toBe('2.0');
+      expect(entry.metadata.priority).toBe(1);
+
+      await services.close();
+      await GenServer.stop(ref);
+    });
+
+    it('supports duplicate key mode', async () => {
+      const topics = Registry.create({ name: 'topics', keys: 'duplicate' });
+      await topics.start();
+
+      const ref1 = await GenServer.start(createCounterBehavior());
+      const ref2 = await GenServer.start(createCounterBehavior());
+
+      topics.register('events', ref1);
+      topics.register('events', ref2);
+
+      expect(topics.countForKey('events')).toBe(2);
+
+      const all = topics.lookupAll('events');
+      expect(all).toHaveLength(2);
+      expect(all[0]!.ref.id).toBe(ref1.id);
+      expect(all[1]!.ref.id).toBe(ref2.id);
+
+      await topics.close();
+      await Promise.all([GenServer.stop(ref1), GenServer.stop(ref2)]);
+    });
+
+    it('multiple created instances are fully independent', async () => {
+      const a = Registry.create({ name: 'a' });
+      const b = Registry.create({ name: 'b' });
+      await Promise.all([a.start(), b.start()]);
+
+      const ref = await GenServer.start(createCounterBehavior());
+
+      a.register('key', ref);
+      expect(a.isRegistered('key')).toBe(true);
+      expect(b.isRegistered('key')).toBe(false);
+
+      await Promise.all([a.close(), b.close()]);
       await GenServer.stop(ref);
     });
   });

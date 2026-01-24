@@ -1,68 +1,51 @@
 /**
- * Registry for named GenServer and Supervisor references.
+ * Registry — global named process lookup, implemented as a facade over RegistryInstance.
  *
  * Provides a global namespace for looking up processes by name.
  * Processes can be registered at start time or dynamically.
  * Registration is automatically cleaned up when processes terminate.
+ *
+ * The static Registry API delegates to an internal default RegistryInstance
+ * (unique mode, no persistence). Use `Registry.create()` to create
+ * additional isolated registry instances with custom configuration.
  */
 
 import {
   type GenServerRef,
-  type SupervisorRef,
   NotRegisteredError,
   AlreadyRegisteredError,
 } from './types.js';
-import { GenServer } from './gen-server.js';
+import { RegistryInstance } from './registry-instance.js';
+import type { RegistryOptions } from './registry-types.js';
+
+// =============================================================================
+// Default Global Instance
+// =============================================================================
+
+let defaultRegistry = new RegistryInstance<unknown>({
+  name: '__global__',
+  keys: 'unique',
+});
+
+let started = false;
 
 /**
- * Union type for references that can be registered.
+ * Lazily starts the default registry instance (sets up lifecycle handler).
+ * Called on first register to avoid overhead when Registry is never used.
  */
-type RegisterableRef = GenServerRef | SupervisorRef;
-
-/**
- * Entry in the registry storing the reference and cleanup function.
- */
-interface RegistryEntry {
-  readonly ref: RegisterableRef;
-  readonly unsubscribe: () => void;
-}
-
-/**
- * Internal storage for named references.
- * Maps process names to their entries.
- */
-const registryMap = new Map<string, RegistryEntry>();
-
-/**
- * Reverse lookup: ref ID to name for efficient cleanup.
- */
-const refIdToName = new Map<string, string>();
-
-/**
- * Lifecycle handler for automatic unregistration.
- * This is registered once when the first process is registered.
- */
-let lifecycleUnsubscribe: (() => void) | null = null;
-
-/**
- * Ensures lifecycle handler is registered.
- */
-function ensureLifecycleHandler(): void {
-  if (lifecycleUnsubscribe !== null) {
+function ensureStarted(): void {
+  if (started) {
     return;
   }
-
-  lifecycleUnsubscribe = GenServer.onLifecycleEvent((event) => {
-    if (event.type === 'terminated') {
-      const name = refIdToName.get(event.ref.id);
-      if (name !== undefined) {
-        // Clean up without calling unsubscribe (we're already in the handler)
-        registryMap.delete(name);
-        refIdToName.delete(event.ref.id);
-      }
-    }
-  });
+  // start() is async for persistence support, but the lifecycle setup
+  // is synchronous. Safe to fire-and-forget for the global instance.
+  void defaultRegistry.start();
+  started = true;
 }
+
+// =============================================================================
+// Registry Facade
+// =============================================================================
 
 /**
  * Registry provides named process lookup for GenServers and Supervisors.
@@ -83,6 +66,17 @@ function ensureLifecycleHandler(): void {
  * // Automatic cleanup on termination
  * await GenServer.stop(ref);
  * Registry.lookup('counter'); // throws NotRegisteredError
+ * ```
+ *
+ * @example Creating isolated instances
+ * ```typescript
+ * const services = Registry.create<{ version: string }>({
+ *   name: 'services',
+ *   keys: 'unique',
+ * });
+ * await services.start();
+ *
+ * services.register('auth', authRef, { version: '2.0' });
  * ```
  */
 export const Registry = {
@@ -112,20 +106,13 @@ export const Registry = {
     name: string,
     ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
   ): void {
-    if (registryMap.has(name)) {
+    ensureStarted();
+
+    if (defaultRegistry.isRegistered(name)) {
       throw new AlreadyRegisteredError(name);
     }
 
-    ensureLifecycleHandler();
-
-    // Store the mapping
-    const entry: RegistryEntry = {
-      ref,
-      unsubscribe: () => {}, // Cleanup handled by global lifecycle handler
-    };
-
-    registryMap.set(name, entry);
-    refIdToName.set(ref.id, name);
+    defaultRegistry.register(name, ref);
   },
 
   /**
@@ -153,7 +140,7 @@ export const Registry = {
     CastMsg = unknown,
     CallReply = unknown,
   >(name: string): GenServerRef<State, CallMsg, CastMsg, CallReply> {
-    const entry = registryMap.get(name);
+    const entry = defaultRegistry.whereis(name);
     if (entry === undefined) {
       throw new NotRegisteredError(name);
     }
@@ -183,7 +170,7 @@ export const Registry = {
     CastMsg = unknown,
     CallReply = unknown,
   >(name: string): GenServerRef<State, CallMsg, CastMsg, CallReply> | undefined {
-    const entry = registryMap.get(name);
+    const entry = defaultRegistry.whereis(name);
     if (entry === undefined) {
       return undefined;
     }
@@ -208,13 +195,7 @@ export const Registry = {
    * ```
    */
   unregister(name: string): void {
-    const entry = registryMap.get(name);
-    if (entry === undefined) {
-      return;
-    }
-
-    refIdToName.delete(entry.ref.id);
-    registryMap.delete(name);
+    defaultRegistry.unregister(name);
   },
 
   /**
@@ -231,7 +212,7 @@ export const Registry = {
    * ```
    */
   isRegistered(name: string): boolean {
-    return registryMap.has(name);
+    return defaultRegistry.isRegistered(name);
   },
 
   /**
@@ -247,7 +228,7 @@ export const Registry = {
    * ```
    */
   getNames(): readonly string[] {
-    return Array.from(registryMap.keys());
+    return defaultRegistry.getKeys();
   },
 
   /**
@@ -256,8 +237,53 @@ export const Registry = {
    * @returns Number of registered processes
    */
   count(): number {
-    return registryMap.size;
+    return defaultRegistry.count();
   },
+
+  // ===========================================================================
+  // Factory
+  // ===========================================================================
+
+  /**
+   * Creates a new isolated RegistryInstance with custom configuration.
+   *
+   * Use this to create application-specific registries with:
+   * - Unique or duplicate key modes
+   * - Custom metadata types
+   * - Optional persistence
+   *
+   * The returned instance must be started with `await instance.start()`
+   * before use, and should be closed with `await instance.close()` on shutdown.
+   *
+   * @typeParam Meta - Type of metadata attached to each entry
+   * @param options - Registry configuration
+   * @returns A new RegistryInstance
+   *
+   * @example
+   * ```typescript
+   * // Unique mode with typed metadata
+   * const services = Registry.create<{ version: string }>({
+   *   name: 'services',
+   *   keys: 'unique',
+   * });
+   * await services.start();
+   * services.register('auth', authRef, { version: '2.0' });
+   *
+   * // Duplicate mode (pub/sub)
+   * const topics = Registry.create({ name: 'topics', keys: 'duplicate' });
+   * await topics.start();
+   * topics.register('user:created', handlerA);
+   * topics.register('user:created', handlerB);
+   * topics.dispatch('user:created', payload);
+   * ```
+   */
+  create<Meta = unknown>(options?: RegistryOptions): RegistryInstance<Meta> {
+    return new RegistryInstance<Meta>(options);
+  },
+
+  // ===========================================================================
+  // Internal / Test Helpers
+  // ===========================================================================
 
   /**
    * Clears all registrations.
@@ -268,8 +294,14 @@ export const Registry = {
    * @internal
    */
   _clear(): void {
-    registryMap.clear();
-    refIdToName.clear();
+    if (started) {
+      void defaultRegistry.close();
+      defaultRegistry = new RegistryInstance<unknown>({
+        name: '__global__',
+        keys: 'unique',
+      });
+      started = false;
+    }
   },
 
   /**
@@ -279,9 +311,13 @@ export const Registry = {
    * @internal
    */
   _clearLifecycleHandler(): void {
-    if (lifecycleUnsubscribe !== null) {
-      lifecycleUnsubscribe();
-      lifecycleUnsubscribe = null;
+    if (started) {
+      void defaultRegistry.close();
+      defaultRegistry = new RegistryInstance<unknown>({
+        name: '__global__',
+        keys: 'unique',
+      });
+      started = false;
     }
   },
 
@@ -292,7 +328,7 @@ export const Registry = {
    * @internal
    */
   _getNameById(refId: string): string | undefined {
-    return refIdToName.get(refId);
+    return defaultRegistry.getKeyByRefId(refId);
   },
 
   // ===========================================================================
@@ -331,8 +367,8 @@ export const Registry = {
     name: string,
     ref: GenServerRef<State, CallMsg, CastMsg, CallReply>,
   ): Promise<void> {
-    // Dynamic import to avoid circular dependencies
     const { GlobalRegistry, Cluster } = await import('../distribution/index.js');
+    const { GenServer } = await import('./gen-server.js');
 
     const localNodeId = Cluster.getLocalNodeId();
 
@@ -340,9 +376,6 @@ export const Registry = {
       id: ref.id,
       nodeId: localNodeId,
     });
-
-    // Also register locally for automatic cleanup on termination
-    ensureLifecycleHandler();
 
     // Set up cleanup when process terminates
     const unsubscribe = GenServer.onLifecycleEvent((event) => {
@@ -381,9 +414,6 @@ export const Registry = {
 
     const serializedRef = GlobalRegistry.lookup(name);
 
-    // Convert SerializedRef back to GenServerRef
-    // We create a minimal ref that can be used for remote calls
-    // The brand is only for compile-time checking, so we can safely cast
     return {
       id: serializedRef.id,
       nodeId: serializedRef.nodeId,
