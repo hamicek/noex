@@ -1151,7 +1151,11 @@ export const GenServer = {
     // Register in Registry if name is provided
     if (options.name) {
       try {
-        Registry.register(options.name, ref);
+        if (options.registry) {
+          options.registry.register(options.name, ref);
+        } else {
+          Registry.register(options.name, ref);
+        }
       } catch (error) {
         // Rollback: clean up the server instance on registration failure
         instance.stopPeriodicSnapshots();

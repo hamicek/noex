@@ -7,6 +7,7 @@
 
 import type { PersistenceConfig, StateMetadata } from '../persistence/types.js';
 import type { MonitorId, ProcessDownReason, SerializedRef } from '../distribution/types.js';
+import type { RegistryInstance } from './registry-instance.js';
 
 // Re-export for use in GenServerBehavior and LifecycleEvent
 export type { StateMetadata } from '../persistence/types.js';
@@ -220,6 +221,33 @@ export interface StartOptions<State = unknown> {
    * ```
    */
   readonly persistence?: PersistenceConfig<State>;
+
+  /**
+   * Optional custom registry instance for name registration.
+   *
+   * When provided, the server will be registered in this RegistryInstance
+   * instead of the global Registry. This enables using application-specific
+   * registries with custom key modes or metadata.
+   *
+   * Requires `name` to be set. The registration is automatically
+   * cleaned up when the server terminates (via the registry's lifecycle handler).
+   *
+   * @example
+   * ```typescript
+   * const services = Registry.create<{ version: string }>({
+   *   name: 'services',
+   *   keys: 'unique',
+   * });
+   * await services.start();
+   *
+   * const ref = await GenServer.start(behavior, {
+   *   name: 'auth',
+   *   registry: services,
+   * });
+   * // Registered in 'services' registry, not in the global Registry
+   * ```
+   */
+  readonly registry?: RegistryInstance;
 
   /**
    * When true, exit signals from linked processes are delivered as

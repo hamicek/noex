@@ -521,6 +521,141 @@ describe('Registry', () => {
     });
   });
 
+  describe('GenServer.start() with registry option', () => {
+    it('registers in the custom registry instead of global', async () => {
+      const custom = Registry.create({ name: 'custom', keys: 'unique' });
+      await custom.start();
+
+      const ref = await GenServer.start(createCounterBehavior(), {
+        name: 'my-service',
+        registry: custom,
+      });
+
+      // Registered in custom registry
+      expect(custom.isRegistered('my-service')).toBe(true);
+      // NOT in global registry
+      expect(Registry.isRegistered('my-service')).toBe(false);
+
+      await GenServer.stop(ref);
+      await custom.close();
+    });
+
+    it('cleanup works when server terminates', async () => {
+      const custom = Registry.create({ name: 'cleanup-test', keys: 'unique' });
+      await custom.start();
+
+      const ref = await GenServer.start(createCounterBehavior(), {
+        name: 'ephemeral',
+        registry: custom,
+      });
+
+      expect(custom.isRegistered('ephemeral')).toBe(true);
+
+      await GenServer.stop(ref);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(custom.isRegistered('ephemeral')).toBe(false);
+
+      await custom.close();
+    });
+
+    it('rollback on registration failure in custom registry', async () => {
+      const custom = Registry.create({ name: 'rollback-test', keys: 'unique' });
+      await custom.start();
+
+      // Pre-register a name to cause conflict
+      const ref1 = await GenServer.start(createCounterBehavior());
+      custom.register('taken', ref1);
+
+      // Attempting to start with same name in the same registry should fail
+      await expect(
+        GenServer.start(createCounterBehavior(), {
+          name: 'taken',
+          registry: custom,
+        }),
+      ).rejects.toThrow();
+
+      await GenServer.stop(ref1);
+      await custom.close();
+    });
+
+    it('without registry option, uses global registry (backward compat)', async () => {
+      const ref = await GenServer.start(createCounterBehavior(), {
+        name: 'global-service',
+      });
+
+      expect(Registry.isRegistered('global-service')).toBe(true);
+
+      await GenServer.stop(ref);
+    });
+
+    it('works with duplicate-key registry', async () => {
+      const pubsub = Registry.create({ name: 'pubsub', keys: 'duplicate' });
+      await pubsub.start();
+
+      const ref1 = await GenServer.start(createCounterBehavior(), {
+        name: 'events',
+        registry: pubsub,
+      });
+      const ref2 = await GenServer.start(createCounterBehavior(), {
+        name: 'events',
+        registry: pubsub,
+      });
+
+      expect(pubsub.countForKey('events')).toBe(2);
+
+      const all = pubsub.lookupAll('events');
+      expect(all).toHaveLength(2);
+
+      await GenServer.stop(ref1);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(pubsub.countForKey('events')).toBe(1);
+      expect(all[1]!.ref.id).toBe(ref2.id);
+
+      await GenServer.stop(ref2);
+      await pubsub.close();
+    });
+
+    it('custom registry with metadata', async () => {
+      interface ServiceMeta {
+        version: string;
+      }
+      const services = Registry.create<ServiceMeta>({ name: 'services' });
+      await services.start();
+
+      // Register directly with metadata — GenServer.start doesn't pass metadata,
+      // so we test that the registry option works and then register metadata manually
+      const ref = await GenServer.start(createCounterBehavior(), {
+        name: 'auth',
+        registry: services,
+      });
+
+      // Update metadata after registration
+      services.updateMetadata('auth', () => ({ version: '2.0' }));
+      const entry = services.lookup('auth');
+      expect(entry.metadata.version).toBe('2.0');
+      expect(entry.ref.id).toBe(ref.id);
+
+      await GenServer.stop(ref);
+      await services.close();
+    });
+
+    it('does not register without name even if registry is provided', async () => {
+      const custom = Registry.create({ name: 'no-name-test' });
+      await custom.start();
+
+      const ref = await GenServer.start(createCounterBehavior(), {
+        registry: custom,
+      });
+
+      expect(custom.count()).toBe(0);
+
+      await GenServer.stop(ref);
+      await custom.close();
+    });
+  });
+
   describe('edge cases', () => {
     it('handles empty string as name', async () => {
       const ref = await GenServer.start(createCounterBehavior());
