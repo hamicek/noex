@@ -86,6 +86,9 @@ export type {
   DispatchFn,
 } from './core/registry-types.js';
 
+// Agent
+export { Agent, type AgentRef, type AgentOptions } from './core/agent.js';
+
 // ETS (Erlang Term Storage)
 export { Ets } from './core/ets-facade.js';
 export { EtsTable, EtsKeyNotFoundError, EtsCounterTypeError } from './core/ets-table.js';
