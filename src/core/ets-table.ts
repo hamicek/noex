@@ -14,6 +14,8 @@ import type {
   EtsMatchResult,
   EtsInfo,
 } from './ets-types.js';
+import { EtsPersistenceHandler } from './ets-persistence.js';
+import type { EtsStateSnapshot } from './ets-persistence.js';
 
 // =============================================================================
 // Error Classes
@@ -148,6 +150,7 @@ export class EtsTable<K, V> {
   readonly type: EtsTableType;
 
   private readonly keyComparator: (a: K, b: K) => number;
+  private readonly persistenceHandler: EtsPersistenceHandler<K, V> | null;
   private started = false;
   private closed = false;
 
@@ -164,6 +167,9 @@ export class EtsTable<K, V> {
     this.type = options?.type ?? 'set';
     this.name = options?.name ?? `ets-${++instanceCounter}`;
     this.keyComparator = options?.keyComparator ?? defaultComparator;
+    this.persistenceHandler = options?.persistence
+      ? new EtsPersistenceHandler<K, V>(this.name, options.persistence)
+      : null;
   }
 
   // ===========================================================================
@@ -172,20 +178,31 @@ export class EtsTable<K, V> {
 
   /**
    * Initialize the table. Must be called before any operations.
-   * In future phases, this will handle persistence restore.
+   * Restores persisted state if persistence is configured.
    */
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
+
+    if (this.persistenceHandler) {
+      const restored = await this.persistenceHandler.restore();
+      if (restored) {
+        this.loadEntries(restored.entries);
+      }
+    }
   }
 
   /**
    * Shut down the table. After close(), no further operations are allowed.
-   * In future phases, this will handle persistence flush.
+   * Flushes pending persistence if configured.
    */
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+
+    if (this.persistenceHandler) {
+      await this.persistenceHandler.persistNow(this.createSnapshot());
+    }
   }
 
   // ===========================================================================
@@ -225,6 +242,8 @@ export class EtsTable<K, V> {
         this.insertBag(key, entry, false);
         break;
     }
+
+    this.notifyPersistence();
   }
 
   /**
@@ -274,8 +293,11 @@ export class EtsTable<K, V> {
     this.assertOpen();
 
     switch (this.type) {
-      case 'set':
-        return this.setStore.delete(key);
+      case 'set': {
+        const deleted = this.setStore.delete(key);
+        if (deleted) this.notifyPersistence();
+        return deleted;
+      }
 
       case 'ordered_set': {
         const { index, found } = binarySearchIndex(
@@ -285,14 +307,18 @@ export class EtsTable<K, V> {
         );
         if (found) {
           this.orderedStore.splice(index, 1);
+          this.notifyPersistence();
           return true;
         }
         return false;
       }
 
       case 'bag':
-      case 'duplicate_bag':
-        return this.bagStore.delete(key);
+      case 'duplicate_bag': {
+        const deleted = this.bagStore.delete(key);
+        if (deleted) this.notifyPersistence();
+        return deleted;
+      }
     }
   }
 
@@ -311,6 +337,7 @@ export class EtsTable<K, V> {
         const entry = this.setStore.get(key);
         if (entry && entry.value === value) {
           this.setStore.delete(key);
+          this.notifyPersistence();
           return true;
         }
         return false;
@@ -324,6 +351,7 @@ export class EtsTable<K, V> {
         );
         if (found && this.orderedStore[index]!.value === value) {
           this.orderedStore.splice(index, 1);
+          this.notifyPersistence();
           return true;
         }
         return false;
@@ -341,6 +369,7 @@ export class EtsTable<K, V> {
         if (entries.length === 0) {
           this.bagStore.delete(key);
         }
+        this.notifyPersistence();
         return true;
       }
     }
@@ -463,6 +492,8 @@ export class EtsTable<K, V> {
         this.bagStore.clear();
         break;
     }
+
+    this.notifyPersistence();
   }
 
   // ===========================================================================
@@ -758,6 +789,46 @@ export class EtsTable<K, V> {
           yield* entries;
         }
         break;
+    }
+  }
+
+  // ===========================================================================
+  // Persistence Helpers
+  // ===========================================================================
+
+  private createSnapshot(): EtsStateSnapshot<K, V> {
+    return {
+      tableName: this.name,
+      tableType: this.type,
+      entries: Array.from(this.iterateEntries()),
+    };
+  }
+
+  private notifyPersistence(): void {
+    if (this.persistenceHandler) {
+      this.persistenceHandler.schedulePersist(this.createSnapshot());
+    }
+  }
+
+  private loadEntries(entries: ReadonlyArray<EtsEntry<K, V>>): void {
+    for (const entry of entries) {
+      switch (this.type) {
+        case 'set':
+          this.setStore.set(entry.key, entry);
+          break;
+
+        case 'ordered_set':
+          this.insertOrdered(entry.key, entry);
+          break;
+
+        case 'bag':
+          this.insertBag(entry.key, entry, true);
+          break;
+
+        case 'duplicate_bag':
+          this.insertBag(entry.key, entry, false);
+          break;
+      }
     }
   }
 }
