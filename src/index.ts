@@ -86,6 +86,19 @@ export type {
   DispatchFn,
 } from './core/registry-types.js';
 
+// ETS (Erlang Term Storage)
+export { Ets } from './core/ets-facade.js';
+export { EtsTable, EtsKeyNotFoundError, EtsCounterTypeError } from './core/ets-table.js';
+export type {
+  EtsTableType,
+  EtsOptions,
+  EtsPersistenceConfig,
+  EtsEntry,
+  EtsPredicate,
+  EtsMatchResult,
+  EtsInfo,
+} from './core/ets-types.js';
+
 // Services
 export { EventBus, type EventBusRef, type EventBusOptions } from './services/event-bus.js';
 export {
