@@ -16,6 +16,7 @@ import type {
 } from './ets-types.js';
 import { EtsPersistenceHandler } from './ets-persistence.js';
 import type { EtsStateSnapshot } from './ets-persistence.js';
+import { globToRegExp } from './glob-utils.js';
 
 // =============================================================================
 // Error Classes
@@ -49,33 +50,6 @@ export class EtsCounterTypeError extends Error {
       `Cannot use updateCounter on key '${String(key)}' in ETS table '${tableName}': value is not a number.`,
     );
   }
-}
-
-// =============================================================================
-// Glob Matching (local copy — will be extracted to shared utility in Phase 5)
-// =============================================================================
-
-function globToRegExp(pattern: string): RegExp {
-  let regexStr = '^';
-  for (let i = 0; i < pattern.length; i++) {
-    const char = pattern[i]!;
-    if (char === '*') {
-      if (i + 1 < pattern.length && pattern[i + 1] === '*') {
-        regexStr += '.*';
-        i++;
-      } else {
-        regexStr += '[^/]*';
-      }
-    } else if (char === '?') {
-      regexStr += '.';
-    } else if ('.+^${}()|[]\\'.includes(char)) {
-      regexStr += '\\' + char;
-    } else {
-      regexStr += char;
-    }
-  }
-  regexStr += '$';
-  return new RegExp(regexStr);
 }
 
 // =============================================================================

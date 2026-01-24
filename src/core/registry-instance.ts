@@ -21,6 +21,7 @@ import type {
   DispatchFn,
 } from './registry-types.js';
 import { GenServer } from './gen-server.js';
+import { globToRegExp } from './glob-utils.js';
 
 // =============================================================================
 // Error Classes
@@ -70,38 +71,6 @@ export class DuplicateRegistrationError extends Error {
       `Ref '${refId}' is already registered under key '${key}' in registry '${registryName}'.`,
     );
   }
-}
-
-// =============================================================================
-// Glob Pattern Matching
-// =============================================================================
-
-/**
- * Converts a glob pattern to a RegExp.
- * Supports `*` (any chars except separator) and `**` (any chars including separator).
- * Also supports `?` for single character.
- */
-function globToRegExp(pattern: string): RegExp {
-  let regexStr = '^';
-  for (let i = 0; i < pattern.length; i++) {
-    const char = pattern[i]!;
-    if (char === '*') {
-      if (i + 1 < pattern.length && pattern[i + 1] === '*') {
-        regexStr += '.*';
-        i++;
-      } else {
-        regexStr += '[^/]*';
-      }
-    } else if (char === '?') {
-      regexStr += '.';
-    } else if ('.+^${}()|[]\\'.includes(char)) {
-      regexStr += '\\' + char;
-    } else {
-      regexStr += char;
-    }
-  }
-  regexStr += '$';
-  return new RegExp(regexStr);
 }
 
 // =============================================================================
