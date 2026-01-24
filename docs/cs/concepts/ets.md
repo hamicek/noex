@@ -209,6 +209,115 @@ await table.close();  // persistuje finální stav
 - `persistOnShutdown` — zapíše stav při `close()` (výchozí: `true`)
 - Chyby jsou non-fatální — tabulka pokračuje v in-memory provozu
 
+## Odolnost proti pádům
+
+ETS tabulky jsou čisté in-memory objekty — nejsou to procesy a nelze je přímo supervizovat. Pokud Node.js proces spadne, veškerá in-memory data jsou ztracena. Existují dvě komplementární strategie pro odolnost proti chybám:
+
+### Pouze persistence
+
+Nejjednodušší přístup. Tabulka přežije restart procesu díky volbě `persistence`. Při restartu `start()` obnoví poslední persistovaný stav. Maximální okno ztráty dat odpovídá `debounceMs`:
+
+```typescript
+const table = Ets.new<string, number>({
+  name: 'counters',
+  persistence: {
+    adapter: new FileAdapter({ dir: './data' }),
+    debounceMs: 100, // max 100ms ztráta dat při pádu
+    restoreOnStart: true,
+  },
+});
+await table.start(); // obnoví předchozí stav
+```
+
+### Supervizovaný GenServer wrapper
+
+Pro plnou supervizi (automatický restart, izolace pádů) zabalte ETS tabulku do GenServeru a umístěte ji pod Supervisor:
+
+```typescript
+import { GenServer, Supervisor, Ets } from 'noex';
+import type { GenServerBehavior, EtsTable } from 'noex';
+import { FileAdapter } from 'noex/persistence';
+
+// Typy zpráv
+type CallMsg =
+  | { type: 'get'; key: string }
+  | { type: 'increment'; key: string; amount: number }
+  | { type: 'keys' };
+
+type CastMsg =
+  | { type: 'set'; key: string; value: number }
+  | { type: 'delete'; key: string };
+
+// GenServer obalující ETS tabulku
+const counterTableBehavior: GenServerBehavior<
+  EtsTable<string, number>,
+  CallMsg,
+  CastMsg,
+  number | string[] | undefined
+> = {
+  async init() {
+    const table = Ets.new<string, number>({
+      name: 'supervised-counters',
+      persistence: {
+        adapter: new FileAdapter({ dir: './data' }),
+        restoreOnStart: true,
+      },
+    });
+    await table.start();
+    return table;
+  },
+
+  handleCall(msg, table) {
+    switch (msg.type) {
+      case 'get':
+        return [table.lookup(msg.key) as number | undefined, table];
+      case 'increment':
+        return [table.updateCounter(msg.key, msg.amount), table];
+      case 'keys':
+        return [table.keys(), table];
+    }
+  },
+
+  handleCast(msg, table) {
+    switch (msg.type) {
+      case 'set':
+        table.insert(msg.key, msg.value);
+        break;
+      case 'delete':
+        table.delete(msg.key);
+        break;
+    }
+    return table;
+  },
+
+  async terminate(_reason, table) {
+    await table.close(); // zapíše persistenci
+  },
+};
+
+// Umístění pod Supervisor pro automatický restart
+const sup = await Supervisor.start({
+  children: [
+    { id: 'counter-table', start: () => GenServer.start(counterTableBehavior) },
+  ],
+  strategy: 'one_for_one',
+});
+```
+
+Tím získáte:
+- **Zotavení z pádu** — Supervisor restartuje GenServer → `init()` → `table.start()` → stav obnoven z persistence
+- **Serializovaný přístup** — Všechny operace jdou přes message queue GenServeru (žádné race conditions)
+- **Graceful shutdown** — `terminate()` zapíše nedokončenou persistenci před ukončením procesu
+
+### Kdy použít kterou strategii
+
+| Scénář | Strategie |
+|--------|-----------|
+| Jednoduchý cache, metriky | Pouze persistence |
+| Sdílený mutable stav s crash recovery | GenServer wrapper + Supervisor |
+| Hodně čtení, málo zápisů | Pouze persistence (jednodušší) |
+| Kritická data, konkurentní zapisovatelé | GenServer wrapper (serializovaný přístup) |
+
 ## Příklady použití
 
 ### Caching

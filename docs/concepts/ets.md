@@ -209,6 +209,115 @@ await table.close();  // persists final state
 - `persistOnShutdown` — flushes state on `close()` (default: `true`)
 - Errors are non-fatal — the table continues operating in-memory
 
+## Fault Tolerance
+
+ETS tables are plain in-memory objects — they are not processes and cannot be directly supervised. If the Node.js process crashes, all in-memory data is lost. There are two complementary strategies for fault tolerance:
+
+### Persistence Only
+
+The simplest approach. The table survives process restarts via the `persistence` option. On restart, `start()` restores the last persisted state. The maximum data loss window equals `debounceMs`:
+
+```typescript
+const table = Ets.new<string, number>({
+  name: 'counters',
+  persistence: {
+    adapter: new FileAdapter({ dir: './data' }),
+    debounceMs: 100, // at most 100ms of data lost on crash
+    restoreOnStart: true,
+  },
+});
+await table.start(); // restores previous state
+```
+
+### Supervised GenServer Wrapper
+
+For full supervision (automatic restart, crash isolation), wrap the ETS table in a GenServer and place it under a Supervisor:
+
+```typescript
+import { GenServer, Supervisor, Ets } from 'noex';
+import type { GenServerBehavior, EtsTable } from 'noex';
+import { FileAdapter } from 'noex/persistence';
+
+// Message types
+type CallMsg =
+  | { type: 'get'; key: string }
+  | { type: 'increment'; key: string; amount: number }
+  | { type: 'keys' };
+
+type CastMsg =
+  | { type: 'set'; key: string; value: number }
+  | { type: 'delete'; key: string };
+
+// GenServer wrapping an ETS table
+const counterTableBehavior: GenServerBehavior<
+  EtsTable<string, number>,
+  CallMsg,
+  CastMsg,
+  number | string[] | undefined
+> = {
+  async init() {
+    const table = Ets.new<string, number>({
+      name: 'supervised-counters',
+      persistence: {
+        adapter: new FileAdapter({ dir: './data' }),
+        restoreOnStart: true,
+      },
+    });
+    await table.start();
+    return table;
+  },
+
+  handleCall(msg, table) {
+    switch (msg.type) {
+      case 'get':
+        return [table.lookup(msg.key) as number | undefined, table];
+      case 'increment':
+        return [table.updateCounter(msg.key, msg.amount), table];
+      case 'keys':
+        return [table.keys(), table];
+    }
+  },
+
+  handleCast(msg, table) {
+    switch (msg.type) {
+      case 'set':
+        table.insert(msg.key, msg.value);
+        break;
+      case 'delete':
+        table.delete(msg.key);
+        break;
+    }
+    return table;
+  },
+
+  async terminate(_reason, table) {
+    await table.close(); // flushes persistence
+  },
+};
+
+// Place under Supervisor for automatic restart
+const sup = await Supervisor.start({
+  children: [
+    { id: 'counter-table', start: () => GenServer.start(counterTableBehavior) },
+  ],
+  strategy: 'one_for_one',
+});
+```
+
+This gives you:
+- **Crash recovery** — Supervisor restarts the GenServer → `init()` → `table.start()` → state restored from persistence
+- **Serialized access** — All operations go through the GenServer message queue (no race conditions)
+- **Graceful shutdown** — `terminate()` flushes pending persistence before the process stops
+
+### When to Use Which
+
+| Scenario | Strategy |
+|----------|----------|
+| Simple cache, metrics | Persistence only |
+| Shared mutable state with crash recovery | GenServer wrapper + Supervisor |
+| Read-heavy, write-rare | Persistence only (simpler) |
+| Critical data, concurrent writers | GenServer wrapper (serialized access) |
+
 ## Use Cases
 
 ### Caching
