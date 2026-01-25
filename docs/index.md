@@ -16,6 +16,7 @@ Elixir-style GenServer and Supervisor patterns for TypeScript.
 
 | Section | Description |
 |---------|-------------|
+| [Learning Guide](./learn/index.md) | Comprehensive tutorial for mastering noex |
 | [Getting Started](./getting-started/index.md) | Installation, quick start, first application |
 | [Core Concepts](./concepts/index.md) | GenServer, Supervisor, Registry, lifecycle |
 | [Distribution](./distribution/index.md) | Clustering, remote processes, fault tolerance |
@@ -109,7 +110,8 @@ await Supervisor.stop(supervisor);
 
 ## Learn More
 
-- **New to noex?** Start with [Getting Started](./getting-started/index.md)
+- **New to noex?** Start with the [Learning Guide](./learn/index.md) for a comprehensive tutorial
+- **Quick setup?** Jump to [Getting Started](./getting-started/index.md)
 - **Coming from Elixir?** Check out [Elixir Comparison](./concepts/elixir-comparison.md)
 - **Want to dive deep?** Read the [Core Concepts](./concepts/index.md)
 - **Building distributed systems?** Explore [Distribution](./distribution/index.md)
