@@ -61,6 +61,22 @@
       "description": "Named process lookup. Find processes by name instead of managing references."
     }
   },
+  "patterns": {
+    "title": "Advanced Patterns",
+    "subtitle": "Higher-level abstractions for common concurrency scenarios",
+    "genStateMachine": {
+      "title": "GenStateMachine",
+      "description": "Explicit finite state machines with typed states and transitions. Perfect for workflows and protocols."
+    },
+    "agent": {
+      "title": "Agent",
+      "description": "Simple state container when you need just state, not a full process. Functional updates with get/update."
+    },
+    "task": {
+      "title": "Task",
+      "description": "Supervised async operations with concurrency control. Run fire-and-forget jobs or await results."
+    }
+  },
   "services": {
     "title": "Built-in Services",
     "subtitle": "Production-ready utilities that work seamlessly with your processes",

@@ -61,6 +61,22 @@
       "description": "Vyhledávání procesů podle jména. Najděte procesy pomocí názvu místo správy referencí."
     }
   },
+  "patterns": {
+    "title": "Pokročilé vzory",
+    "subtitle": "Abstrakce vyšší úrovně pro běžné konkurenční scénáře",
+    "genStateMachine": {
+      "title": "GenStateMachine",
+      "description": "Explicitní konečné automaty s typovanými stavy a přechody. Ideální pro workflows a protokoly."
+    },
+    "agent": {
+      "title": "Agent",
+      "description": "Jednoduchý kontejner stavu, když potřebujete jen stav, ne celý proces. Funkcionální aktualizace s get/update."
+    },
+    "task": {
+      "title": "Task",
+      "description": "Supervisované asynchronní operace s řízením konkurence. Spouštějte fire-and-forget úlohy nebo čekejte na výsledky."
+    }
+  },
   "services": {
     "title": "Vestavěné služby",
     "subtitle": "Produkčně připravené utility, které bezproblémově spolupracují s vašimi procesy",
