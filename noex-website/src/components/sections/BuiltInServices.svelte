@@ -12,6 +12,7 @@
     cache: Service;
     eventbus: Service;
     ratelimiter: Service;
+    ets: Service;
   }
 
   interface Props {
@@ -22,7 +23,7 @@
 
   let sectionRef: HTMLElement | null = $state(null);
   let isVisible = $state(false);
-  let cardsVisible = $state([false, false, false]);
+  let cardsVisible = $state([false, false, false, false]);
   let activeCard = $state<number | null>(null);
   let connectionsVisible = $state(false);
 
@@ -80,7 +81,14 @@ const limiter = new RateLimiter({
 
 if (await limiter.acquire('api:user:123')) {
   // Process request
-}`
+}`,
+    ets: `// In-memory key-value storage
+const users = new EtsTable({ name: 'users', type: 'set' });
+await users.start();
+
+users.insert('user:1', { name: 'Alice', score: 100 });
+const alice = users.lookup('user:1');
+const top = users.select(([k, v]) => v.score > 50);`
   };
 
   const services = $derived([
@@ -107,6 +115,14 @@ if (await limiter.acquire('api:user:123')) {
       data: translations.ratelimiter,
       code: codeSnippets.ratelimiter,
       useCases: ['API protection', 'Resource throttling', 'DoS prevention']
+    },
+    {
+      key: 'ets' as const,
+      icon: 'table',
+      accent: 'secondary',
+      data: translations.ets,
+      code: codeSnippets.ets,
+      useCases: ['Fast lookups', 'Session data', 'Shared state']
     }
   ]);
 </script>
@@ -177,7 +193,7 @@ if (await limiter.acquire('api:user:123')) {
       </svg>
 
       <!-- Service cards -->
-      <div class="cards-grid grid lg:grid-cols-3 gap-6 lg:gap-8">
+      <div class="cards-grid grid md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
         {#each services as service, index}
           <article
             class="service-card"
@@ -214,6 +230,13 @@ if (await limiter.acquire('api:user:123')) {
                     <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
                     <path d="M12 6v6l4 2" />
                     <path d="M16.24 7.76l-1.41 1.41" stroke-linecap="round" />
+                  </svg>
+                {:else if service.icon === 'table'}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18" />
+                    <path d="M3 15h18" />
+                    <path d="M9 3v18" />
                   </svg>
                 {/if}
               </div>
@@ -266,15 +289,15 @@ if (await limiter.acquire('api:user:123')) {
       // Keywords
       .replace(/\b(const|let|new|await|async|if|return)\b/g, '<span class="hl-keyword">$1</span>')
       // Classes/Types
-      .replace(/\b(Cache|EventBus|RateLimiter)\b/g, '<span class="hl-class">$1</span>')
+      .replace(/\b(Cache|EventBus|RateLimiter|EtsTable)\b/g, '<span class="hl-class">$1</span>')
       // Methods
-      .replace(/\b(set|get|subscribe|publish|acquire|sendConfirmation)\b/g, '<span class="hl-method">$1</span>')
+      .replace(/\b(set|get|subscribe|publish|acquire|sendConfirmation|start|insert|lookup|select)\b/g, '<span class="hl-method">$1</span>')
       // Strings
       .replace(/'([^']+)'/g, '<span class="hl-string">\'$1\'</span>')
       // Numbers
       .replace(/\b(\d+(_\d+)?)\b/g, '<span class="hl-number">$1</span>')
       // Properties
-      .replace(/\b(ttl|tokens|interval)\b(?=\s*:)/g, '<span class="hl-property">$1</span>')
+      .replace(/\b(ttl|tokens|interval|name|type|score)\b(?=\s*:)/g, '<span class="hl-property">$1</span>')
       // Comments
       .replace(/(\/\/[^\n]*)/g, '<span class="hl-comment">$1</span>')
       // Arrow functions
@@ -736,7 +759,7 @@ if (await limiter.acquire('api:user:123')) {
   /* Responsive */
   @media (max-width: 1024px) {
     .cards-grid {
-      max-width: 500px;
+      max-width: 600px;
       margin-left: auto;
       margin-right: auto;
     }

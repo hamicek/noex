@@ -91,6 +91,10 @@
     "ratelimiter": {
       "title": "RateLimiter",
       "description": "Token bucket rate limiting for APIs and resources"
+    },
+    "ets": {
+      "title": "ETS",
+      "description": "Erlang Term Storage - fast in-memory key-value store with pattern matching"
     }
   },
   "observability": {

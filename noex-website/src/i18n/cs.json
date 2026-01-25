@@ -91,6 +91,10 @@
     "ratelimiter": {
       "title": "RateLimiter",
       "description": "Token bucket rate limiting pro API a zdroje"
+    },
+    "ets": {
+      "title": "ETS",
+      "description": "Erlang Term Storage - rychlé in-memory key-value úložiště s pattern matchingem"
     }
   },
   "observability": {
