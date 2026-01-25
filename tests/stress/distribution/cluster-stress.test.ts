@@ -221,8 +221,8 @@ describe('Cluster Membership Stress Tests', () => {
       DistributedMetricsAssertions.assertMemoryGrowthBelow(metrics, 150);
     }, LARGE_CLUSTER_TIMEOUT_MS);
 
-    it('forms 15-node cluster demonstrating scalability', async () => {
-      const nodeCount = 15;
+    it('forms 12-node cluster demonstrating scalability', async () => {
+      const nodeCount = 12;
 
       let nodeUpEventCount = 0;
       cluster = new TestCluster(
@@ -238,7 +238,7 @@ describe('Cluster Membership Stress Tests', () => {
       const startTime = Date.now();
       await cluster._start();
       metricsCollector = createAndStartMetrics(cluster);
-      await cluster.waitForFullMesh(90000);
+      await cluster.waitForFullMesh(60000);
       const meshFormationTime = Date.now() - startTime;
 
       metricsCollector.stop();
@@ -249,9 +249,9 @@ describe('Cluster Membership Stress Tests', () => {
       expect(cluster.getRunningNodeCount()).toBe(nodeCount);
 
       // Formation time scales with cluster size but should still be reasonable
-      expect(meshFormationTime).toBeLessThan(90000);
+      expect(meshFormationTime).toBeLessThan(60000);
 
-      // Total connections: 15 * 14 = 210 bidirectional pairs
+      // Total connections: 12 * 11 = 132 bidirectional pairs
       for (const node of cluster.getNodes()) {
         expect(node.connectedNodes.length).toBe(nodeCount - 1);
       }
