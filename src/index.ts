@@ -89,6 +89,18 @@ export type {
 // Agent
 export { Agent, type AgentRef, type AgentOptions } from './core/agent.js';
 
+// Task
+export { Task } from './core/task.js';
+export type {
+  TaskRef,
+  TaskSupervisorRef,
+  TaskSupervisorOptions,
+  TaskAwaitOptions,
+  AsyncStreamOptions,
+  StreamResult,
+} from './core/task-types.js';
+export { TaskTimeoutError, TaskExecutionError } from './core/task-types.js';
+
 // ETS (Erlang Term Storage)
 export { Ets } from './core/ets-facade.js';
 export { EtsTable, EtsKeyNotFoundError, EtsCounterTypeError } from './core/ets-table.js';
