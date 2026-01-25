@@ -183,6 +183,54 @@ const supervisor = await Supervisor.start({
 });
 ```
 
+## Traditional Node.js vs Actor Model
+
+The following diagram illustrates the fundamental difference between traditional shared-state programming and the actor model:
+
+```text
+┌─────────────────────────────────────────┐  ┌─────────────────────────────────────────┐
+│       TRADITIONAL NODE.JS               │  │           ACTOR MODEL (noex)            │
+├─────────────────────────────────────────┤  ├─────────────────────────────────────────┤
+│                                         │  │                                         │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
+│  │Request 1│  │Request 2│  │Request 3│  │  │  │Request 1│  │Request 2│  │Request 3│  │
+│  └────┬────┘  └────┬────┘  └────┬────┘  │  │  └────┬────┘  └────┬────┘  └────┬────┘  │
+│       │            │            │       │  │       │            │            │       │
+│       ▼            ▼            ▼       │  │       ▼            ▼            ▼       │
+│  ┌──────────────────────────────────┐   │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
+│  │                                  │   │  │  │ Process │  │ Process │  │ Process │  │
+│  │         SHARED STATE            │   │  │  │    A    │  │    B    │  │    C    │  │
+│  │     ┌─────────────────┐         │   │  │  │ ┌─────┐ │  │ ┌─────┐ │  │ ┌─────┐ │  │
+│  │     │   users: Map    │ ◄───────┼───│  │  │ │state│ │  │ │state│ │  │ │state│ │  │
+│  │     │   sessions: {}  │         │   │  │  │ └─────┘ │  │ └─────┘ │  │ └─────┘ │  │
+│  │     │   orders: []    │         │   │  │  │ private │  │ private │  │ private │  │
+│  │     └─────────────────┘         │   │  │  └────┬────┘  └────┬────┘  └────┬────┘  │
+│  │                                  │   │  │       │            │            │       │
+│  └──────────────────────────────────┘   │  │       └──────┬─────┴────────────┘       │
+│                                         │  │              │                          │
+│  Problems:                              │  │              ▼                          │
+│  ✗ Race conditions at every await       │  │     ┌────────────────┐                  │
+│  ✗ State corrupted by concurrent access │  │     │   MESSAGES     │                  │
+│  ✗ Crashes lose all in-memory data      │  │     │  (call/cast)   │                  │
+│  ✗ Complex error handling everywhere    │  │     └────────────────┘                  │
+│                                         │  │                                         │
+│                                         │  │  Benefits:                              │
+│  ┌──────────────────────────────────┐   │  │  ✓ No race conditions (sequential msgs) │
+│  │          ERROR HANDLING          │   │  │  ✓ Isolated state (no shared memory)   │
+│  │  try {                           │   │  │  ✓ Crash = restart with clean state    │
+│  │    try {                         │   │  │  ✓ Simple code (let it crash)          │
+│  │      try {                       │   │  │                                         │
+│  │        // pyramid of doom        │   │  │  ┌──────────────────────────────────┐   │
+│  │      } catch...                  │   │  │  │         SUPERVISOR               │   │
+│  │    } catch...                    │   │  │  │  ┌───┐   ┌───┐   ┌───┐          │   │
+│  │  } catch...                      │   │  │  │  │ A │   │ B │   │ C │ ◄─ auto  │   │
+│  └──────────────────────────────────┘   │  │  │  └───┘   └───┘   └───┘   restart│   │
+│                                         │  │  └──────────────────────────────────┘   │
+└─────────────────────────────────────────┘  └─────────────────────────────────────────┘
+```
+
+**Key insight**: In the actor model, each process owns its state exclusively. Communication happens only through messages, which are processed one at a time. This eliminates entire categories of bugs.
+
 ## Erlang/OTP: 40 Years of Battle-Testing
 
 These patterns aren't theoretical. They come from Erlang, a language designed in the 1980s for telecommunications systems that required:
