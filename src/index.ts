@@ -86,6 +86,20 @@ export type {
   DispatchFn,
 } from './core/registry-types.js';
 
+// GenStateMachine
+export { GenStateMachine } from './core/gen-state-machine.js';
+export type {
+  StateMachineBehavior,
+  StateMachineInit,
+  StateMachineOptions,
+  StateMachineRef,
+  StateHandler,
+  StateTransitionResult,
+  StateMachineAction,
+  TimeoutEvent,
+  DeferredReply,
+} from './core/gen-state-machine-types.js';
+
 // Agent
 export { Agent, type AgentRef, type AgentOptions } from './core/agent.js';
 
