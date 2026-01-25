@@ -8,6 +8,7 @@
       counter: { name: string; description: string };
       chat: { name: string; description: string };
       worker: { name: string; description: string };
+      stateMachine: { name: string; description: string };
     };
     terminal: {
       title: string;
@@ -32,7 +33,7 @@
   let isVisible = $state(false);
 
   // Active example tab
-  let activeExample = $state<'counter' | 'chat' | 'worker'>('counter');
+  let activeExample = $state<'counter' | 'chat' | 'worker' | 'stateMachine'>('counter');
 
   // Copy state
   let copied = $state(false);
@@ -182,6 +183,64 @@ console.log(result);`,
         '{ processed: "HELLO", count: 1 }',
       ],
     },
+    stateMachine: {
+      code: `import { GenStateMachine } from '@hamicek/noex';
+import type { StateMachineBehavior } from '@hamicek/noex';
+
+type LightState = 'red' | 'green' | 'yellow';
+type LightEvent = { type: 'timer' } | { type: 'emergency' };
+
+const trafficLight: StateMachineBehavior<LightState, null, LightEvent> = {
+  init: () => ({ state: 'red', data: null }),
+  states: {
+    red: {
+      handleEvent: (event) =>
+        event.type === 'timer'
+          ? { type: 'transition', nextState: 'green', data: null }
+          : { type: 'keep_state_and_data' }
+    },
+    green: {
+      handleEvent: (event) =>
+        event.type === 'timer'
+          ? { type: 'transition', nextState: 'yellow', data: null }
+          : { type: 'keep_state_and_data' }
+    },
+    yellow: {
+      handleEvent: (event) =>
+        event.type === 'timer'
+          ? { type: 'transition', nextState: 'red', data: null }
+          : { type: 'keep_state_and_data' }
+    }
+  }
+};
+
+// Start the state machine
+const light = await GenStateMachine.start(trafficLight);
+
+// Trigger state transitions
+await GenStateMachine.cast(light, { type: 'timer' }); // red -> green
+await GenStateMachine.cast(light, { type: 'timer' }); // green -> yellow
+await GenStateMachine.cast(light, { type: 'timer' }); // yellow -> red
+
+console.log('Traffic light cycle complete');`,
+      output: [
+        '$ npx ts-node traffic-light.ts',
+        '',
+        '✓ GenStateMachine started (pid: <fsm_1>)',
+        '  state: red',
+        '',
+        '→ cast: { type: "timer" }',
+        '  ↳ transition: red → green',
+        '',
+        '→ cast: { type: "timer" }',
+        '  ↳ transition: green → yellow',
+        '',
+        '→ cast: { type: "timer" }',
+        '  ↳ transition: yellow → red',
+        '',
+        'Traffic light cycle complete',
+      ],
+    },
   };
 
   onMount(() => {
@@ -224,7 +283,7 @@ console.log(result);`,
     addLine();
   }
 
-  function switchExample(example: 'counter' | 'chat' | 'worker') {
+  function switchExample(example: 'counter' | 'chat' | 'worker' | 'stateMachine') {
     activeExample = example;
     runTerminalAnimation();
   }
@@ -263,13 +322,13 @@ console.log(result);`,
       // Keywords
       .replace(/\b(import|from|export|class|extends|const|let|var|return|new|await|async|function|if|else|interface)\b/g, '<span class="hl-keyword">$1</span>')
       // Types and Classes
-      .replace(/\b(GenServer|Supervisor|DynamicSupervisor|Registry|EventBus|Counter|Worker|ChatServer|ChatRoom|Set|Array|Promise)\b/g, '<span class="hl-class">$1</span>')
+      .replace(/\b(GenServer|GenStateMachine|StateMachineBehavior|Supervisor|DynamicSupervisor|Registry|EventBus|Counter|Worker|ChatServer|ChatRoom|Set|Array|Promise|LightState|LightEvent)\b/g, '<span class="hl-class">$1</span>')
       // Numbers
       .replace(/\b(\d+)\b/g, '<span class="hl-number">$1</span>')
       // Methods/Functions
       .replace(/\b(init|handleCall|handleCast|start|register|broadcast|call|cast|getChild|setTimeout|toUpperCase|add|push)\b(?=\s*\()/g, '<span class="hl-method">$1</span>')
       // Properties
-      .replace(/\b(type|user|text|data|processed|count|id|strategy|maxRestarts|children|users|messages|taskCount)\b(?=\s*[:\}])/g, '<span class="hl-property">$1</span>')
+      .replace(/\b(type|user|text|data|processed|count|id|strategy|maxRestarts|children|users|messages|taskCount|state|states|init|nextState|handleEvent)\b(?=\s*[:\}])/g, '<span class="hl-property">$1</span>')
       // Built-ins
       .replace(/\b(console|document|navigator)\b/g, '<span class="hl-builtin">$1</span>')
       .replace(/\.(log|clipboard|writeText)\b/g, '.<span class="hl-method">$1</span>');
@@ -313,8 +372,8 @@ console.log(result);`,
       role="tablist"
       aria-label="Code examples"
     >
-      {#each ['counter', 'chat', 'worker'] as example}
-        {@const exampleKey = example as 'counter' | 'chat' | 'worker'}
+      {#each ['counter', 'chat', 'worker', 'stateMachine'] as example}
+        {@const exampleKey = example as 'counter' | 'chat' | 'worker' | 'stateMachine'}
         <button
           role="tab"
           aria-selected={activeExample === exampleKey}
@@ -332,9 +391,14 @@ console.log(result);`,
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
               </svg>
-            {:else}
+            {:else if example === 'worker'}
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
+              </svg>
+            {:else}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h3M10.5 18h3M6 10.5v3M18 10.5v3" />
               </svg>
             {/if}
           </span>

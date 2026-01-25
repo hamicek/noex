@@ -158,6 +158,10 @@
       "worker": {
         "name": "Worker Pool",
         "description": "Supervisované workery"
+      },
+      "stateMachine": {
+        "name": "Stavový automat",
+        "description": "FSM semaforu"
       }
     },
     "terminal": {

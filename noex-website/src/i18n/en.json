@@ -158,6 +158,10 @@
       "worker": {
         "name": "Worker Pool",
         "description": "Supervised workers"
+      },
+      "stateMachine": {
+        "name": "State Machine",
+        "description": "Traffic light FSM"
       }
     },
     "terminal": {
