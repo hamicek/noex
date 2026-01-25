@@ -24,6 +24,7 @@
   let isVisible = $state(false);
   let cardsVisible = $state([false, false, false]);
   let activeCard = $state<number | null>(null);
+  let expandedCode = $state<{ title: string; code: string; filename: string } | null>(null);
 
   onMount(() => {
     if (!sectionRef) return;
@@ -48,6 +49,22 @@
 
     return () => observer.disconnect();
   });
+
+  function openCodeModal(title: string, code: string, filename: string) {
+    expandedCode = { title, code, filename };
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeCodeModal() {
+    expandedCode = null;
+    document.body.style.overflow = '';
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && expandedCode) {
+      closeCodeModal();
+    }
+  }
 
   const codeSnippets = {
     genStateMachine: `const trafficLight: StateMachineBehavior<
@@ -198,21 +215,63 @@ const results = await Task.Supervisor.asyncStream(
             {/each}
           </div>
 
-          <div class="code-block">
+          <button
+            class="code-block"
+            onclick={() => openCodeModal(pattern.data.title, pattern.code, `${pattern.key}.ts`)}
+            aria-label="Expand code"
+            title="Click to expand"
+          >
             <div class="code-header">
               <span class="code-dot code-dot-red"></span>
               <span class="code-dot code-dot-yellow"></span>
               <span class="code-dot code-dot-green"></span>
               <span class="code-filename">{pattern.key}.ts</span>
+              <span class="expand-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              </span>
             </div>
             <pre class="code-content"><code>{@html highlightCode(pattern.code)}</code></pre>
-          </div>
+          </button>
 
           <div class="card-glow" aria-hidden="true"></div>
         </article>
       {/each}
     </div>
   </div>
+
+  {#if expandedCode}
+    <div
+      class="code-modal-overlay"
+      onclick={closeCodeModal}
+      onkeydown={handleKeydown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      tabindex="-1"
+    >
+      <div class="code-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="modal-header">
+          <h3 id="modal-title" class="modal-title">{expandedCode.title}</h3>
+          <button class="modal-close" onclick={closeCodeModal} aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-code-block">
+          <div class="modal-code-header">
+            <span class="code-dot code-dot-red"></span>
+            <span class="code-dot code-dot-yellow"></span>
+            <span class="code-dot code-dot-green"></span>
+            <span class="code-filename">{expandedCode.filename}</span>
+          </div>
+          <pre class="modal-code-content"><code>{@html highlightCode(expandedCode.code)}</code></pre>
+        </div>
+      </div>
+    </div>
+  {/if}
 </section>
 
 <script context="module" lang="ts">
@@ -444,11 +503,23 @@ const results = await Task.Supervisor.asyncStream(
   }
 
   .code-block {
+    width: 100%;
+    text-align: left;
     background: rgba(10, 10, 15, 0.8);
     border: 1px solid var(--color-border);
     border-radius: 8px;
     overflow: hidden;
-    transition: border-color 0.3s ease;
+    transition: border-color 0.3s ease, transform 0.2s ease;
+    cursor: pointer;
+  }
+
+  .code-block:hover {
+    transform: scale(1.02);
+  }
+
+  .code-block:focus-visible {
+    outline: 2px solid var(--color-accent-primary);
+    outline-offset: 2px;
   }
 
   .accent-primary:hover .code-block,
@@ -485,6 +556,32 @@ const results = await Task.Supervisor.asyncStream(
     font-size: 0.7rem;
     color: var(--color-text-secondary);
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  .expand-icon {
+    width: 16px;
+    height: 16px;
+    margin-left: 8px;
+    color: var(--color-text-secondary);
+    opacity: 0;
+    transition: opacity 0.2s ease, color 0.2s ease;
+  }
+
+  .expand-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .code-block:hover .expand-icon {
+    opacity: 1;
+  }
+
+  .accent-primary .code-block:hover .expand-icon {
+    color: var(--color-accent-primary);
+  }
+
+  .accent-secondary .code-block:hover .expand-icon {
+    color: var(--color-accent-secondary);
   }
 
   .code-content {
@@ -589,6 +686,151 @@ const results = await Task.Supervisor.asyncStream(
     }
   }
 
+  /* Code Modal */
+  .code-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .code-modal {
+    background: rgba(18, 18, 26, 0.98);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    max-width: 700px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s ease-out;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .modal-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+
+  .modal-close {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-primary);
+    border-color: var(--color-accent-primary);
+  }
+
+  .modal-close svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .modal-code-block {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-code-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .modal-code-content {
+    flex: 1;
+    overflow: auto;
+    padding: 1.5rem;
+    margin: 0;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+  }
+
+  .modal-code-content code {
+    display: block;
+    white-space: pre;
+  }
+
+  .modal-code-content :global(.hl-keyword) {
+    color: var(--color-accent-secondary);
+  }
+
+  .modal-code-content :global(.hl-class) {
+    color: var(--color-accent-primary);
+  }
+
+  .modal-code-content :global(.hl-method) {
+    color: #dcdcaa;
+  }
+
+  .modal-code-content :global(.hl-string) {
+    color: #ce9178;
+  }
+
+  .modal-code-content :global(.hl-number) {
+    color: #b5cea8;
+  }
+
+  .modal-code-content :global(.hl-property) {
+    color: #9cdcfe;
+  }
+
+  .modal-code-content :global(.hl-comment) {
+    color: #6a9955;
+    font-style: italic;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .section-title,
     .section-subtitle,
@@ -611,6 +853,15 @@ const results = await Task.Supervisor.asyncStream(
     .pattern-card:hover .card-icon,
     .pattern-card.active .card-icon {
       transform: none;
+    }
+
+    .code-block:hover {
+      transform: none;
+    }
+
+    .code-modal-overlay,
+    .code-modal {
+      animation: none;
     }
   }
 </style>
