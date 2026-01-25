@@ -65,6 +65,25 @@ export { GenServer } from './core/gen-server.js';
 // Supervisor
 export { Supervisor } from './core/supervisor.js';
 
+// Application
+export { Application } from './core/application.js';
+export type {
+  ApplicationBehavior,
+  ApplicationStartOptions,
+  ApplicationRef,
+  ApplicationStatus,
+  ApplicationLifecycleEvent,
+  ApplicationLifecycleHandler,
+  ApplicationStopReason,
+} from './core/application-types.js';
+export {
+  ApplicationStartError,
+  ApplicationAlreadyRunningError,
+  ApplicationStopTimeoutError,
+  ApplicationNotRunningError,
+  APPLICATION_DEFAULTS,
+} from './core/application-types.js';
+
 // Registry
 export { Registry } from './core/registry.js';
 export {
