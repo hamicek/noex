@@ -37,11 +37,11 @@ Budujte fault-tolerantní aplikace.
 
 | Kapitola | Popis |
 |----------|-------|
-| [3.1 Proč Supervisor?](../learn/03-supervision/01-why-supervisor.md) | Automatická obnova po selháních |
-| [3.2 První Supervisor](../learn/03-supervision/02-first-supervisor.md) | Vytváření supervizovaných procesů |
-| [3.3 Restart strategie](../learn/03-supervision/03-restart-strategies.md) | one_for_one, one_for_all, rest_for_one |
-| [3.4 Restart intenzita](../learn/03-supervision/04-restart-intensity.md) | Prevence restart smyček |
-| [3.5 Supervision trees](../learn/03-supervision/05-supervision-trees.md) | Hierarchická izolace selhání |
+| [3.1 Proč Supervisor?](./03-supervision/01-proc-supervisor.md) | Automatická obnova po selháních |
+| [3.2 První Supervisor](./03-supervision/02-prvni-supervisor.md) | Vytváření supervizovaných procesů |
+| [3.3 Restart strategie](./03-supervision/03-restart-strategie.md) | one_for_one, one_for_all, rest_for_one |
+| [3.4 Restart intenzita](./03-supervision/04-restart-intenzita.md) | Prevence restart smyček |
+| [3.5 Stromy supervize](./03-supervision/05-stromy-supervize.md) | Hierarchická izolace selhání |
 
 ### Část 4: Myšlení v procesech
 
