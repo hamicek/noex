@@ -90,10 +90,10 @@ Služby připravené k použití pro běžné potřeby.
 
 | Kapitola | Popis |
 |----------|-------|
-| [8.1 EventBus](../learn/08-builtin-services/01-eventbus.md) | Pub/sub messaging |
-| [8.2 Cache](../learn/08-builtin-services/02-cache.md) | LRU cache s TTL |
-| [8.3 RateLimiter](../learn/08-builtin-services/03-ratelimiter.md) | Sliding window rate limiting |
-| [8.4 TimerService](../learn/08-builtin-services/04-timerservice.md) | Trvanlivé naplánované úlohy |
+| [8.1 EventBus](./08-vestavene-sluzby/01-eventbus.md) | Pub/sub messaging |
+| [8.2 Cache](./08-vestavene-sluzby/02-cache.md) | LRU cache s TTL |
+| [8.3 RateLimiter](./08-vestavene-sluzby/03-rate-limiter.md) | Sliding window rate limiting |
+| [8.4 TimerService](./08-vestavene-sluzby/04-timer-service.md) | Trvanlivé naplánované úlohy |
 
 ### Část 9: Application
 
