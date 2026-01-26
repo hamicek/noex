@@ -59,9 +59,9 @@ Explicitní stavy a přechody pro komplexní business logiku.
 
 | Kapitola | Popis |
 |----------|-------|
-| [5.1 Kdy použít](../learn/05-state-machine/01-when-to-use.md) | Stavový automat vs GenServer |
-| [5.2 Definování stavů](../learn/05-state-machine/02-defining-states.md) | Stavy, události, přechody |
-| [5.3 Order workflow](../learn/05-state-machine/03-order-workflow.md) | Praktický příklad |
+| [5.1 Kdy použít](./05-stavovy-automat/01-kdy-pouzit.md) | Stavový automat vs GenServer |
+| [5.2 Definice stavů](./05-stavovy-automat/02-definice-stavu.md) | Stavy, události, přechody |
+| [5.3 Workflow objednávky](./05-stavovy-automat/03-objednavka-workflow.md) | Praktický příklad |
 
 ### Část 6: Persistence
 
