@@ -49,9 +49,9 @@ Naučte se rozložit problémy na procesy.
 
 | Kapitola | Popis |
 |----------|-------|
-| [4.1 Mapování problémů](../learn/04-thinking-in-processes/01-mapping-problems.md) | Jeden proces = jedna zodpovědnost |
-| [4.2 Komunikace mezi procesy](../learn/04-thinking-in-processes/02-ipc.md) | Call, cast, EventBus, Registry |
-| [4.3 Vzory](../learn/04-thinking-in-processes/03-patterns.md) | Request-response, worker pool, circuit breaker |
+| [4.1 Mapování problémů](./04-mysleni-v-procesech/01-mapovani-problemu.md) | Jeden proces = jedna zodpovědnost |
+| [4.2 Komunikace mezi procesy](./04-mysleni-v-procesech/02-komunikace-mezi-procesy.md) | Call, cast, EventBus, Registry |
+| [4.3 Vzory](./04-mysleni-v-procesech/03-vzory.md) | Request-response, worker pool, circuit breaker |
 
 ### Část 5: Stavový automat
 
