@@ -101,9 +101,9 @@ Struktura produkčních aplikací.
 
 | Kapitola | Popis |
 |----------|-------|
-| [9.1 Struktura aplikace](../learn/09-application/01-application-structure.md) | Entry point a životní cyklus |
-| [9.2 Zpracování signálů](../learn/09-application/02-signal-handling.md) | SIGINT/SIGTERM cleanup |
-| [9.3 Produkční setup](../learn/09-application/03-production-setup.md) | Config, logging, health checks |
+| [9.1 Struktura aplikace](./09-aplikace/01-struktura-aplikace.md) | Entry point a životní cyklus |
+| [9.2 Zpracování signálů](./09-aplikace/02-zpracovani-signalu.md) | SIGINT/SIGTERM cleanup |
+| [9.3 Produkční setup](./09-aplikace/03-produkcni-setup.md) | Config, logging, health checks |
 
 ### Část 10: Monitoring
 
