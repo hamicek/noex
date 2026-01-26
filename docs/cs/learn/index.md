@@ -80,9 +80,9 @@ Vysoce výkonné in-memory úložiště.
 
 | Kapitola | Popis |
 |----------|-------|
-| [7.1 Co je ETS](../learn/07-ets/01-what-is-ets.md) | Erlang Term Storage v TypeScriptu |
-| [7.2 Typy tabulek](../learn/07-ets/02-table-types.md) | set, ordered_set, bag, duplicate_bag |
-| [7.3 Praktické použití](../learn/07-ets/03-practical-usage.md) | Cache, sessions, countery |
+| [7.1 Co je ETS](./07-ets/01-co-je-ets.md) | Erlang Term Storage v TypeScriptu |
+| [7.2 Typy tabulek](./07-ets/02-typy-tabulek.md) | set, ordered_set, bag, duplicate_bag |
+| [7.3 Praktické použití](./07-ets/03-prakticke-pouziti.md) | Cache, sessions, countery |
 
 ### Část 8: Vestavěné služby
 
