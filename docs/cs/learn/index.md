@@ -122,9 +122,9 @@ Budujte distribuované systémy.
 
 | Kapitola | Popis |
 |----------|-------|
-| [11.1 Základy clusteringu](../learn/11-distribution/01-clustering-basics.md) | Uzly, discovery, heartbeats |
-| [11.2 Vzdálená volání](../learn/11-distribution/02-remote-calls.md) | Messaging mezi uzly |
-| [11.3 Distributed Supervisor](../learn/11-distribution/03-distributed-supervisor.md) | Multi-node supervize |
+| [11.1 Základy clusteringu](./11-distribuce/01-zaklady-clusteringu.md) | Uzly, discovery, heartbeats |
+| [11.2 Vzdálená volání](./11-distribuce/02-vzdalene-volani.md) | Messaging mezi uzly |
+| [11.3 Distribuovaný Supervisor](./11-distribuce/03-distribuovany-supervisor.md) | Multi-node supervize |
 
 ### Část 12: Projekty
 
