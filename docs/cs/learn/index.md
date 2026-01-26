@@ -132,9 +132,9 @@ Aplikujte vše v reálných projektech.
 
 | Kapitola | Popis |
 |----------|-------|
-| [12.1 Chat Server](../learn/12-projects/01-chat-server.md) | WebSocket + noex |
-| [12.2 Task Queue](../learn/12-projects/02-task-queue.md) | Zpracování úloh s workery |
-| [12.3 API Gateway](../learn/12-projects/03-api-gateway.md) | Rate limiting, caching, circuit breaker |
+| [12.1 Chat Server](./12-projekty/01-chat-server.md) | WebSocket + noex |
+| [12.2 Fronta úloh](./12-projekty/02-fronta-uloh.md) | Zpracování úloh s workery |
+| [12.3 API Gateway](./12-projekty/03-api-brana.md) | Rate limiting, caching, circuit breaker |
 
 ## Formát kapitol
 
