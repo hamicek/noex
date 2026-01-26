@@ -105,16 +105,16 @@ Struktura produkčních aplikací.
 | [9.2 Zpracování signálů](./09-aplikace/02-zpracovani-signalu.md) | SIGINT/SIGTERM cleanup |
 | [9.3 Produkční setup](./09-aplikace/03-produkcni-setup.md) | Config, logging, health checks |
 
-### Část 10: Monitoring
+### Část 10: Monitoring a debugging
 
 Pozorujte a debugujte své aplikace.
 
 | Kapitola | Popis |
 |----------|-------|
-| [10.1 Observer](../learn/10-monitoring/01-observer.md) | Introspekce procesů |
-| [10.2 Dashboard](../learn/10-monitoring/02-dashboard.md) | TUI a vzdálený monitoring |
-| [10.3 AlertManager](../learn/10-monitoring/03-alertmanager.md) | Detekce anomálií |
-| [10.4 Debugging](../learn/10-monitoring/04-debugging.md) | Běžné problémy a techniky |
+| [10.1 Observer](./10-monitoring/01-observer.md) | Introspekce procesů a real-time statistiky |
+| [10.2 Dashboard](./10-monitoring/02-dashboard.md) | TUI a vzdálený monitoring |
+| [10.3 AlertManager](./10-monitoring/03-alertmanager.md) | Detekce anomálií a dynamické prahy |
+| [10.4 Debugging](./10-monitoring/04-debugging.md) | Lifecycle události, trasování zpráv, běžné problémy |
 
 ### Část 11: Distribuce
 
