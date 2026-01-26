@@ -26,10 +26,10 @@ Naučte se základní stavební bloky.
 
 | Kapitola | Popis |
 |----------|-------|
-| [2.1 První GenServer](../learn/02-basics/01-first-genserver.md) | Vytvořte svou první stavovou službu |
-| [2.2 Životní cyklus procesu](../learn/02-basics/02-lifecycle.md) | Stavy start, running, terminate |
-| [2.3 Call vs Cast](../learn/02-basics/03-call-vs-cast.md) | Synchronní vs asynchronní posílání zpráv |
-| [2.4 Registry](../learn/02-basics/04-registry.md) | Vyhledávání pojmenovaných procesů |
+| [2.1 První GenServer](./02-basics/01-prvni-genserver.md) | Vytvořte svou první stavovou službu |
+| [2.2 Životní cyklus procesu](./02-basics/02-zivotni-cyklus.md) | Stavy start, running, terminate |
+| [2.3 Call vs Cast](./02-basics/03-call-vs-cast.md) | Synchronní vs asynchronní posílání zpráv |
+| [2.4 Registry](./02-basics/04-registry.md) | Vyhledávání pojmenovaných procesů |
 
 ### Část 3: Supervision
 
