@@ -69,10 +69,10 @@ Přežijte restarty a zotavte se z pádů.
 
 | Kapitola | Popis |
 |----------|-------|
-| [6.1 Proč persistence?](../learn/06-persistence/01-why-persistence.md) | Obnova stavu po pádu |
-| [6.2 Storage adaptery](../learn/06-persistence/02-storage-adapters.md) | Memory, File, SQLite |
-| [6.3 Konfigurace](../learn/06-persistence/03-configuration.md) | Snapshoty, restore, shutdown |
-| [6.4 Verzování schémat](../learn/06-persistence/04-schema-versioning.md) | Migrace a verzování |
+| [6.1 Proč persistence?](./06-persistence/01-proc-persistence.md) | Obnova stavu po pádu |
+| [6.2 Storage adaptery](./06-persistence/02-storage-adaptery.md) | Memory, File, SQLite |
+| [6.3 Konfigurace](./06-persistence/03-konfigurace.md) | Snapshoty, restore, shutdown |
+| [6.4 Verzování schémat](./06-persistence/04-verzovani-schemat.md) | Migrace a verzování |
 
 ### Část 7: ETS
 
