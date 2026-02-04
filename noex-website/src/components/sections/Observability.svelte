@@ -783,8 +783,15 @@
       height: 20px;
     }
 
-    .gradient-orb-1,
+    .gradient-orb-1 {
+      width: 280px;
+      height: 280px;
+      opacity: 0.05;
+    }
+
     .gradient-orb-2 {
+      width: 220px;
+      height: 220px;
       opacity: 0.05;
     }
   }

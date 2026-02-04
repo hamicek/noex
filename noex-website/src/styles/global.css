@@ -21,10 +21,16 @@
 }
 
 /* Base styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 html, body {
   height: 100%;
   margin: 0;
   overflow: hidden;
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 body {
@@ -66,9 +72,11 @@ code, pre {
 .snap-container {
   height: 100vh;
   overflow-y: scroll;
+  overflow-x: hidden;
   scroll-snap-type: y proximity;
   scroll-behavior: smooth;
   scroll-padding-top: 4rem; /* Account for fixed navigation */
+  max-width: 100vw;
 }
 
 /* Full-page snap sections */
@@ -83,9 +91,21 @@ code, pre {
   position: relative;
 }
 
+@media (max-width: 640px) {
+  .snap-section {
+    padding: 5rem 1rem 3rem;
+  }
+}
+
 /* First section doesn't need extra padding as hero is full-bleed */
 .snap-section:first-child {
   padding-top: 4rem;
+}
+
+@media (max-width: 640px) {
+  .snap-section:first-child {
+    padding-top: 3.5rem;
+  }
 }
 
 /* Utility: Glow effect */

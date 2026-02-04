@@ -346,6 +346,14 @@ await GenServer.call(pid, { type: 'get_data' });`;
   .distribution-section {
     position: relative;
     overflow: hidden;
+    max-width: 100vw;
+  }
+
+  .content-wrapper {
+    max-width: 100%;
+    overflow-x: hidden;
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 
   /* Background */
@@ -427,6 +435,8 @@ await GenServer.call(pid, { type: 'get_data' });`;
     display: grid;
     grid-template-columns: 1fr;
     gap: 2rem;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   @media (min-width: 1024px) {
@@ -442,6 +452,8 @@ await GenServer.call(pid, { type: 'get_data' });`;
     opacity: 0;
     transform: translateY(30px);
     transition: opacity 0.6s ease-out 0.2s, transform 0.6s ease-out 0.2s;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .cluster-container.visible {
@@ -675,6 +687,8 @@ await GenServer.call(pid, { type: 'get_data' });`;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   /* Features list */
@@ -682,6 +696,7 @@ await GenServer.call(pid, { type: 'get_data' });`;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    max-width: 100%;
   }
 
   .feature-card {
@@ -820,6 +835,7 @@ await GenServer.call(pid, { type: 'get_data' });`;
     border: 1px solid var(--color-border);
     border-radius: 10px;
     overflow: hidden;
+    max-width: 100%;
     transition: border-color 0.3s ease, box-shadow 0.3s ease;
   }
 
@@ -939,8 +955,15 @@ await GenServer.call(pid, { type: 'get_data' });`;
       padding: 0.875rem 1rem;
     }
 
-    .gradient-orb-1,
+    .gradient-orb-1 {
+      width: 280px;
+      height: 280px;
+      opacity: 0.05;
+    }
+
     .gradient-orb-2 {
+      width: 250px;
+      height: 250px;
       opacity: 0.05;
     }
 

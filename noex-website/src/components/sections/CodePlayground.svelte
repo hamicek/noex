@@ -412,7 +412,7 @@ console.log('Traffic light cycle complete');`,
 
     <!-- Editor and Terminal panels -->
     <div
-      class="panels-container grid lg:grid-cols-2 gap-4 lg:gap-6"
+      class="panels-container grid md:grid-cols-2 gap-4 md:gap-6"
       class:visible={isVisible}
     >
       <!-- Code Editor Panel -->
@@ -871,8 +871,15 @@ console.log('Traffic light cycle complete');`,
       font-size: 0.7rem;
     }
 
-    .gradient-blob-1,
+    .gradient-blob-1 {
+      width: 280px;
+      height: 280px;
+      opacity: 0.05;
+    }
+
     .gradient-blob-2 {
+      width: 220px;
+      height: 220px;
       opacity: 0.05;
     }
   }

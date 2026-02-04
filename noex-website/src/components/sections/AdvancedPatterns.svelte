@@ -680,9 +680,22 @@ const results = await Task.Supervisor.asyncStream(
       padding: 0.75rem;
     }
 
-    .gradient-blob-1,
-    .gradient-blob-2 {
+    .gradient-blob-1 {
+      width: 300px;
+      height: 300px;
       opacity: 0.06;
+    }
+
+    .gradient-blob-2 {
+      width: 250px;
+      height: 250px;
+      opacity: 0.06;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .code-modal-overlay {
+      padding: 0.5rem;
     }
   }
 

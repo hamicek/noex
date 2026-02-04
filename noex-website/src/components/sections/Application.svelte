@@ -245,6 +245,14 @@ await Application.start(MyApp, {
   .application-section {
     position: relative;
     overflow: hidden;
+    max-width: 100vw;
+  }
+
+  .content-wrapper {
+    max-width: 100%;
+    overflow-x: hidden;
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 
   /* Background */
@@ -374,6 +382,8 @@ await Application.start(MyApp, {
   .main-grid {
     display: grid;
     gap: 2rem;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   @media (min-width: 1024px) {
@@ -389,6 +399,8 @@ await Application.start(MyApp, {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   /* Feature cards */
@@ -409,6 +421,8 @@ await Application.start(MyApp, {
     overflow: hidden;
     cursor: default;
     outline: none;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .feature-card.visible {
@@ -518,6 +532,8 @@ await Application.start(MyApp, {
     opacity: 0;
     transform: translateY(30px);
     transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .code-column.visible {
@@ -531,6 +547,7 @@ await Application.start(MyApp, {
     border: 1px solid var(--color-border);
     border-radius: 12px;
     overflow: hidden;
+    max-width: 100%;
   }
 
   .code-header {
@@ -614,8 +631,13 @@ await Application.start(MyApp, {
   }
 
   @media (max-width: 768px) {
+    .main-grid {
+      max-width: 100%;
+    }
+
     .feature-card {
       padding: 1rem;
+      max-width: 100%;
     }
 
     .card-icon {
@@ -628,13 +650,25 @@ await Application.start(MyApp, {
       height: 18px;
     }
 
+    .code-block {
+      max-width: 100%;
+    }
+
     .code-content {
       font-size: 0.65rem;
       padding: 1rem;
+      max-width: 100%;
     }
 
-    .gradient-orb-1,
+    .gradient-orb-1 {
+      width: 300px;
+      height: 300px;
+      opacity: 0.05;
+    }
+
     .gradient-orb-2 {
+      width: 220px;
+      height: 220px;
       opacity: 0.05;
     }
   }

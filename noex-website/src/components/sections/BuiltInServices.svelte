@@ -883,9 +883,27 @@ const top = users.select(([k, v]) => v.score > 50);`
       padding: 0.75rem;
     }
 
-    .gradient-orb-1,
-    .gradient-orb-2 {
+    .gradient-orb-1 {
+      width: 280px;
+      height: 280px;
       opacity: 0.06;
+    }
+
+    .gradient-orb-2 {
+      width: 220px;
+      height: 220px;
+      opacity: 0.06;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .code-modal-overlay {
+      padding: 0.5rem;
+    }
+
+    .modal-code-content {
+      font-size: 0.8rem;
+      padding: 1rem;
     }
   }
 

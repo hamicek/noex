@@ -464,8 +464,15 @@
       height: 22px;
     }
 
-    .glow-primary,
+    .glow-primary {
+      width: 280px;
+      height: 280px;
+      opacity: 0.1;
+    }
+
     .glow-secondary {
+      width: 180px;
+      height: 180px;
       opacity: 0.1;
     }
   }
