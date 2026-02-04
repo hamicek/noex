@@ -5,6 +5,7 @@ import Hero from '../../components/sections/Hero.svelte';
 import ProblemStatement from '../../components/sections/ProblemStatement.svelte';
 import CoreFeatures from '../../components/sections/CoreFeatures.svelte';
 import AdvancedPatterns from '../../components/sections/AdvancedPatterns.svelte';
+import Application from '../../components/sections/Application.svelte';
 import BuiltInServices from '../../components/sections/BuiltInServices.svelte';
 import Observability from '../../components/sections/Observability.svelte';
 import Distribution from '../../components/sections/Distribution.svelte';
@@ -29,18 +30,21 @@ const translations = getTranslations(locale);
   <!-- Section 4: Advanced Patterns -->
   <AdvancedPatterns translations={translations.patterns} client:visible />
 
-  <!-- Section 5: Built-in Services -->
+  <!-- Section 5: Application -->
+  <Application translations={translations.application} client:visible />
+
+  <!-- Section 6: Built-in Services -->
   <BuiltInServices translations={translations.services} client:visible />
 
-  <!-- Section 6: Observability -->
+  <!-- Section 7: Observability -->
   <Observability translations={translations.observability} client:visible />
 
-  <!-- Section 7: Distribution -->
+  <!-- Section 8: Distribution -->
   <Distribution translations={translations.distribution} client:visible />
 
-  <!-- Section 8: Code Playground -->
+  <!-- Section 9: Code Playground -->
   <CodePlayground translations={translations.playground} client:visible />
 
-  <!-- Section 9: Call to Action -->
+  <!-- Section 10: Call to Action -->
   <CallToAction translations={translations.cta} footerTranslations={translations.footer} supportTranslations={translations.support} client:visible />
 </FullPageLayout>

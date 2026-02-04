@@ -77,6 +77,25 @@
       "description": "Supervised async operations with concurrency control. Run fire-and-forget jobs or await results."
     }
   },
+  "application": {
+    "title": "Application Framework",
+    "subtitle": "Complete lifecycle management for production-ready applications",
+    "features": {
+      "lifecycle": "Lifecycle Management",
+      "signals": "Signal Handling",
+      "graceful": "Graceful Shutdown"
+    },
+    "descriptions": {
+      "lifecycle": "Consistent startup sequence with health checks. Start, stop, and monitor your application with a unified API.",
+      "signals": "Automatic SIGINT/SIGTERM handling for Docker and Kubernetes. Your processes clean up properly.",
+      "graceful": "prepStop hooks give services time to drain. Configurable timeouts prevent hanging shutdowns."
+    },
+    "badges": {
+      "kubernetes": "Kubernetes-ready",
+      "docker": "Docker-friendly",
+      "production": "Production tested"
+    }
+  },
   "services": {
     "title": "Built-in Services",
     "subtitle": "Production-ready utilities that work seamlessly with your processes",

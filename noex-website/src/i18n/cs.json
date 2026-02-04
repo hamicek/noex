@@ -77,6 +77,25 @@
       "description": "Supervisované asynchronní operace s řízením konkurence. Spouštějte fire-and-forget úlohy nebo čekejte na výsledky."
     }
   },
+  "application": {
+    "title": "Application Framework",
+    "subtitle": "Kompletní správa životního cyklu pro produkčně připravené aplikace",
+    "features": {
+      "lifecycle": "Správa životního cyklu",
+      "signals": "Zpracování signálů",
+      "graceful": "Graceful shutdown"
+    },
+    "descriptions": {
+      "lifecycle": "Konzistentní startup sekvence s health checky. Spouštějte, zastavujte a monitorujte aplikaci pomocí jednotného API.",
+      "signals": "Automatické zpracování SIGINT/SIGTERM pro Docker a Kubernetes. Vaše procesy se korektně ukončí.",
+      "graceful": "prepStop hooky dají službám čas na dokončení prací. Konfigurovatelné timeouty zabrání zaseknutým shutdownům."
+    },
+    "badges": {
+      "kubernetes": "Připraveno pro Kubernetes",
+      "docker": "Docker-friendly",
+      "production": "Otestováno v produkci"
+    }
+  },
   "services": {
     "title": "Vestavěné služby",
     "subtitle": "Produkčně připravené utility, které bezproblémově spolupracují s vašimi procesy",
