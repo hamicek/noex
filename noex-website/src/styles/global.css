@@ -66,7 +66,7 @@ code, pre {
 .snap-container {
   height: 100vh;
   overflow-y: scroll;
-  scroll-snap-type: y mandatory;
+  scroll-snap-type: y proximity;
   scroll-behavior: smooth;
   scroll-padding-top: 4rem; /* Account for fixed navigation */
 }
@@ -75,7 +75,6 @@ code, pre {
 .snap-section {
   min-height: 100vh;
   scroll-snap-align: start;
-  scroll-snap-stop: always;
   display: flex;
   flex-direction: column;
   justify-content: center;
