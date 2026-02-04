@@ -43,7 +43,7 @@
   // Navigation sections with their IDs and translation keys
   const sections = [
     { id: 'hero', key: 'hero' as const },
-    { id: 'problem', key: 'problem' as const },
+    { id: 'why-noex', key: 'problem' as const },
     { id: 'features', key: 'features' as const },
     { id: 'services', key: 'services' as const },
     { id: 'observability', key: 'observability' as const },
