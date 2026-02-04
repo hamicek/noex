@@ -26,6 +26,30 @@
     },
     "scrollDown": "Scroll to explore"
   },
+  "whyNoex": {
+    "tagline": "Inspired by 40+ years of Erlang/OTP",
+    "title": "Why noex?",
+    "subtitle": "Node.js is fast and flexible, but building reliable distributed systems requires proven patterns. noex brings battle-tested Erlang/OTP concepts to TypeScript, so you can focus on your business logic instead of infrastructure.",
+    "benefits": {
+      "proven": {
+        "title": "Battle-tested patterns",
+        "description": "GenServer, Supervisor, Registry - concepts that power WhatsApp, Discord, and millions of telecom systems worldwide. Now available in your TypeScript codebase."
+      },
+      "faultTolerant": {
+        "title": "Fault-tolerant by design",
+        "description": "Embrace the 'let it crash' philosophy. Processes fail gracefully and supervisors automatically restart them. No more cascading failures bringing down your entire app."
+      },
+      "distributed": {
+        "title": "Distributed from day one",
+        "description": "The same code that runs on one machine scales across a cluster. Location-transparent messaging means you don't rewrite anything when you need to scale."
+      },
+      "observable": {
+        "title": "Observable out of the box",
+        "description": "Built-in web dashboard and terminal UI show you exactly what's happening. See process states, message throughput, and errors in real-time without any configuration."
+      }
+    },
+    "learnMore": "See what problems noex solves"
+  },
   "problem": {
     "title": "Node.js is great, but...",
     "subtitle": "Common challenges that slow down development and cause production issues",

@@ -2,6 +2,7 @@
 import FullPageLayout from '../layouts/FullPageLayout.astro';
 import { useTranslations, getTranslations } from '../i18n/utils';
 import Hero from '../components/sections/Hero.svelte';
+import WhyNoex from '../components/sections/WhyNoex.svelte';
 import ProblemStatement from '../components/sections/ProblemStatement.svelte';
 import CoreFeatures from '../components/sections/CoreFeatures.svelte';
 import AdvancedPatterns from '../components/sections/AdvancedPatterns.svelte';
@@ -21,7 +22,10 @@ const translations = getTranslations(locale);
   <!-- Section 1: Hero -->
   <Hero translations={translations.hero} client:load />
 
-  <!-- Section 2: Problem Statement -->
+  <!-- Section 2: Why noex -->
+  <WhyNoex translations={translations.whyNoex} client:visible />
+
+  <!-- Section 3: Problem Statement -->
   <ProblemStatement translations={translations.problem} client:visible />
 
   <!-- Section 3: Core Features -->

@@ -26,6 +26,30 @@
     },
     "scrollDown": "Scrollujte pro více"
   },
+  "whyNoex": {
+    "tagline": "Inspirováno 40+ lety Erlang/OTP",
+    "title": "Proč noex?",
+    "subtitle": "Node.js je rychlý a flexibilní, ale budování spolehlivých distribuovaných systémů vyžaduje ověřené vzory. noex přináší prověřené koncepty z Erlang/OTP do TypeScriptu, abyste se mohli soustředit na byznys logiku místo infrastruktury.",
+    "benefits": {
+      "proven": {
+        "title": "Prověřené vzory",
+        "description": "GenServer, Supervisor, Registry - koncepty, které pohání WhatsApp, Discord a miliony telekomunikačních systémů po celém světě. Nyní dostupné ve vašem TypeScript kódu."
+      },
+      "faultTolerant": {
+        "title": "Odolnost od základu",
+        "description": "Přijměte filozofii 'nech to spadnout'. Procesy selhávají elegantně a supervisoři je automaticky restartují. Žádné kaskádové selhání, které by položilo celou aplikaci."
+      },
+      "distributed": {
+        "title": "Distribuovaný od začátku",
+        "description": "Stejný kód, který běží na jednom stroji, škáluje přes celý cluster. Transparentní lokace zpráv znamená, že při škálování nic nepřepisujete."
+      },
+      "observable": {
+        "title": "Monitoring v základu",
+        "description": "Vestavěný webový dashboard a terminálové UI vám ukáže přesně, co se děje. Sledujte stavy procesů, propustnost zpráv a chyby v reálném čase bez jakékoli konfigurace."
+      }
+    },
+    "learnMore": "Podívejte se, jaké problémy noex řeší"
+  },
   "problem": {
     "title": "Node.js je skvělý, ale...",
     "subtitle": "Běžné problémy, které zpomalují vývoj a způsobují produkční incidenty",
