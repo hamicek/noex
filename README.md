@@ -1,4 +1,4 @@
-# noex
+# @hamicek/noex
 
 Elixir-style GenServer and Supervisor patterns for TypeScript.
 
@@ -17,7 +17,7 @@ Elixir-style GenServer and Supervisor patterns for TypeScript.
 ## Installation
 
 ```bash
-npm install noex
+npm install @hamicek/noex
 ```
 
 Requires Node.js 20.0.0 or later.
