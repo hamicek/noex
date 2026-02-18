@@ -9,8 +9,10 @@ Elixir-style GenServer and Supervisor patterns for TypeScript.
 - **GenServer**: Stateful services with serialized message processing
 - **Supervisor**: Automatic restart strategies for fault tolerance
 - **Registry**: Named process lookup for loose coupling
+- **Built-in Services**: EventBus, Cache, RateLimiter, TimerService — all built on GenServer
 - **Observer**: Real-time introspection into process state
 - **Dashboard**: TUI-based monitoring interface
+- **Distribution** *(experimental)*: Multi-node clustering with transparent remote calls
 - **Type-safe**: Full TypeScript support with strict typing
 - **Zero dependencies**: Core library is lightweight and focused
 
@@ -451,6 +453,78 @@ try {
 | `isRegistered(name)` | Check if name is registered |
 | `getNames()` | Get all registered names |
 | `count()` | Get registration count |
+
+## Distribution (Experimental)
+
+noex includes a distribution layer for building multi-node actor systems. It enables transparent communication between GenServers running on different machines — same API, no code changes.
+
+> **Status: Experimental.** The distribution module is functional for prototyping and small clusters (2-5 nodes) but has not been battle-tested in production. See [Known Limitations](#known-limitations) below.
+
+```typescript
+import { Cluster, GenServer } from 'noex';
+
+// Start a cluster node
+await Cluster.start({
+  nodeId: 'app1@192.168.1.1:4369',
+  seeds: ['app2@192.168.1.2:4369'],
+  clusterSecret: 'my-secret', // HMAC-SHA256 authentication
+});
+
+// Call a remote GenServer — same API as local
+const remoteRef = { id: 'counter', nodeId: 'app2@192.168.1.2:4369' };
+const value = await GenServer.call(remoteRef, { type: 'get' });
+```
+
+### Distribution Features
+
+| Feature | Description |
+|---------|-------------|
+| **Cluster** | Seed-based discovery with gossip protocol |
+| **RemoteCall** | Transparent RPC across nodes |
+| **RemoteSpawn** | Start processes on remote nodes |
+| **DistributedSupervisor** | Supervision trees spanning multiple nodes |
+| **GlobalRegistry** | Cluster-wide process discovery |
+| **RemoteMonitor / RemoteLink** | Cross-node monitoring and linking |
+
+### Transport
+
+- TCP with length-prefix framing
+- HMAC-SHA256 message authentication
+- Heartbeat-based failure detection (configurable interval + threshold)
+- Exponential backoff with jitter for reconnection
+- JSON serialization with support for Date, Map, Set, Error, BigInt, RegExp
+
+## Known Limitations
+
+### Core (Stable)
+
+The core module (GenServer, Supervisor, Registry, services) is stable and well-tested. Known considerations:
+
+- **Single-threaded**: Like all Node.js, each noex instance runs on a single event loop. CPU-bound work in a GenServer blocks the entire process. Use `worker_threads` or offload heavy computation.
+- **In-memory state**: GenServer state lives in memory. Use the persistence module or external storage for durability.
+
+### Distribution (Experimental)
+
+The distribution layer is functional but has limitations you should be aware of before using it:
+
+- **No split-brain detection**: If a network partition divides your cluster, both sides operate independently. After the partition heals, there is no automatic reconciliation — GlobalRegistry entries may conflict. This is the same behavior as Erlang/OTP, but it means you should not rely on GlobalRegistry for strong consistency.
+- **No backpressure**: The transport layer does not monitor socket write buffers. Under sustained high throughput, memory usage may grow unbounded. Not suitable for high-throughput messaging (>10K msg/sec) without external flow control.
+- **Cast messages can be silently dropped**: `GenServer.cast()` to a disconnected remote node is silently discarded (fire-and-forget semantics). Use `GenServer.call()` when you need delivery confirmation.
+- **No encryption**: Messages are authenticated (HMAC-SHA256) but not encrypted. Use a VPN or TLS tunnel for sensitive data in transit.
+- **No circuit breakers**: Failed remote calls will keep attempting until the heartbeat timeout detects the node as down (default: ~15 seconds). Applications should implement their own circuit breaker or retry logic.
+- **Limited serialization**: Functions, class instances (prototypes), Symbols, and circular references cannot be serialized across nodes.
+- **Single connection per peer**: Each node pair uses one TCP connection, which may become a bottleneck in high-fanout scenarios.
+- **No integration/chaos tests**: The distribution module has unit tests but lacks multi-process integration tests and network partition tests. It has not been validated under adversarial network conditions.
+
+### What This Means in Practice
+
+| Use Case | Recommendation |
+|----------|----------------|
+| Single-node services | **Use with confidence.** Core is stable and well-tested. |
+| Prototyping distributed systems | **Good to go.** Distribution works well for exploring multi-node patterns. |
+| Small internal clusters (2-5 nodes, reliable network) | **Viable with caution.** Monitor for the limitations above. |
+| Production with unreliable networks | **Not recommended yet.** Needs split-brain detection and backpressure handling. |
+| High-throughput messaging (>10K msg/sec) | **Not recommended yet.** Needs backpressure and connection pooling. |
 
 ## Support
 
