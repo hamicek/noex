@@ -5,10 +5,13 @@
  * Requires `better-sqlite3` as an optional peer dependency.
  */
 
+import { createRequire } from 'node:module';
 import type { PersistenceKey, PersistedState, StorageAdapter, StateMetadata } from '../types.js';
 import { CorruptedStateError, PersistenceError, StorageError } from '../errors.js';
 import { defaultSerializer } from '../serializers.js';
 import type { StateSerializer } from '../types.js';
+
+const require = createRequire(import.meta.url);
 
 /**
  * Minimal type definitions for better-sqlite3 to avoid requiring @types/better-sqlite3.
